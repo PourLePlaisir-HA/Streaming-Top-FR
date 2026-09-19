@@ -15,6 +15,7 @@ from .const import (
     CONF_UPDATE_HOURS,
     DEFAULT_UPDATE_HOURS,
     DOMAIN,
+    PROVIDER_NAMES,
     SUPPORTED_PROVIDERS,
 )
 from .settings import (
@@ -320,6 +321,75 @@ def _player_schema(
     return vol.Schema(schema)
 
 
+
+def _status(value: Any) -> str:
+    return "✅" if bool(value) else "❌"
+
+
+def _summary_placeholders(
+    settings: dict[str, Any], update_hours: int
+) -> dict[str, str]:
+    services = settings.get("services") or {}
+    enabled_services = [
+        PROVIDER_NAMES.get(provider, provider)
+        for provider in SUPPORTED_PROVIDERS
+        if services.get(provider, False)
+    ]
+
+    discovery = settings.get("discovery") or {}
+    top = settings.get("top_catalog") or {}
+    decades = top.get("decades") or {}
+    enabled_decades = []
+    for decade in DEFAULT_TOP_CATALOG["decades"]:
+        cfg = decades.get(decade) or {}
+        if cfg.get("enabled", False):
+            categories = "".join(
+                symbol
+                for enabled, symbol in (
+                    (cfg.get("movies", True), "🎬"),
+                    (cfg.get("animation", True), "✨"),
+                    (cfg.get("series", True), "📺"),
+                )
+                if enabled
+            )
+            enabled_decades.append(
+                f"{decade}s: {int(cfg.get('top_count', 10))} {categories}".strip()
+            )
+
+    family = settings.get("family") or {}
+    classification = settings.get("classification") or {}
+    players = settings.get("players") or {}
+    player_names = [
+        str(player.get("name") or player_id)
+        for player_id, player in players.items()
+        if isinstance(player, dict)
+    ]
+
+    return {
+        "update_hours": str(update_hours),
+        "services": ", ".join(enabled_services) if enabled_services else "—",
+        "visible_count": str(int(discovery.get("visible_count", 10))),
+        "prefetch_count": str(int(discovery.get("prefetch_count", 20))),
+        "max_depth": str(int(discovery.get("max_depth", 100))),
+        "top_enabled": _status(top.get("enabled", True)),
+        "min_imdb_votes": f"{int(top.get('min_imdb_votes', 20000)):,}".replace(",", " "),
+        "exclude_short_films": _status(top.get("exclude_short_films", True)),
+        "decades": " · ".join(enabled_decades) if enabled_decades else "—",
+        "family_enabled": _status(family.get("enabled", True)),
+        "target_age": str(int(family.get("target_age", 11))),
+        "allow_unrated": _status(family.get("allow_unrated", False)),
+        "family_movies": _status(family.get("movies", True)),
+        "family_animation": _status(family.get("animation", True)),
+        "family_series": _status(family.get("series", True)),
+        "classification_enabled": _status(classification.get("enabled", True)),
+        "classification_france": _status(classification.get("france", True)),
+        "us_fallback": _status(classification.get("us_fallback", True)),
+        "us_tv": _status(classification.get("us_tv", True)),
+        "players": ", ".join(player_names) if player_names else "—",
+        "player_count": str(len(player_names)),
+    }
+
+
 class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure Streaming Top FR."""
 
@@ -555,6 +625,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "summary",
                 "general",
                 "services",
                 "discovery",
@@ -564,6 +635,24 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                 "classification",
                 "players",
             ],
+        )
+
+    async def async_step_summary(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show a read-only summary of the active configuration."""
+        self._ensure_loaded()
+        assert self._settings is not None
+
+        if user_input is not None:
+            return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="summary",
+            data_schema=vol.Schema({}),
+            description_placeholders=_summary_placeholders(
+                self._settings, self._update_hours
+            ),
         )
 
     async def async_step_general(
