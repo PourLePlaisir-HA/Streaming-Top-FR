@@ -1,16 +1,221 @@
 {
+  "title": "Streaming Top FR",
   "config": {
     "step": {
       "user": {
-        "title": "Streaming Top FR",
-        "description": "Streaming Top FR: multi-service discovery and ranking for France. Netflix uses its official France Top 10 extended with JustWatch; other services use JustWatch France popularity.",
+        "title": "General settings",
+        "description": "Configure Streaming Top FR. Advanced settings can later be changed from **Settings → Devices & services → Streaming Top FR → Configure**.",
         "data": {
-          "update_hours": "Refresh interval (hours)"
+          "update_hours": "Automatic refresh (hours)"
+        },
+        "data_description": {
+          "update_hours": "Interval between automatic updates, from 2 to 24 hours."
+        }
+      },
+      "services": {
+        "title": "Streaming services",
+        "description": "Enable only the subscriptions you want to use. Rental and purchase offers are ignored.",
+        "data": {
+          "service_netflix": "Netflix",
+          "service_disney": "Disney+",
+          "service_prime": "Prime Video",
+          "service_hbo_max": "HBO Max",
+          "service_apple_tv": "Apple TV+",
+          "service_paramount": "Paramount+",
+          "service_canal": "CANAL+",
+          "service_crunchyroll": "Crunchyroll",
+          "service_mubi": "MUBI",
+          "service_adn": "ADN"
+        }
+      },
+      "discovery": {
+        "title": "Discovery",
+        "description": "Configure carousel size and reserve depth.",
+        "data": {
+          "visible_count": "Visible titles",
+          "prefetch_count": "Prefetched titles",
+          "max_depth": "Maximum depth"
+        }
+      },
+      "top_catalog": {
+        "title": "Top Streaming / IMDb",
+        "description": "JustWatch France defines the local candidate pool; IMDb then ranks quality inside that pool.",
+        "data": {
+          "top_enabled": "Enable Top Streaming",
+          "min_imdb_votes": "Minimum IMDb votes",
+          "exclude_short_films": "Exclude short films (< 40 min)"
+        }
+      },
+      "decades": {
+        "title": "Decades",
+        "description": "Select decades available in Top Streaming. Detailed settings remain editable later from Configure.",
+        "data": {
+          "enabled_decades": "Enabled decades"
+        }
+      },
+      "family": {
+        "title": "Family mode",
+        "description": "Configure the Family branch of Top Streaming.",
+        "data": {
+          "family_enabled": "Enable Family",
+          "target_age": "Target age",
+          "allow_unrated": "Allow unrated content",
+          "family_movies": "Movies",
+          "family_animation": "Animation",
+          "family_series": "TV shows"
+        }
+      },
+      "classification": {
+        "title": "Age ratings",
+        "description": "French ratings have priority. US fallback is used only when no usable French rating is available.",
+        "data": {
+          "classification_enabled": "Show ratings",
+          "classification_france": "Prefer France",
+          "us_fallback": "US fallback",
+          "us_tv": "Allow US TV ratings"
+        }
+      },
+      "playback": {
+        "title": "Android TV / Freebox playback",
+        "description": "Automated playback is optional. It requires Home Assistant entities for remote control and Android Debug Bridge.",
+        "data": {
+          "configure_player": "Configure a playback destination now"
+        }
+      },
+      "player": {
+        "title": "Playback destination",
+        "description": "Select the Home Assistant entities for your Android TV / Freebox Pop.",
+        "data": {
+          "player_id": "Internal ID",
+          "player_name": "Display name",
+          "player_media_player": "Main media player",
+          "player_remote": "Remote",
+          "player_adb_player": "Android Debug Bridge media player",
+          "add_another": "Add another destination"
         }
       }
     },
+    "error": {
+      "invalid_player_id": "The destination ID is invalid.",
+      "player_already_exists": "A destination already uses this ID."
+    },
     "abort": {
       "single_instance_allowed": "Only one instance is supported."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Streaming Top FR",
+        "description": "Choose the section to edit.",
+        "menu_options": {
+          "general": "General",
+          "services": "Streaming services",
+          "discovery": "Discovery",
+          "top_catalog": "Top Streaming / IMDb",
+          "decades": "Decades",
+          "family": "Family",
+          "classification": "Age ratings",
+          "players": "Playback destinations"
+        }
+      },
+      "general": {
+        "title": "General",
+        "data": {
+          "update_hours": "Automatic refresh (hours)"
+        }
+      },
+      "services": {
+        "title": "Streaming services",
+        "data": {
+          "service_netflix": "Netflix",
+          "service_disney": "Disney+",
+          "service_prime": "Prime Video",
+          "service_hbo_max": "HBO Max",
+          "service_apple_tv": "Apple TV+",
+          "service_paramount": "Paramount+",
+          "service_canal": "CANAL+",
+          "service_crunchyroll": "Crunchyroll",
+          "service_mubi": "MUBI",
+          "service_adn": "ADN"
+        }
+      },
+      "discovery": {
+        "title": "Discovery",
+        "data": {
+          "visible_count": "Visible titles",
+          "prefetch_count": "Prefetched titles",
+          "max_depth": "Maximum depth"
+        }
+      },
+      "top_catalog": {
+        "title": "Top Streaming / IMDb",
+        "data": {
+          "top_enabled": "Enable Top Streaming",
+          "min_imdb_votes": "Minimum IMDb votes",
+          "exclude_short_films": "Exclude short films (< 40 min)"
+        }
+      },
+      "decades": {
+        "title": "Decades",
+        "description": "Choose the decade to edit.",
+        "data": {
+          "decade": "Decade"
+        }
+      },
+      "decade_edit": {
+        "title": "Decade {decade}",
+        "description": "Detailed settings for the {decade}s.",
+        "data": {
+          "enabled": "Enable this decade",
+          "top_count": "Titles per category",
+          "movies": "Movies",
+          "animation": "Animation",
+          "series": "TV shows"
+        }
+      },
+      "family": {
+        "title": "Family",
+        "data": {
+          "family_enabled": "Enable Family",
+          "target_age": "Target age",
+          "allow_unrated": "Allow unrated content",
+          "family_movies": "Movies",
+          "family_animation": "Animation",
+          "family_series": "TV shows"
+        }
+      },
+      "classification": {
+        "title": "Age ratings",
+        "data": {
+          "classification_enabled": "Show ratings",
+          "classification_france": "Prefer France",
+          "us_fallback": "US fallback",
+          "us_tv": "Allow US TV ratings"
+        }
+      },
+      "players": {
+        "title": "Playback destinations",
+        "description": "Add a destination or select an existing destination to edit it.",
+        "data": {
+          "player_select": "Destination"
+        }
+      },
+      "player_edit": {
+        "title": "Playback destination",
+        "data": {
+          "player_id": "Internal ID",
+          "player_name": "Display name",
+          "player_media_player": "Main media player",
+          "player_remote": "Remote",
+          "player_adb_player": "Android Debug Bridge media player",
+          "delete_player": "Delete this destination"
+        }
+      }
+    },
+    "error": {
+      "invalid_player_id": "The destination ID is invalid.",
+      "player_already_exists": "A destination already uses this ID."
     }
   }
 }
