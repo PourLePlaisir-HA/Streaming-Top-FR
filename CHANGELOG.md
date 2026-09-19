@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+- Première version stable de la branche **v0.7** après validation des trois bêta.
+- Ajoute la **configuration native Home Assistant** avec assistant initial et menu **Configurer**.
+- Ajoute une page **Synthèse** en lecture seule des paramètres réellement actifs.
+- Ajoute la gestion native des **services**, de la **découverte**, du **Top Streaming / IMDb**, des **décennies**, de la **Famille**, des **classifications** et des **destinations de lecture**.
+- Ajoute une section séparée **Décennie par défaut** ; la carte Top Streaming utilise ce réglage automatiquement sauf surcharge locale explicite.
+- Conserve la migration depuis `streaming_top_fr.yaml` pour les installations v0.6.x, sans supprimer le fichier existant.
+- Documentation Lovelace simplifiée avec la ressource stable `/streaming_top_fr/streaming-top-fr-card.js` sans suffixe de version.
+
 ## 0.7.0-beta.3
 - Corrige les libellés manquants du menu **Configurer** pour **Synthèse** et **Décennie par défaut**.
 - Réorganise les réglages des décennies : **Décennies** sert à modifier les paramètres détaillés d'une décennie ; **Décennie par défaut** devient une section séparée.
