@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1-beta.1
+- Améliore la stabilité visuelle de la carte **Top Streaming** sur mobile et tablette.
+- Réserve en permanence la hauteur de la ligne de sous-catégories **Famille** (Films / Animation / Séries), même lorsqu'elle est masquée.
+- Évite ainsi le décalage vertical du texte descriptif et des affiches lors du passage vers ou depuis **Famille**.
+
 ## 0.7.0
 - Première version stable de la branche **v0.7** après validation des trois bêta.
 - Ajoute la **configuration native Home Assistant** avec assistant initial et menu **Configurer**.
