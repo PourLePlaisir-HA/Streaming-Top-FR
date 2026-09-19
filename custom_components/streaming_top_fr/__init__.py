@@ -10,6 +10,7 @@ from .storage import StreamingTopStore
 from .sources import NetflixOfficialClient, JustWatchClient
 from .coordinator import StreamingTopCoordinator
 from .playback import SUPPORTED_PLAYBACK_PROVIDERS, async_launch, log_launch_failure
+from .settings import async_load_legacy_settings, normalize_settings
 
 
 async def async_setup(hass, config):
@@ -19,6 +20,25 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass, entry):
     hass.data.setdefault(DOMAIN, {})
+
+    # v0.7 migrates the v0.6.x YAML configuration into native ConfigEntry
+    # options once, while leaving the YAML file untouched as a rollback path.
+    if "settings" not in entry.options or CONF_UPDATE_HOURS not in entry.options:
+        options = dict(entry.options)
+        if "settings" not in options:
+            options["settings"] = normalize_settings(
+                await async_load_legacy_settings(hass)
+            )
+        options.setdefault(
+            CONF_UPDATE_HOURS,
+            entry.data.get(CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS),
+        )
+        hass.config_entries.async_update_entry(
+            entry,
+            options=options,
+            minor_version=1,
+        )
+
     store = StreamingTopStore(hass)
     await store.async_load()
     session = async_get_clientsession(hass)
@@ -27,7 +47,7 @@ async def async_setup_entry(hass, entry):
         NetflixOfficialClient(session),
         JustWatchClient(session, store),
         store,
-        entry.data.get(CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS),
+        entry,
     )
     await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id] = {"coordinator": coordinator, "store": store}
