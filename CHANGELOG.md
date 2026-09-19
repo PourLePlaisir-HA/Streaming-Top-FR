@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.6.5
+- **Version stable validée via HACS** : installation depuis le dépôt public, création de l'intégration, chargement backend, cartes Lovelace et fonctionnement général testés avec succès.
+- Met à jour le texte du flux de configuration pour refléter le support multi-services actuel.
 - Le pool du Top est désormais défini par **JustWatch `POPULAR` France**, puis classé par qualité IMDb pondérée.
 - IMDb ne détermine plus la pertinence France ; il départage seulement les candidats déjà populaires localement.
 - Ajoute un fallback US strictement secondaire si le pool France ne suffit pas ; tous les candidats France restent devant les candidats US.
