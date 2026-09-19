@@ -661,7 +661,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                 "discovery",
                 "top_catalog",
                 "decades",
-                "decade_details",
+                "default_decade",
                 "family",
                 "classification",
                 "players",
@@ -747,22 +747,6 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
     async def async_step_decades(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Configure enabled decades and the global default decade."""
-        self._ensure_loaded()
-        assert self._settings is not None
-
-        if user_input is not None:
-            _apply_enabled_decades(self._settings, user_input)
-            return self._save()
-
-        return self.async_show_form(
-            step_id="decades",
-            data_schema=_decades_schema(self._settings),
-        )
-
-    async def async_step_decade_details(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
         """Choose a decade whose detailed settings should be edited."""
         self._ensure_loaded()
         assert self._settings is not None
@@ -776,7 +760,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
             for decade in DEFAULT_TOP_CATALOG["decades"]
         ]
         return self.async_show_form(
-            step_id="decade_details",
+            step_id="decades",
             data_schema=vol.Schema(
                 {
                     vol.Required(
@@ -787,6 +771,57 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                                 DEFAULT_TOP_CATALOG["default_decade"],
                             )
                         ),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_default_decade(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure the decade selected by default in Top Streaming."""
+        self._ensure_loaded()
+        assert self._settings is not None
+        top = self._settings.setdefault(
+            "top_catalog", deepcopy(DEFAULT_TOP_CATALOG)
+        )
+
+        if user_input is not None:
+            default_decade = str(user_input[FIELD_DEFAULT_DECADE])
+            if default_decade not in DEFAULT_TOP_CATALOG["decades"]:
+                default_decade = DEFAULT_TOP_CATALOG["default_decade"]
+            top[FIELD_DEFAULT_DECADE] = default_decade
+            decades = top.setdefault(
+                "decades", deepcopy(DEFAULT_TOP_CATALOG["decades"])
+            )
+            decades.setdefault(
+                default_decade,
+                deepcopy(DEFAULT_TOP_CATALOG["decades"][default_decade]),
+            )["enabled"] = True
+            return self._save()
+
+        options = [
+            SelectOptionDict(value=decade, label=f"{decade}s")
+            for decade in DEFAULT_TOP_CATALOG["decades"]
+        ]
+        current = str(
+            top.get(FIELD_DEFAULT_DECADE, DEFAULT_TOP_CATALOG["default_decade"])
+        )
+        if current not in DEFAULT_TOP_CATALOG["decades"]:
+            current = DEFAULT_TOP_CATALOG["default_decade"]
+
+        return self.async_show_form(
+            step_id="default_decade",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        FIELD_DEFAULT_DECADE,
+                        default=current,
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=options,
