@@ -264,9 +264,12 @@ customElements.define('streaming-top-fr-card',StreamingTopFrCard);
 
 class StreamingTopFrCatalogCard extends StreamingTopFrCard {
   setConfig(c){
-    this._config={title:"Top Streaming",default_decade:"1990",default_category:"movies",default_family_category:"movies",...c};
+    const hasLocalDefaultDecade=Object.prototype.hasOwnProperty.call(c||{},"default_decade");
+    this._config={title:"Top Streaming",default_category:"movies",default_family_category:"movies",...c};
+    this._configuredDefaultDecade=hasLocalDefaultDecade?String(c.default_decade):null;
     if(!this.shadowRoot)this.attachShadow({mode:"open"});
-    this._decade=String(this._config.default_decade||"1990");
+    this._decade=this._configuredDefaultDecade||"1990";
+    this._defaultDecadeApplied=false;
     this._category=String(this._config.default_category||"movies");
     this._familyType=String(this._config.default_family_category||"movies");
     this._familyCache={};this._familyLoadingKey=null;this._familyError={};
@@ -275,12 +278,18 @@ class StreamingTopFrCatalogCard extends StreamingTopFrCard {
   getCardSize(){return 6}
   async _load(){
     await super._load();
+    if(!this._defaultDecadeApplied){
+      const globalDefault=String(this._data?.settings?.top_catalog?.default_decade||"");
+      this._decade=this._configuredDefaultDecade||globalDefault||this._decade||"1990";
+      this._defaultDecadeApplied=true;
+    }
     this._normalizeCatalogSelection();
     if(this._category==="family")await this._loadFamily();
     this._render();
   }
   async _refresh(){
     this._familyCache={};this._familyError={};this._familyLoadingKey=null;
+    if(!this._configuredDefaultDecade)this._defaultDecadeApplied=false;
     await super._refresh();
   }
   _catalog(){return this._data?.top_catalog||null}
