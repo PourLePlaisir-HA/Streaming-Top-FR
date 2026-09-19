@@ -73,7 +73,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
 }
 
-DEFAULT_CONFIG_TEXT = """# Streaming Top FR 0.6.3
+DEFAULT_CONFIG_TEXT = """# Streaming Top FR legacy YAML (v0.7 migration support)
 # Ce fichier est relu à chaque rafraîchissement de la source (bouton ↻ inclus).
 # Les booléens acceptent true/false, yes/no, oui/non.
 #
