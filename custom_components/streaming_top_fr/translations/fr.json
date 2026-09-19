@@ -120,6 +120,7 @@
         "title": "Configurer Streaming Top FR",
         "description": "Choisissez la section à modifier.",
         "menu_options": {
+          "summary": "Synthèse",
           "general": "Général",
           "services": "Services de streaming",
           "discovery": "Découverte",
@@ -222,6 +223,10 @@
           "player_adb_player": "Media player Android Debug Bridge",
           "delete_player": "Supprimer cette destination"
         }
+      },
+      "summary": {
+        "title": "Synthèse des paramètres",
+        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies actives\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
       }
     },
     "error": {
