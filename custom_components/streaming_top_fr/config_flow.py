@@ -323,7 +323,8 @@ def _player_schema(
 class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure Streaming Top FR."""
 
-    VERSION = 2
+    VERSION = 1
+    MINOR_VERSION = 1
 
     def __init__(self) -> None:
         self._settings: dict[str, Any] | None = None
