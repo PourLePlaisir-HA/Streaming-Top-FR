@@ -5,27 +5,112 @@ Carte Home Assistant multi-services pour découvrir des films et séries disponi
 
 ## Installation
 
-### Via HACS — dépôt personnalisé
+### 1. Installer Streaming Top FR via HACS
 
 1. Ouvrez **HACS** dans Home Assistant.
 2. Ajoutez `https://github.com/PourLePlaisir-HA/Streaming-Top-FR` comme **dépôt personnalisé** de type **Integration**.
 3. Recherchez **Streaming Top FR** puis installez l'intégration.
 4. Redémarrez Home Assistant.
 5. Ajoutez l'intégration depuis **Paramètres → Appareils et services → Ajouter une intégration → Streaming Top FR**.
-6. Copiez et adaptez `streaming_top_fr.yaml` dans `/config/streaming_top_fr.yaml` si vous souhaitez personnaliser les services, destinations, filtres et classements.
+6. Copiez et adaptez `streaming_top_fr.yaml` dans `/config/streaming_top_fr.yaml` pour personnaliser les services, destinations, filtres et classements.
 
-Les exemples de destinations présents dans le dépôt sont volontairement génériques : remplacez les entités `media_player`, `remote` et `adb_player` par celles de votre propre installation.
+> La découverte et les classements fonctionnent sans ADB. **Android Debug Bridge est requis uniquement si vous souhaitez lancer Netflix, Disney+ ou Prime Video directement sur un Player Android TV / Freebox Pop depuis la carte.**
 
-### Cartes Lovelace
+---
 
-Après installation et redémarrage, les cartes sont servies par l'intégration :
+### 2. Préparer Android Debug Bridge (lecture depuis Home Assistant)
+
+Streaming Top FR utilise l'action Home Assistant `androidtv.adb_command` pour les séquences de lancement Android TV. Il faut donc ajouter l'intégration officielle **Android Debug Bridge** dans Home Assistant.
+
+Documentation officielle Home Assistant :  
+https://www.home-assistant.io/integrations/androidtv/
+
+Home Assistant recommande d'utiliser en priorité son implémentation Python ADB intégrée, sans serveur ADB externe.
+
+#### Freebox Player Pop : activer le mode développeur
+
+Sur le **Player Pop** :
+
+1. Ouvrez **Paramètres**.
+2. Allez dans **Préférences relatives à l'appareil** (ou **Système**, selon la version Android TV).
+3. Ouvrez **À propos**.
+4. Descendez sur **Build Android TV / Numéro de build**.
+5. Appuyez **7 fois sur OK** avec la télécommande.
+6. Un message confirme que le **mode développeur** est activé.
+7. Revenez au menu précédent et ouvrez **Options pour les développeurs**.
+8. Dans **Débogage**, activez **Débogage USB**.
+9. Si votre version du Player propose aussi **Débogage réseau / ADB réseau**, activez-le.
+
+Free documente également l'activation du mode développeur par appuis répétés sur le numéro de build sur le Player Pop :  
+https://dev.freebox.fr/bugs/task/40578
+
+#### Ajouter le Player Pop dans Home Assistant
+
+1. Relevez l'**adresse IP locale** du Player Pop et, de préférence, réservez-la dans votre DHCP afin qu'elle ne change pas.
+2. Dans Home Assistant : **Paramètres → Appareils et services → Ajouter une intégration**.
+3. Recherchez **Android Debug Bridge**.
+4. Ajoutez l'adresse IP du Player Pop.
+5. Lors de la première connexion, une demande d'autorisation ADB apparaît sur le téléviseur : cochez **Toujours autoriser depuis cet appareil** puis validez.
+
+L'intégration Android Debug Bridge crée notamment l'entité `media_player` utilisée comme `adb_player` par Streaming Top FR.
+
+> **Sécurité :** ADB donne un contrôle avancé sur le Player. Ne publiez jamais le port ADB sur Internet et n'effectuez aucune redirection de port vers le Player. Gardez ADB uniquement sur votre réseau local.
+
+#### Entités de destination
+
+Exemple :
+
+```yaml
+players:
+  salon:
+    name: Salon
+    type: android_tv
+    media_player: media_player.android_tv_salon
+    remote: remote.android_tv_salon
+    adb_player: media_player.android_tv_salon_adb
+```
+
+- `media_player` : destination Home Assistant logique ;
+- `remote` : entité `remote` capable d'allumer le Player et d'envoyer les commandes de navigation ;
+- `adb_player` : entité `media_player` fournie par **Android Debug Bridge**, cible de `androidtv.adb_command`.
+
+Les exemples du dépôt sont volontairement génériques : remplacez ces entités par celles de votre installation.
+
+---
+
+### 3. Charger les cartes Lovelace
+
+Les **deux cartes sont incluses dans l'intégration** dans le fichier :
+
+```text
+custom_components/streaming_top_fr/www/streaming-top-fr-card.js
+```
+
+L'intégration expose ce fichier à l'adresse :
+
+```text
+/streaming_top_fr/streaming-top-fr-card.js
+```
+
+Il faut l'enregistrer **une seule fois** comme ressource Lovelace :
+
+1. Ouvrez **Paramètres → Tableaux de bord**.
+2. Ouvrez le menu **⋮ → Ressources**.
+3. Ajoutez :
+   - URL : `/streaming_top_fr/streaming-top-fr-card.js?v=0.6.5`
+   - Type : **Module JavaScript**
+4. Rechargez les ressources ou faites un rechargement forcé du navigateur.
+
+La même ressource fournit les deux cartes suivantes.
+
+#### Carte de découverte
 
 ```yaml
 type: custom:streaming-top-fr-card
 title: Streaming
 ```
 
-et :
+#### Carte Top Streaming
 
 ```yaml
 type: custom:streaming-top-fr-catalog-card
@@ -33,6 +118,27 @@ title: Top Streaming
 default_decade: "1990"
 default_category: movies
 ```
+
+---
+
+### 4. Le moteur de lancement est-il inclus ?
+
+**Oui.** Aucun script Home Assistant séparé n'est nécessaire pour les plateformes déjà validées.
+
+Le moteur est embarqué dans :
+
+```text
+custom_components/streaming_top_fr/playback.py
+```
+
+La carte appelle directement le backend Streaming Top FR, qui exécute les séquences de lancement.
+
+Séquences actuellement intégrées :
+
+- **Netflix** : réveil du Player, redémarrage propre de l'application, sélection du profil par défaut puis lancement direct du contenu ;
+- **Disney+** : résolution de la fiche France, réveil/redémarrage de l'application, ouverture du contenu puis validation du profil ;
+- **Prime Video** : réveil, redémarrage propre de l'application et ouverture de Prime Video ;
+- **HBO Max / Apple TV+ / Paramount+ / CANAL+ / Crunchyroll / MUBI / ADN** : disponibilité et catalogue pris en charge, mais lancement automatisé non activé tant que la séquence n'a pas été validée.
 
 ## Nouveau 0.6.5 — classement ancré sur la popularité France
 
@@ -264,6 +370,24 @@ classification:
 
 France prioritaire ; US uniquement en fallback ; aucune conversion US → France. Le badge reste dans la popup à côté du titre.
 
+## Configuration par interface Home Assistant
+
+La version **0.6.5** utilise encore principalement `/config/streaming_top_fr.yaml` pour les réglages avancés. L'écran d'ajout de l'intégration ne propose actuellement que l'intervalle de rafraîchissement.
+
+Une **IHM complète de paramètres est prévue pour une prochaine version majeure**. L'objectif est de pouvoir gérer depuis **Paramètres → Appareils et services → Streaming Top FR → Configurer** :
+
+- les services de streaming activés ;
+- les destinations de lecture Android TV / Freebox ;
+- les entités `media_player`, `remote` et `adb_player` avec sélecteurs Home Assistant ;
+- le nombre de titres visibles, la réserve et la profondeur de découverte ;
+- le seuil minimal de votes IMDb et l'exclusion des courts métrages ;
+- les décennies et le nombre de titres par catégorie ;
+- le mode Famille et l'âge cible ;
+- les règles de classification FR / US ;
+- à terme, les options de filtrage géographique des votes IMDb.
+
+La cible est de conserver une migration compatible depuis le YAML existant afin qu'une mise à jour n'oblige pas à ressaisir toute la configuration.
+
 ## Configuration Lovelace
 
 Carte de découverte :
@@ -285,7 +409,7 @@ default_category: movies
 ## Mise à jour frontend
 
 ```text
-/streaming_top_fr/streaming-top-fr-card.js?v=0.6.3
+/streaming_top_fr/streaming-top-fr-card.js?v=0.6.5
 ```
 
 Après remplacement des fichiers : redémarrer Home Assistant puis effectuer un rechargement forcé du navigateur. Le bouton **↻** relit `/config/streaming_top_fr.yaml`.
