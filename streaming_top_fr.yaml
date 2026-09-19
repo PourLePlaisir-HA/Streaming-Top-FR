@@ -1,0 +1,137 @@
+# À copier dans /config/streaming_top_fr.yaml si besoin.
+# L'intégration crée aussi automatiquement ce fichier avec ces valeurs par défaut.
+
+services:
+  netflix: true
+  disney: true
+  prime: true
+  hbo_max: false
+  apple_tv: false
+  paramount: false
+  canal: false
+  crunchyroll: false
+  mubi: false
+  adn: false
+
+# Nombre de destinations non limité. Le nom de la clé (salon, etage, chambre...)
+# sert d'identifiant interne ; `name` est le libellé affiché dans la popup.
+players:
+  salon:
+    name: Salon
+    type: android_tv
+    media_player: media_player.android_tv_salon
+    remote: remote.android_tv_salon
+    adb_player: media_player.android_tv_salon_adb
+
+  etage:
+    name: Étage
+    type: android_tv
+    media_player: media_player.android_tv_etage
+    remote: remote.android_tv_etage
+    adb_player: media_player.android_tv_etage_adb
+
+# Deuxième carte : custom:streaming-top-fr-catalog-card
+# top_count s'applique séparément aux Films, Animation et Séries activés.
+top_catalog:
+  enabled: true
+  min_imdb_votes: 20000      # 0 = pas de seuil minimal
+  exclude_short_films: true  # films/animations de moins de 40 min exclus
+  decades:
+    "1920":
+      enabled: false
+      top_count: 3
+      movies: true
+      animation: true
+      series: false
+
+    "1930":
+      enabled: false
+      top_count: 5
+      movies: true
+      animation: true
+      series: false
+
+    "1940":
+      enabled: false
+      top_count: 5
+      movies: true
+      animation: true
+      series: false
+
+    "1950":
+      enabled: false
+      top_count: 15
+      movies: true
+      animation: true
+      series: true
+
+    "1960":
+      enabled: false
+      top_count: 5
+      movies: true
+      animation: true
+      series: true
+
+    "1970":
+      enabled: true
+      top_count: 12
+      movies: true
+      animation: true
+      series: true
+
+    "1980":
+      enabled: true
+      top_count: 20
+      movies: true
+      animation: true
+      series: true
+
+    "1990":
+      enabled: true
+      top_count: 65
+      movies: true
+      animation: true
+      series: true
+
+    "2000":
+      enabled: true
+      top_count: 65
+      movies: true
+      animation: true
+      series: true
+
+    "2010":
+      enabled: true
+      top_count: 65
+      movies: true
+      animation: true
+      series: true
+
+    "2020":
+      enabled: true
+      top_count: 65
+      movies: true
+      animation: true
+      series: true
+
+# Branche Famille de la carte Top Streaming.
+# target_age: 11 = enfants de moins de 12 ans.
+# Les œuvres sans classification exploitable sont exclues par défaut.
+family:
+  enabled: true
+  target_age: 11
+  allow_unrated: false
+  movies: true
+  animation: true
+  series: true
+
+classification:
+  enabled: true
+  france: true
+  us_fallback: true
+  us_tv: true
+
+discovery:
+  visible_count: 10
+  prefetch_count: 20
+  max_depth: 100
