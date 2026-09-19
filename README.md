@@ -1,6 +1,4 @@
-# Streaming Top FR 0.7.0-beta.3
-
-> 🧪 **Branche de développement v0.7.0** — La version publique stable reste **v0.6.5**. Cette branche introduit la configuration native Home Assistant.
+# Streaming Top FR 0.7.0
 
 <p align="center">
   <img src="custom_components/streaming_top_fr/brand/logo.png" alt="Streaming Top FR" width="220">
@@ -129,7 +127,7 @@ Il faut l'enregistrer **une seule fois** comme ressource Lovelace :
 1. Ouvrez **Paramètres → Tableaux de bord**.
 2. Ouvrez le menu **⋮ → Ressources**.
 3. Ajoutez :
-   - URL : `/streaming_top_fr/streaming-top-fr-card.js?v=0.7.0-beta.3`
+   - URL : `/streaming_top_fr/streaming-top-fr-card.js`
    - Type : **Module JavaScript**
 4. Rechargez les ressources ou faites un rechargement forcé du navigateur.
 
@@ -442,7 +440,7 @@ default_category: movies
 ## Mise à jour frontend
 
 ```text
-/streaming_top_fr/streaming-top-fr-card.js?v=0.7.0-beta.3
+/streaming_top_fr/streaming-top-fr-card.js
 ```
 
 Après remplacement des fichiers : redémarrer Home Assistant puis effectuer un rechargement forcé du navigateur. Le bouton **↻** relit `/config/streaming_top_fr.yaml`.
