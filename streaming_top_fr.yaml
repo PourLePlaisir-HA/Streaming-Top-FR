@@ -39,6 +39,7 @@ players:
 # top_count s'applique séparément aux Films, Animation et Séries activés.
 top_catalog:
   enabled: true
+  default_decade: "1990"       # Décennie affichée par défaut dans Top Streaming
   min_imdb_votes: 20000      # 0 = pas de seuil minimal
   exclude_short_films: true  # films/animations de moins de 40 min exclus
   decades:
