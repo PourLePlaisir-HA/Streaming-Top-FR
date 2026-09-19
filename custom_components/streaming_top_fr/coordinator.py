@@ -13,7 +13,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class StreamingTopCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, netflix, justwatch, store, update_hours):
+    def __init__(self, hass, netflix, justwatch, store, config_entry):
+        update_hours = int(
+            config_entry.options.get(
+                "update_hours",
+                config_entry.data.get("update_hours", 6),
+            )
+        )
         super().__init__(
             hass,
             _LOGGER,
@@ -23,6 +29,7 @@ class StreamingTopCoordinator(DataUpdateCoordinator):
         self.netflix = netflix
         self.justwatch = justwatch
         self.store = store
+        self.config_entry = config_entry
         self.settings = None
 
     def _excluded_keys(self):
@@ -135,7 +142,7 @@ class StreamingTopCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         try:
-            self.settings = await async_load_settings(self.hass)
+            self.settings = await async_load_settings(self.hass, self.config_entry)
             services = self.settings["services"]
             classification = self.settings["classification"]
             discovery = self.settings["discovery"]
