@@ -1,3 +1,8 @@
+# LEGACY / MIGRATION v0.7+
+# La configuration native Home Assistant est désormais la méthode recommandée.
+# Ce fichier reste pris en charge pour importer une configuration v0.6.x existante.
+# Il n'est pas nécessaire pour une nouvelle installation v0.7.
+
 # À copier dans /config/streaming_top_fr.yaml si besoin.
 # L'intégration crée aussi automatiquement ce fichier avec ces valeurs par défaut.
 
