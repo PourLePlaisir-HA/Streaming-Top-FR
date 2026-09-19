@@ -1,0 +1,1 @@
+{"config":{"step":{"user":{"title":"Streaming Top FR","description":"Netflix: official France Top 10. Disney+ and Prime: JustWatch France trends.","data":{"update_hours":"Refresh interval (hours)"}}},"abort":{"single_instance_allowed":"Only one instance is supported."}}}
