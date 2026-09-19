@@ -16,6 +16,7 @@ DEFAULT_PLAYERS: dict[str, dict[str, Any]] = {}
 
 DEFAULT_TOP_CATALOG: dict[str, Any] = {
     "enabled": True,
+    "default_decade": "1990",
     "min_imdb_votes": 20000,
     "exclude_short_films": True,
     "decades": {
@@ -124,6 +125,7 @@ players:
 # Les décennies désactivées ne génèrent aucune requête catalogue.
 top_catalog:
   enabled: true
+  default_decade: "1990"       # Décennie affichée par défaut dans la carte Top Streaming
   min_imdb_votes: 20000      # Seuil IMDb minimal ; 0 désactive ce filtre
   exclude_short_films: true  # Exclut les films/animations de moins de 40 min
   decades:
@@ -253,6 +255,12 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         settings["top_catalog"]["enabled"] = _as_bool(
             top_catalog.get("enabled"), DEFAULT_TOP_CATALOG["enabled"]
         )
+        default_decade = str(
+            top_catalog.get("default_decade", DEFAULT_TOP_CATALOG["default_decade"])
+        )
+        if default_decade not in DEFAULT_TOP_CATALOG["decades"]:
+            default_decade = DEFAULT_TOP_CATALOG["default_decade"]
+        settings["top_catalog"]["default_decade"] = default_decade
         settings["top_catalog"]["min_imdb_votes"] = _as_int(
             top_catalog.get("min_imdb_votes"),
             DEFAULT_TOP_CATALOG["min_imdb_votes"],
