@@ -39,7 +39,7 @@ L'ajout de **Streaming Top FR** ouvre maintenant un assistant multi-écrans dire
 2. **Services** — Netflix, Disney+, Prime Video, HBO Max, Apple TV+, Paramount+, CANAL+, Crunchyroll, MUBI et ADN ;
 3. **Découverte** — titres visibles, préchargement et profondeur ;
 4. **Top Streaming / IMDb** — activation, seuil de votes et courts métrages ;
-5. **Décennies** — sélection des décennies actives ;
+5. **Décennies** — choix de la décennie par défaut et sélection des décennies actives ;
 6. **Famille** — âge cible et catégories ;
 7. **Classification** — France prioritaire et fallback US ;
 8. **Lecture** — ajout facultatif d'une ou plusieurs destinations Android TV / Freebox via sélecteurs d'entités.
@@ -129,7 +129,7 @@ Il faut l'enregistrer **une seule fois** comme ressource Lovelace :
 1. Ouvrez **Paramètres → Tableaux de bord**.
 2. Ouvrez le menu **⋮ → Ressources**.
 3. Ajoutez :
-   - URL : `/streaming_top_fr/streaming-top-fr-card.js?v=0.7.0-beta.1`
+   - URL : `/streaming_top_fr/streaming-top-fr-card.js?v=0.7.0-beta.2`
    - Type : **Module JavaScript**
 4. Rechargez les ressources ou faites un rechargement forcé du navigateur.
 
@@ -147,9 +147,10 @@ title: Streaming
 ```yaml
 type: custom:streaming-top-fr-catalog-card
 title: Top Streaming
-default_decade: "1990"
 default_category: movies
 ```
+
+> La **décennie par défaut** se règle désormais dans **Paramètres → Appareils et services → Streaming Top FR → Configurer → Décennies**. Si vous ajoutez explicitement `default_decade:` dans le YAML de la carte, cette valeur locale prend priorité sur le réglage global de l'intégration.
 
 ---
 
@@ -441,7 +442,7 @@ default_category: movies
 ## Mise à jour frontend
 
 ```text
-/streaming_top_fr/streaming-top-fr-card.js?v=0.7.0-beta.1
+/streaming_top_fr/streaming-top-fr-card.js?v=0.7.0-beta.2
 ```
 
 Après remplacement des fichiers : redémarrer Home Assistant puis effectuer un rechargement forcé du navigateur. Le bouton **↻** relit `/config/streaming_top_fr.yaml`.
