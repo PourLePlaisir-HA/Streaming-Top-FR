@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0-beta.3
+- Corrige les libellés manquants du menu **Configurer** pour **Synthèse** et **Décennie par défaut**.
+- Réorganise les réglages des décennies : **Décennies** sert à modifier les paramètres détaillés d'une décennie ; **Décennie par défaut** devient une section séparée.
+- La décennie par défaut sélectionnée est automatiquement conservée comme active.
+- Version de développement : `0.7.0-beta.3`.
+
 ## 0.7.0-beta.2
 - Ajoute une page **Synthèse** en tête du menu **Configurer**.
 - La synthèse est en lecture seule et affiche les valeurs réellement actives : fréquence d'actualisation, services, découverte, Top/IMDb, décennies et volumes, Famille, classifications et destinations de lecture.
