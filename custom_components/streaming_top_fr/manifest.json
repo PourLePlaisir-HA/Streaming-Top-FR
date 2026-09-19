@@ -1,0 +1,8 @@
+{
+  "domain": "streaming_top_fr",
+  "name": "Streaming Top FR",
+  "version": "0.6.5",
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "requirements": []
+}
