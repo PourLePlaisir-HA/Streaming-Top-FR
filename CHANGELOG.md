@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0-beta.1
+- Ajoute un **assistant de configuration natif Home Assistant** affiché dès l'ajout de l'intégration.
+- L'assistant configure successivement : fréquence d'actualisation, services de streaming, découverte, Top Streaming / IMDb, décennies, Famille, classifications et destinations Android TV / Freebox.
+- Ajoute un **Options Flow** accessible via **Paramètres → Appareils et services → Streaming Top FR → Configurer**.
+- Le menu Configurer permet de modifier séparément : Général, Services, Découverte, Top Streaming, chaque décennie, Famille, Classifications et Destinations de lecture.
+- Les destinations utilisent les sélecteurs d'entités Home Assistant pour `media_player`, `remote` et le `media_player` Android Debug Bridge.
+- Les destinations peuvent être ajoutées, modifiées, renommées ou supprimées depuis l'IHM.
+- Migre automatiquement les réglages de `/config/streaming_top_fr.yaml` vers les options natives lors du premier démarrage en v0.7, sans modifier ni supprimer le YAML.
+- Conserve la compatibilité de retour vers la v0.6.5 en gardant la version majeure de ConfigEntry inchangée.
+- Les nouvelles installations UI ne créent plus de destinations d'exemple fictives.
+- Ajoute les traductions FR/EN complètes et `strings.json`.
+- Ajoute une validation GitHub Actions : compilation Python, JSON et syntaxe JavaScript.
+- Version de développement : `0.7.0-beta.1`.
+
 ## 0.6.5
 - **Version stable validée via HACS** : installation depuis le dépôt public, création de l'intégration, chargement backend, cartes Lovelace et fonctionnement général testés avec succès.
 - Met à jour le texte du flux de configuration pour refléter le support multi-services actuel.
