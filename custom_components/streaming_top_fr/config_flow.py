@@ -1,10 +1,801 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
 import voluptuous as vol
+
 from homeassistant import config_entries
-from .const import DOMAIN, CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS
+from homeassistant.config_entries import ConfigFlowResult, OptionsFlowWithReload
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+from homeassistant.helpers.selector import SelectOptionDict
+
+from .const import (
+    CONF_UPDATE_HOURS,
+    DEFAULT_UPDATE_HOURS,
+    DOMAIN,
+    SUPPORTED_PROVIDERS,
+)
+from .settings import (
+    DEFAULT_SETTINGS,
+    DEFAULT_TOP_CATALOG,
+    async_load_legacy_settings,
+    normalize_settings,
+)
+
+CONF_SETTINGS = "settings"
+
+FIELD_TOP_ENABLED = "top_enabled"
+FIELD_MIN_IMDB_VOTES = "min_imdb_votes"
+FIELD_EXCLUDE_SHORT = "exclude_short_films"
+FIELD_ENABLED_DECADES = "enabled_decades"
+FIELD_FAMILY_ENABLED = "family_enabled"
+FIELD_TARGET_AGE = "target_age"
+FIELD_ALLOW_UNRATED = "allow_unrated"
+FIELD_FAMILY_MOVIES = "family_movies"
+FIELD_FAMILY_ANIMATION = "family_animation"
+FIELD_FAMILY_SERIES = "family_series"
+FIELD_CLASSIFICATION_ENABLED = "classification_enabled"
+FIELD_CLASSIFICATION_FRANCE = "classification_france"
+FIELD_US_FALLBACK = "us_fallback"
+FIELD_US_TV = "us_tv"
+FIELD_VISIBLE_COUNT = "visible_count"
+FIELD_PREFETCH_COUNT = "prefetch_count"
+FIELD_MAX_DEPTH = "max_depth"
+FIELD_CONFIGURE_PLAYER = "configure_player"
+FIELD_PLAYER_SELECT = "player_select"
+FIELD_PLAYER_ID = "player_id"
+FIELD_PLAYER_NAME = "player_name"
+FIELD_PLAYER_MEDIA = "player_media_player"
+FIELD_PLAYER_REMOTE = "player_remote"
+FIELD_PLAYER_ADB = "player_adb_player"
+FIELD_ADD_ANOTHER = "add_another"
+FIELD_DELETE_PLAYER = "delete_player"
+
+
+def _number(minimum: int, maximum: int, step: int = 1) -> selector.NumberSelector:
+    return selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=minimum,
+            max=maximum,
+            step=step,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    )
+
+
+def _entity(domain: str) -> selector.EntitySelector:
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
+
+
+def _service_schema(settings: dict[str, Any]) -> vol.Schema:
+    current = settings.get("services") or {}
+    return vol.Schema(
+        {
+            vol.Optional(
+                f"service_{provider}",
+                default=bool(current.get(provider, False)),
+            ): selector.BooleanSelector()
+            for provider in SUPPORTED_PROVIDERS
+        }
+    )
+
+
+def _apply_services(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
+    settings["services"] = {
+        provider: bool(user_input.get(f"service_{provider}", False))
+        for provider in SUPPORTED_PROVIDERS
+    }
+
+
+def _discovery_schema(settings: dict[str, Any]) -> vol.Schema:
+    discovery = settings.get("discovery") or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                FIELD_VISIBLE_COUNT,
+                default=int(discovery.get("visible_count", 10)),
+            ): _number(1, 100),
+            vol.Required(
+                FIELD_PREFETCH_COUNT,
+                default=int(discovery.get("prefetch_count", 20)),
+            ): _number(1, 100),
+            vol.Required(
+                FIELD_MAX_DEPTH,
+                default=int(discovery.get("max_depth", 100)),
+            ): _number(1, 100),
+        }
+    )
+
+
+def _apply_discovery(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
+    visible = int(user_input[FIELD_VISIBLE_COUNT])
+    prefetch = max(visible, int(user_input[FIELD_PREFETCH_COUNT]))
+    max_depth = max(prefetch, int(user_input[FIELD_MAX_DEPTH]))
+    settings["discovery"] = {
+        "visible_count": visible,
+        "prefetch_count": prefetch,
+        "max_depth": max_depth,
+    }
+
+
+def _top_schema(settings: dict[str, Any]) -> vol.Schema:
+    top = settings.get("top_catalog") or {}
+    return vol.Schema(
+        {
+            vol.Optional(
+                FIELD_TOP_ENABLED,
+                default=bool(top.get("enabled", True)),
+            ): selector.BooleanSelector(),
+            vol.Required(
+                FIELD_MIN_IMDB_VOTES,
+                default=int(top.get("min_imdb_votes", 20000)),
+            ): _number(0, 10_000_000, 1000),
+            vol.Optional(
+                FIELD_EXCLUDE_SHORT,
+                default=bool(top.get("exclude_short_films", True)),
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+def _apply_top(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
+    top = settings.setdefault("top_catalog", deepcopy(DEFAULT_TOP_CATALOG))
+    top["enabled"] = bool(user_input.get(FIELD_TOP_ENABLED, True))
+    top["min_imdb_votes"] = int(user_input[FIELD_MIN_IMDB_VOTES])
+    top["exclude_short_films"] = bool(user_input.get(FIELD_EXCLUDE_SHORT, True))
+
+
+def _decades_schema(settings: dict[str, Any]) -> vol.Schema:
+    decades = (settings.get("top_catalog") or {}).get("decades") or {}
+    selected = [
+        decade
+        for decade in DEFAULT_TOP_CATALOG["decades"]
+        if (decades.get(decade) or {}).get("enabled", False)
+    ]
+    options = [
+        SelectOptionDict(value=decade, label=f"{decade}s")
+        for decade in DEFAULT_TOP_CATALOG["decades"]
+    ]
+    return vol.Schema(
+        {
+            vol.Required(
+                FIELD_ENABLED_DECADES,
+                default=selected,
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options,
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+        }
+    )
+
+
+def _apply_enabled_decades(
+    settings: dict[str, Any], user_input: dict[str, Any]
+) -> None:
+    selected = {str(value) for value in user_input.get(FIELD_ENABLED_DECADES, [])}
+    top = settings.setdefault("top_catalog", deepcopy(DEFAULT_TOP_CATALOG))
+    decades = top.setdefault("decades", deepcopy(DEFAULT_TOP_CATALOG["decades"]))
+    for decade, defaults in DEFAULT_TOP_CATALOG["decades"].items():
+        current = decades.setdefault(decade, deepcopy(defaults))
+        current["enabled"] = decade in selected
+
+
+def _family_schema(settings: dict[str, Any]) -> vol.Schema:
+    family = settings.get("family") or {}
+    return vol.Schema(
+        {
+            vol.Optional(
+                FIELD_FAMILY_ENABLED,
+                default=bool(family.get("enabled", True)),
+            ): selector.BooleanSelector(),
+            vol.Required(
+                FIELD_TARGET_AGE,
+                default=int(family.get("target_age", 11)),
+            ): _number(0, 17),
+            vol.Optional(
+                FIELD_ALLOW_UNRATED,
+                default=bool(family.get("allow_unrated", False)),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                FIELD_FAMILY_MOVIES,
+                default=bool(family.get("movies", True)),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                FIELD_FAMILY_ANIMATION,
+                default=bool(family.get("animation", True)),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                FIELD_FAMILY_SERIES,
+                default=bool(family.get("series", True)),
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+def _apply_family(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
+    settings["family"] = {
+        "enabled": bool(user_input.get(FIELD_FAMILY_ENABLED, True)),
+        "target_age": int(user_input[FIELD_TARGET_AGE]),
+        "allow_unrated": bool(user_input.get(FIELD_ALLOW_UNRATED, False)),
+        "movies": bool(user_input.get(FIELD_FAMILY_MOVIES, True)),
+        "animation": bool(user_input.get(FIELD_FAMILY_ANIMATION, True)),
+        "series": bool(user_input.get(FIELD_FAMILY_SERIES, True)),
+    }
+
+
+def _classification_schema(settings: dict[str, Any]) -> vol.Schema:
+    classification = settings.get("classification") or {}
+    return vol.Schema(
+        {
+            vol.Optional(
+                FIELD_CLASSIFICATION_ENABLED,
+                default=bool(classification.get("enabled", True)),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                FIELD_CLASSIFICATION_FRANCE,
+                default=bool(classification.get("france", True)),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                FIELD_US_FALLBACK,
+                default=bool(classification.get("us_fallback", True)),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                FIELD_US_TV,
+                default=bool(classification.get("us_tv", True)),
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+def _apply_classification(
+    settings: dict[str, Any], user_input: dict[str, Any]
+) -> None:
+    settings["classification"] = {
+        "enabled": bool(user_input.get(FIELD_CLASSIFICATION_ENABLED, True)),
+        "france": bool(user_input.get(FIELD_CLASSIFICATION_FRANCE, True)),
+        "us_fallback": bool(user_input.get(FIELD_US_FALLBACK, True)),
+        "us_tv": bool(user_input.get(FIELD_US_TV, True)),
+    }
+
+
+def _decade_edit_schema(settings: dict[str, Any], decade: str) -> vol.Schema:
+    cfg = (
+        ((settings.get("top_catalog") or {}).get("decades") or {}).get(decade)
+        or DEFAULT_TOP_CATALOG["decades"][decade]
+    )
+    return vol.Schema(
+        {
+            vol.Optional(
+                "enabled", default=bool(cfg.get("enabled", False))
+            ): selector.BooleanSelector(),
+            vol.Required(
+                "top_count", default=int(cfg.get("top_count", 10))
+            ): _number(1, 100),
+            vol.Optional(
+                "movies", default=bool(cfg.get("movies", True))
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                "animation", default=bool(cfg.get("animation", True))
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                "series", default=bool(cfg.get("series", True))
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+def _player_schema(
+    current: dict[str, Any] | None = None,
+    *,
+    player_id: str = "",
+    include_add_another: bool = False,
+    include_delete: bool = False,
+) -> vol.Schema:
+    current = current or {}
+    schema: dict[Any, Any] = {
+        vol.Required(FIELD_PLAYER_ID, default=player_id): selector.TextSelector(),
+        vol.Required(
+            FIELD_PLAYER_NAME,
+            default=str(current.get("name") or player_id or "Salon"),
+        ): selector.TextSelector(),
+    }
+
+    for field, domain, value in (
+        (FIELD_PLAYER_MEDIA, "media_player", current.get("media_player")),
+        (FIELD_PLAYER_REMOTE, "remote", current.get("remote")),
+        (FIELD_PLAYER_ADB, "media_player", current.get("adb_player")),
+    ):
+        marker = vol.Required(field, default=value) if value else vol.Required(field)
+        schema[marker] = _entity(domain)
+
+    if include_add_another:
+        schema[vol.Optional(FIELD_ADD_ANOTHER, default=False)] = selector.BooleanSelector()
+    if include_delete:
+        schema[vol.Optional(FIELD_DELETE_PLAYER, default=False)] = selector.BooleanSelector()
+    return vol.Schema(schema)
+
+
 class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION=1
-    async def async_step_user(self, user_input=None):
-        if self._async_current_entries(): return self.async_abort(reason="single_instance_allowed")
-        schema=vol.Schema({vol.Optional(CONF_UPDATE_HOURS, default=DEFAULT_UPDATE_HOURS): vol.All(vol.Coerce(int), vol.Range(min=2,max=24))})
-        if user_input is not None: return self.async_create_entry(title="Streaming Top FR", data=user_input)
-        return self.async_show_form(step_id="user", data_schema=schema)
+    """Configure Streaming Top FR."""
+
+    VERSION = 2
+
+    def __init__(self) -> None:
+        self._settings: dict[str, Any] | None = None
+        self._update_hours = DEFAULT_UPDATE_HOURS
+        self._player_counter = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> StreamingTopFrOptionsFlow:
+        return StreamingTopFrOptionsFlow()
+
+    async def _ensure_settings(self) -> None:
+        if self._settings is None:
+            self._settings = await async_load_legacy_settings(self.hass)
+
+    def _finish(self) -> ConfigFlowResult:
+        assert self._settings is not None
+        return self.async_create_entry(
+            title="Streaming Top FR",
+            data={},
+            options={
+                CONF_UPDATE_HOURS: self._update_hours,
+                CONF_SETTINGS: normalize_settings(self._settings),
+            },
+        )
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Initial setup."""
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
+        await self._ensure_settings()
+
+        if user_input is not None:
+            self._update_hours = int(user_input[CONF_UPDATE_HOURS])
+            return await self.async_step_services()
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_UPDATE_HOURS,
+                        default=self._update_hours,
+                    ): _number(2, 24),
+                }
+            ),
+        )
+
+    async def async_step_services(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_services(self._settings, user_input)
+            return await self.async_step_discovery()
+        return self.async_show_form(
+            step_id="services",
+            data_schema=_service_schema(self._settings),
+        )
+
+    async def async_step_discovery(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_discovery(self._settings, user_input)
+            return await self.async_step_top_catalog()
+        return self.async_show_form(
+            step_id="discovery",
+            data_schema=_discovery_schema(self._settings),
+        )
+
+    async def async_step_top_catalog(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_top(self._settings, user_input)
+            return await self.async_step_decades()
+        return self.async_show_form(
+            step_id="top_catalog",
+            data_schema=_top_schema(self._settings),
+        )
+
+    async def async_step_decades(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_enabled_decades(self._settings, user_input)
+            return await self.async_step_family()
+        return self.async_show_form(
+            step_id="decades",
+            data_schema=_decades_schema(self._settings),
+        )
+
+    async def async_step_family(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_family(self._settings, user_input)
+            return await self.async_step_classification()
+        return self.async_show_form(
+            step_id="family",
+            data_schema=_family_schema(self._settings),
+        )
+
+    async def async_step_classification(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_classification(self._settings, user_input)
+            return await self.async_step_playback()
+        return self.async_show_form(
+            step_id="classification",
+            data_schema=_classification_schema(self._settings),
+        )
+
+    async def async_step_playback(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        if user_input is not None:
+            if not user_input.get(FIELD_CONFIGURE_PLAYER, False):
+                return self._finish()
+            return await self.async_step_player()
+
+        has_players = bool(self._settings.get("players"))
+        return self.async_show_form(
+            step_id="playback",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        FIELD_CONFIGURE_PLAYER,
+                        default=not has_players,
+                    ): selector.BooleanSelector()
+                }
+            ),
+        )
+
+    async def async_step_player(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        assert self._settings is not None
+        players = self._settings.setdefault("players", {})
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            player_id = (
+                str(user_input[FIELD_PLAYER_ID]).strip().casefold().replace(" ", "_")
+            )
+            if not player_id:
+                errors[FIELD_PLAYER_ID] = "invalid_player_id"
+            elif player_id in players:
+                errors[FIELD_PLAYER_ID] = "player_already_exists"
+            else:
+                players[player_id] = {
+                    "name": str(user_input[FIELD_PLAYER_NAME]).strip() or player_id,
+                    "type": "android_tv",
+                    "media_player": user_input[FIELD_PLAYER_MEDIA],
+                    "remote": user_input[FIELD_PLAYER_REMOTE],
+                    "adb_player": user_input[FIELD_PLAYER_ADB],
+                }
+                if user_input.get(FIELD_ADD_ANOTHER, False):
+                    self._player_counter += 1
+                    return await self.async_step_player()
+                return self._finish()
+
+        return self.async_show_form(
+            step_id="player",
+            data_schema=_player_schema(
+                player_id=f"player_{self._player_counter}",
+                include_add_another=True,
+            ),
+            errors=errors,
+        )
+
+
+class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
+    """Manage Streaming Top FR options."""
+
+    def __init__(self) -> None:
+        self._settings: dict[str, Any] | None = None
+        self._update_hours = DEFAULT_UPDATE_HOURS
+        self._selected_decade: str | None = None
+        self._selected_player: str | None = None
+
+    def _ensure_loaded(self) -> None:
+        if self._settings is not None:
+            return
+        options = dict(self.config_entry.options)
+        raw_settings = options.get(CONF_SETTINGS) or self.config_entry.data.get(
+            CONF_SETTINGS
+        )
+        self._settings = normalize_settings(raw_settings or DEFAULT_SETTINGS)
+        self._update_hours = int(
+            options.get(
+                CONF_UPDATE_HOURS,
+                self.config_entry.data.get(
+                    CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS
+                ),
+            )
+        )
+
+    def _save(self) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        options = dict(self.config_entry.options)
+        options.update(
+            {
+                CONF_UPDATE_HOURS: self._update_hours,
+                CONF_SETTINGS: normalize_settings(self._settings),
+            }
+        )
+        return self.async_create_entry(title="", data=options)
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=[
+                "general",
+                "services",
+                "discovery",
+                "top_catalog",
+                "decades",
+                "family",
+                "classification",
+                "players",
+            ],
+        )
+
+    async def async_step_general(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        if user_input is not None:
+            self._update_hours = int(user_input[CONF_UPDATE_HOURS])
+            return self._save()
+        return self.async_show_form(
+            step_id="general",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_UPDATE_HOURS,
+                        default=self._update_hours,
+                    ): _number(2, 24)
+                }
+            ),
+        )
+
+    async def async_step_services(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_services(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="services",
+            data_schema=_service_schema(self._settings),
+        )
+
+    async def async_step_discovery(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_discovery(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="discovery",
+            data_schema=_discovery_schema(self._settings),
+        )
+
+    async def async_step_top_catalog(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_top(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="top_catalog",
+            data_schema=_top_schema(self._settings),
+        )
+
+    async def async_step_decades(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            self._selected_decade = str(user_input["decade"])
+            return await self.async_step_decade_edit()
+
+        options = [
+            SelectOptionDict(value=decade, label=f"{decade}s")
+            for decade in DEFAULT_TOP_CATALOG["decades"]
+        ]
+        return self.async_show_form(
+            step_id="decades",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "decade",
+                        default="1990",
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_decade_edit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        assert self._selected_decade is not None
+
+        if user_input is not None:
+            top = self._settings.setdefault(
+                "top_catalog", deepcopy(DEFAULT_TOP_CATALOG)
+            )
+            decades = top.setdefault(
+                "decades", deepcopy(DEFAULT_TOP_CATALOG["decades"])
+            )
+            decades[self._selected_decade] = {
+                "enabled": bool(user_input.get("enabled", False)),
+                "top_count": int(user_input["top_count"]),
+                "movies": bool(user_input.get("movies", True)),
+                "animation": bool(user_input.get("animation", True)),
+                "series": bool(user_input.get("series", True)),
+            }
+            return self._save()
+
+        return self.async_show_form(
+            step_id="decade_edit",
+            data_schema=_decade_edit_schema(
+                self._settings, self._selected_decade
+            ),
+            description_placeholders={"decade": self._selected_decade},
+        )
+
+    async def async_step_family(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_family(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="family",
+            data_schema=_family_schema(self._settings),
+        )
+
+    async def async_step_classification(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_classification(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="classification",
+            data_schema=_classification_schema(self._settings),
+        )
+
+    async def async_step_players(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        players = self._settings.get("players") or {}
+
+        if user_input is not None:
+            self._selected_player = str(user_input[FIELD_PLAYER_SELECT])
+            return await self.async_step_player_edit()
+
+        options = [
+            SelectOptionDict(
+                value="__add__", label="➕ Ajouter une destination"
+            )
+        ]
+        options.extend(
+            SelectOptionDict(
+                value=player_id,
+                label=str(player.get("name") or player_id),
+            )
+            for player_id, player in players.items()
+        )
+        return self.async_show_form(
+            step_id="players",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        FIELD_PLAYER_SELECT,
+                        default="__add__",
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_player_edit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        assert self._selected_player is not None
+
+        players = self._settings.setdefault("players", {})
+        is_new = self._selected_player == "__add__"
+        old_id = "" if is_new else self._selected_player
+        current = {} if is_new else dict(players.get(old_id) or {})
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if not is_new and user_input.get(FIELD_DELETE_PLAYER, False):
+                players.pop(old_id, None)
+                return self._save()
+
+            new_id = (
+                str(user_input[FIELD_PLAYER_ID])
+                .strip()
+                .casefold()
+                .replace(" ", "_")
+            )
+            if not new_id:
+                errors[FIELD_PLAYER_ID] = "invalid_player_id"
+            elif new_id != old_id and new_id in players:
+                errors[FIELD_PLAYER_ID] = "player_already_exists"
+            else:
+                if old_id and new_id != old_id:
+                    players.pop(old_id, None)
+                players[new_id] = {
+                    "name": str(user_input[FIELD_PLAYER_NAME]).strip() or new_id,
+                    "type": "android_tv",
+                    "media_player": user_input[FIELD_PLAYER_MEDIA],
+                    "remote": user_input[FIELD_PLAYER_REMOTE],
+                    "adb_player": user_input[FIELD_PLAYER_ADB],
+                }
+                return self._save()
+
+        return self.async_show_form(
+            step_id="player_edit",
+            data_schema=_player_schema(
+                current,
+                player_id=old_id or "salon",
+                include_delete=not is_new,
+            ),
+            errors=errors,
+        )
