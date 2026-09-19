@@ -1,1 +1,16 @@
-{"config":{"step":{"user":{"title":"Streaming Top FR","description":"Netflix : Top 10 officiel France. Disney+ et Prime : tendances JustWatch France.","data":{"update_hours":"Actualisation (heures)"}}},"abort":{"single_instance_allowed":"Une seule instance est nécessaire."}}}
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Streaming Top FR",
+        "description": "Streaming Top FR : découverte et classement multi-services en France. Netflix utilise son Top 10 officiel France complété par JustWatch ; les autres services s’appuient sur la popularité JustWatch France.",
+        "data": {
+          "update_hours": "Actualisation (heures)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Une seule instance est nécessaire."
+    }
+  }
+}
