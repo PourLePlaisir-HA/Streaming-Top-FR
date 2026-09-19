@@ -11,22 +11,8 @@ from .const import SUPPORTED_PROVIDERS
 
 CONFIG_FILENAME = "streaming_top_fr.yaml"
 
-DEFAULT_PLAYERS: dict[str, dict[str, Any]] = {
-    "salon": {
-        "name": "Salon",
-        "type": "android_tv",
-        "media_player": "media_player.android_tv_salon",
-        "remote": "remote.android_tv_salon",
-        "adb_player": "media_player.android_tv_salon_adb",
-    },
-    "etage": {
-        "name": "Étage",
-        "type": "android_tv",
-        "media_player": "media_player.android_tv_etage",
-        "remote": "remote.android_tv_etage",
-        "adb_player": "media_player.android_tv_etage_adb",
-    },
-}
+DEFAULT_PLAYERS: dict[str, dict[str, Any]] = {}
+
 
 DEFAULT_TOP_CATALOG: dict[str, Any] = {
     "enabled": True,
@@ -447,6 +433,25 @@ family:
     return normalize_settings(raw)
 
 
-async def async_load_settings(hass) -> dict[str, Any]:
+def _load_legacy_if_present(path: str) -> dict[str, Any]:
+    """Load legacy YAML without creating it for new UI-based installs."""
+    if not Path(path).exists():
+        return deepcopy(DEFAULT_SETTINGS)
+    return _ensure_and_load(path)
+
+
+async def async_load_legacy_settings(hass) -> dict[str, Any]:
+    """Load v0.6.x YAML settings when present, otherwise return defaults."""
     path = hass.config.path(CONFIG_FILENAME)
-    return await hass.async_add_executor_job(_ensure_and_load, path)
+    return await hass.async_add_executor_job(_load_legacy_if_present, path)
+
+
+async def async_load_settings(hass, config_entry=None) -> dict[str, Any]:
+    """Load settings, preferring the native Home Assistant config entry UI."""
+    if config_entry is not None:
+        options = dict(config_entry.options)
+        raw = options.get("settings") or config_entry.data.get("settings")
+        if isinstance(raw, dict):
+            return normalize_settings(raw)
+
+    return await async_load_legacy_settings(hass)
