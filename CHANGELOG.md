@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.0
+- Première version stable de la branche **v0.7** après validation des trois bêta.
+- Ajoute la **configuration native Home Assistant** avec assistant initial et menu **Configurer**.
+- Ajoute une page **Synthèse** en lecture seule des paramètres réellement actifs.
+- Ajoute la gestion native des **services**, de la **découverte**, du **Top Streaming / IMDb**, des **décennies**, de la **Famille**, des **classifications** et des **destinations de lecture**.
+- Ajoute une section séparée **Décennie par défaut** ; la carte Top Streaming utilise ce réglage automatiquement sauf surcharge locale explicite.
+- Conserve la migration depuis `streaming_top_fr.yaml` pour les installations v0.6.x, sans supprimer le fichier existant.
+- Documentation Lovelace simplifiée avec la ressource stable `/streaming_top_fr/streaming-top-fr-card.js` sans suffixe de version.
+
+## 0.7.0-beta.3
+- Corrige les libellés manquants du menu **Configurer** pour **Synthèse** et **Décennie par défaut**.
+- Réorganise les réglages des décennies : **Décennies** sert à modifier les paramètres détaillés d'une décennie ; **Décennie par défaut** devient une section séparée.
+- La décennie par défaut sélectionnée est automatiquement conservée comme active.
+- Version de développement : `0.7.0-beta.3`.
+
+## 0.7.0-beta.2
+- Ajoute une page **Synthèse** en tête du menu **Configurer**.
+- La synthèse est en lecture seule et affiche les valeurs réellement actives : fréquence d'actualisation, services, découverte, Top/IMDb, décennies et volumes, Famille, classifications et destinations de lecture.
+- Les décennies affichent également leurs catégories actives (🎬 Films · ✨ Animation · 📺 Séries).
+- Ajoute un réglage **Décennie par défaut** dans l'IHM ; la carte Top Streaming l'utilise automatiquement, sauf surcharge locale explicite via `default_decade:` dans le YAML Lovelace.
+- Version de développement : `0.7.0-beta.2`.
+
+## 0.7.0-beta.1
+- Ajoute un **assistant de configuration natif Home Assistant** affiché dès l'ajout de l'intégration.
+- L'assistant configure successivement : fréquence d'actualisation, services de streaming, découverte, Top Streaming / IMDb, décennies, Famille, classifications et destinations Android TV / Freebox.
+- Ajoute un **Options Flow** accessible via **Paramètres → Appareils et services → Streaming Top FR → Configurer**.
+- Le menu Configurer permet de modifier séparément : Général, Services, Découverte, Top Streaming, chaque décennie, Famille, Classifications et Destinations de lecture.
+- Les destinations utilisent les sélecteurs d'entités Home Assistant pour `media_player`, `remote` et le `media_player` Android Debug Bridge.
+- Les destinations peuvent être ajoutées, modifiées, renommées ou supprimées depuis l'IHM.
+- Migre automatiquement les réglages de `/config/streaming_top_fr.yaml` vers les options natives lors du premier démarrage en v0.7, sans modifier ni supprimer le YAML.
+- Conserve la compatibilité de retour vers la v0.6.5 en gardant la version majeure de ConfigEntry inchangée.
+- Les nouvelles installations UI ne créent plus de destinations d'exemple fictives.
+- Ajoute les traductions FR/EN complètes et `strings.json`.
+- Ajoute une validation GitHub Actions : compilation Python, JSON et syntaxe JavaScript.
+- Version de développement : `0.7.0-beta.1`.
+
 ## 0.6.5
 - **Version stable validée via HACS** : installation depuis le dépôt public, création de l'intégration, chargement backend, cartes Lovelace et fonctionnement général testés avec succès.
 - Met à jour le texte du flux de configuration pour refléter le support multi-services actuel.

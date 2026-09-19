@@ -11,25 +11,12 @@ from .const import SUPPORTED_PROVIDERS
 
 CONFIG_FILENAME = "streaming_top_fr.yaml"
 
-DEFAULT_PLAYERS: dict[str, dict[str, Any]] = {
-    "salon": {
-        "name": "Salon",
-        "type": "android_tv",
-        "media_player": "media_player.android_tv_salon",
-        "remote": "remote.android_tv_salon",
-        "adb_player": "media_player.android_tv_salon_adb",
-    },
-    "etage": {
-        "name": "Étage",
-        "type": "android_tv",
-        "media_player": "media_player.android_tv_etage",
-        "remote": "remote.android_tv_etage",
-        "adb_player": "media_player.android_tv_etage_adb",
-    },
-}
+DEFAULT_PLAYERS: dict[str, dict[str, Any]] = {}
+
 
 DEFAULT_TOP_CATALOG: dict[str, Any] = {
     "enabled": True,
+    "default_decade": "1990",
     "min_imdb_votes": 20000,
     "exclude_short_films": True,
     "decades": {
@@ -87,7 +74,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
 }
 
-DEFAULT_CONFIG_TEXT = """# Streaming Top FR 0.6.3
+DEFAULT_CONFIG_TEXT = """# Streaming Top FR legacy YAML (v0.7 migration support)
 # Ce fichier est relu à chaque rafraîchissement de la source (bouton ↻ inclus).
 # Les booléens acceptent true/false, yes/no, oui/non.
 #
@@ -138,6 +125,7 @@ players:
 # Les décennies désactivées ne génèrent aucune requête catalogue.
 top_catalog:
   enabled: true
+  default_decade: "1990"       # Décennie affichée par défaut dans la carte Top Streaming
   min_imdb_votes: 20000      # Seuil IMDb minimal ; 0 désactive ce filtre
   exclude_short_films: true  # Exclut les films/animations de moins de 40 min
   decades:
@@ -267,6 +255,12 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         settings["top_catalog"]["enabled"] = _as_bool(
             top_catalog.get("enabled"), DEFAULT_TOP_CATALOG["enabled"]
         )
+        default_decade = str(
+            top_catalog.get("default_decade", DEFAULT_TOP_CATALOG["default_decade"])
+        )
+        if default_decade not in DEFAULT_TOP_CATALOG["decades"]:
+            default_decade = DEFAULT_TOP_CATALOG["default_decade"]
+        settings["top_catalog"]["default_decade"] = default_decade
         settings["top_catalog"]["min_imdb_votes"] = _as_int(
             top_catalog.get("min_imdb_votes"),
             DEFAULT_TOP_CATALOG["min_imdb_votes"],
@@ -447,6 +441,25 @@ family:
     return normalize_settings(raw)
 
 
-async def async_load_settings(hass) -> dict[str, Any]:
+def _load_legacy_if_present(path: str) -> dict[str, Any]:
+    """Load legacy YAML without creating it for new UI-based installs."""
+    if not Path(path).exists():
+        return deepcopy(DEFAULT_SETTINGS)
+    return _ensure_and_load(path)
+
+
+async def async_load_legacy_settings(hass) -> dict[str, Any]:
+    """Load v0.6.x YAML settings when present, otherwise return defaults."""
     path = hass.config.path(CONFIG_FILENAME)
-    return await hass.async_add_executor_job(_ensure_and_load, path)
+    return await hass.async_add_executor_job(_load_legacy_if_present, path)
+
+
+async def async_load_settings(hass, config_entry=None) -> dict[str, Any]:
+    """Load settings, preferring the native Home Assistant config entry UI."""
+    if config_entry is not None:
+        options = dict(config_entry.options)
+        raw = options.get("settings") or config_entry.data.get("settings")
+        if isinstance(raw, dict):
+            return normalize_settings(raw)
+
+    return await async_load_legacy_settings(hass)

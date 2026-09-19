@@ -1,4 +1,4 @@
-# Streaming Top FR 0.6.5
+# Streaming Top FR 0.7.0
 
 <p align="center">
   <img src="custom_components/streaming_top_fr/brand/logo.png" alt="Streaming Top FR" width="220">
@@ -21,9 +21,30 @@ Carte Home Assistant multi-services pour découvrir des films et séries disponi
 3. Recherchez **Streaming Top FR** puis installez l'intégration.
 4. Redémarrez Home Assistant.
 5. Ajoutez l'intégration depuis **Paramètres → Appareils et services → Ajouter une intégration → Streaming Top FR**.
-6. Copiez et adaptez `streaming_top_fr.yaml` dans `/config/streaming_top_fr.yaml` pour personnaliser les services, destinations, filtres et classements.
+6. L'assistant graphique s'ouvre automatiquement et vous guide à travers les services, la découverte, le Top Streaming, Famille, les classifications et, si souhaité, les destinations Android TV / Freebox.
+
+> À partir de la v0.7, l'IHM Home Assistant devient la source de configuration principale. Un ancien `/config/streaming_top_fr.yaml` est importé automatiquement lors de la première migration, mais reste intact afin de permettre un retour vers la v0.6.5.
 
 > La découverte et les classements fonctionnent sans ADB. **Android Debug Bridge est requis uniquement si vous souhaitez lancer Netflix, Disney+ ou Prime Video directement sur un Player Android TV / Freebox Pop depuis la carte.**
+
+---
+
+## Configuration native Home Assistant — v0.7
+
+L'ajout de **Streaming Top FR** ouvre maintenant un assistant multi-écrans directement dans Home Assistant :
+
+1. **Général** — fréquence d'actualisation ;
+2. **Services** — Netflix, Disney+, Prime Video, HBO Max, Apple TV+, Paramount+, CANAL+, Crunchyroll, MUBI et ADN ;
+3. **Découverte** — titres visibles, préchargement et profondeur ;
+4. **Top Streaming / IMDb** — activation, seuil de votes et courts métrages ;
+5. **Décennies** — choix de la décennie par défaut et sélection des décennies actives ;
+6. **Famille** — âge cible et catégories ;
+7. **Classification** — France prioritaire et fallback US ;
+8. **Lecture** — ajout facultatif d'une ou plusieurs destinations Android TV / Freebox via sélecteurs d'entités.
+
+Après installation, tous ces réglages restent accessibles depuis **Paramètres → Appareils et services → Streaming Top FR → Configurer**. Le menu permet également d'éditer individuellement chaque décennie et de gérer les destinations de lecture.
+
+La lecture Android TV reste facultative : il est possible d'utiliser entièrement les fonctions de découverte et de classement sans installer ADB.
 
 ---
 
@@ -106,7 +127,7 @@ Il faut l'enregistrer **une seule fois** comme ressource Lovelace :
 1. Ouvrez **Paramètres → Tableaux de bord**.
 2. Ouvrez le menu **⋮ → Ressources**.
 3. Ajoutez :
-   - URL : `/streaming_top_fr/streaming-top-fr-card.js?v=0.6.5`
+   - URL : `/streaming_top_fr/streaming-top-fr-card.js`
    - Type : **Module JavaScript**
 4. Rechargez les ressources ou faites un rechargement forcé du navigateur.
 
@@ -124,9 +145,10 @@ title: Streaming
 ```yaml
 type: custom:streaming-top-fr-catalog-card
 title: Top Streaming
-default_decade: "1990"
 default_category: movies
 ```
+
+> La **décennie par défaut** se règle désormais dans **Paramètres → Appareils et services → Streaming Top FR → Configurer → Décennies**. Si vous ajoutez explicitement `default_decade:` dans le YAML de la carte, cette valeur locale prend priorité sur le réglage global de l'intégration.
 
 ---
 
@@ -418,7 +440,7 @@ default_category: movies
 ## Mise à jour frontend
 
 ```text
-/streaming_top_fr/streaming-top-fr-card.js?v=0.6.5
+/streaming_top_fr/streaming-top-fr-card.js
 ```
 
 Après remplacement des fichiers : redémarrer Home Assistant puis effectuer un rechargement forcé du navigateur. Le bouton **↻** relit `/config/streaming_top_fr.yaml`.
