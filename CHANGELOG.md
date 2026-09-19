@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0-beta.2
+- Ajoute une page **Synthèse** en tête du menu **Configurer**.
+- La synthèse est en lecture seule et affiche les valeurs réellement actives : fréquence d'actualisation, services, découverte, Top/IMDb, décennies et volumes, Famille, classifications et destinations de lecture.
+- Les décennies affichent également leurs catégories actives (🎬 Films · ✨ Animation · 📺 Séries).
+- Version de développement : `0.7.0-beta.2`.
+
 ## 0.7.0-beta.1
 - Ajoute un **assistant de configuration natif Home Assistant** affiché dès l'ajout de l'intégration.
 - L'assistant configure successivement : fréquence d'actualisation, services de streaming, découverte, Top Streaming / IMDb, décennies, Famille, classifications et destinations Android TV / Freebox.
