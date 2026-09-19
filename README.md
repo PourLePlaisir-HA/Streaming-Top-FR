@@ -153,16 +153,16 @@ players:
   salon:
     name: Salon
     type: android_tv
-    media_player: media_player.freebox_player_pop
-    remote: remote.freebox_player_pop
-    adb_player: media_player.android_tv_192_168_1_141
+    media_player: media_player.android_tv_salon
+    remote: remote.android_tv_salon
+    adb_player: media_player.android_tv_salon_adb
 
   etage:
     name: Étage
     type: android_tv
-    media_player: media_player.freebox_player_pop_2
-    remote: remote.freebox_player_pop_2
-    adb_player: media_player.android_tv_192_168_1_135
+    media_player: media_player.android_tv_etage
+    remote: remote.android_tv_etage
+    adb_player: media_player.android_tv_etage_adb
 ```
 
 Pour ajouter une destination :
@@ -171,8 +171,8 @@ Pour ajouter une destination :
   chambre:
     name: Chambre
     type: android_tv
-    media_player: media_player.freebox_chambre
-    remote: remote.freebox_chambre
+    media_player: media_player.android_tv_chambre
+    remote: remote.android_tv_chambre
     adb_player: media_player.android_tv_chambre
 ```
 
