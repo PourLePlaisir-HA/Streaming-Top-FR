@@ -1,16 +1,232 @@
 {
+  "title": "Streaming Top FR",
   "config": {
     "step": {
       "user": {
-        "title": "Streaming Top FR",
-        "description": "Streaming Top FR : découverte et classement multi-services en France. Netflix utilise son Top 10 officiel France complété par JustWatch ; les autres services s’appuient sur la popularité JustWatch France.",
+        "title": "Paramètres généraux",
+        "description": "Configurez Streaming Top FR. Les réglages avancés pourront ensuite être modifiés depuis **Paramètres → Appareils et services → Streaming Top FR → Configurer**.",
         "data": {
-          "update_hours": "Actualisation (heures)"
+          "update_hours": "Actualisation automatique (heures)"
+        },
+        "data_description": {
+          "update_hours": "Intervalle entre deux mises à jour automatiques, de 2 à 24 heures."
+        }
+      },
+      "services": {
+        "title": "Services de streaming",
+        "description": "Activez uniquement les abonnements que vous souhaitez voir dans Streaming Top FR. Les offres de location/achat ne sont pas utilisées.",
+        "data": {
+          "service_netflix": "Netflix",
+          "service_disney": "Disney+",
+          "service_prime": "Prime Video",
+          "service_hbo_max": "HBO Max",
+          "service_apple_tv": "Apple TV+",
+          "service_paramount": "Paramount+",
+          "service_canal": "CANAL+",
+          "service_crunchyroll": "Crunchyroll",
+          "service_mubi": "MUBI",
+          "service_adn": "ADN"
+        }
+      },
+      "discovery": {
+        "title": "Découverte",
+        "description": "Réglez la taille des carrousels et de leur réserve.",
+        "data": {
+          "visible_count": "Titres visibles",
+          "prefetch_count": "Titres préchargés",
+          "max_depth": "Profondeur maximale"
+        },
+        "data_description": {
+          "visible_count": "Nombre de titres affichés dans chaque carrousel.",
+          "prefetch_count": "Nombre total de titres maintenus en mémoire, visibles + réserve.",
+          "max_depth": "Nombre maximal de candidats explorés pour reconstituer la réserve."
+        }
+      },
+      "top_catalog": {
+        "title": "Top Streaming / IMDb",
+        "description": "JustWatch France définit le pool local ; IMDb classe ensuite la qualité des titres à l'intérieur de ce pool.",
+        "data": {
+          "top_enabled": "Activer Top Streaming",
+          "min_imdb_votes": "Votes IMDb minimum",
+          "exclude_short_films": "Exclure les courts métrages (< 40 min)"
+        }
+      },
+      "decades": {
+        "title": "Décennies",
+        "description": "Sélectionnez les décennies disponibles dans la carte Top Streaming. Les réglages détaillés de chaque décennie restent modifiables ensuite via **Configurer**.",
+        "data": {
+          "enabled_decades": "Décennies actives"
+        }
+      },
+      "family": {
+        "title": "Mode Famille",
+        "description": "Configurez la branche Famille du Top Streaming.",
+        "data": {
+          "family_enabled": "Activer Famille",
+          "target_age": "Âge cible",
+          "allow_unrated": "Autoriser les contenus non classifiés",
+          "family_movies": "Films",
+          "family_animation": "Animation",
+          "family_series": "Séries"
+        }
+      },
+      "classification": {
+        "title": "Classification d'âge",
+        "description": "La classification française reste prioritaire. Le fallback US n'est utilisé qu'en absence de classification FR exploitable.",
+        "data": {
+          "classification_enabled": "Afficher les classifications",
+          "classification_france": "Priorité France",
+          "us_fallback": "Fallback US",
+          "us_tv": "Autoriser les classifications TV US"
+        }
+      },
+      "playback": {
+        "title": "Lecture sur Android TV / Freebox",
+        "description": "La lecture automatique est facultative. Elle nécessite les intégrations Home Assistant fournissant les entités **remote** et **Android Debug Bridge**.",
+        "data": {
+          "configure_player": "Configurer une destination maintenant"
+        }
+      },
+      "player": {
+        "title": "Destination de lecture",
+        "description": "Sélectionnez les entités Home Assistant de votre Android TV / Freebox Pop.",
+        "data": {
+          "player_id": "Identifiant interne",
+          "player_name": "Nom affiché",
+          "player_media_player": "Media player principal",
+          "player_remote": "Remote",
+          "player_adb_player": "Media player Android Debug Bridge",
+          "add_another": "Ajouter une autre destination"
+        },
+        "data_description": {
+          "player_id": "Exemple : salon, etage, chambre. Cet identifiant est utilisé en interne.",
+          "player_media_player": "Destination Home Assistant logique.",
+          "player_remote": "Entité remote utilisée pour réveiller le Player et envoyer les commandes.",
+          "player_adb_player": "Entité media_player créée par l'intégration Android Debug Bridge."
         }
       }
     },
+    "error": {
+      "invalid_player_id": "L'identifiant de destination est invalide.",
+      "player_already_exists": "Une destination utilise déjà cet identifiant."
+    },
     "abort": {
       "single_instance_allowed": "Une seule instance est nécessaire."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configurer Streaming Top FR",
+        "description": "Choisissez la section à modifier.",
+        "menu_options": {
+          "general": "Général",
+          "services": "Services de streaming",
+          "discovery": "Découverte",
+          "top_catalog": "Top Streaming / IMDb",
+          "decades": "Décennies",
+          "family": "Famille",
+          "classification": "Classification d'âge",
+          "players": "Destinations de lecture"
+        }
+      },
+      "general": {
+        "title": "Général",
+        "data": {
+          "update_hours": "Actualisation automatique (heures)"
+        }
+      },
+      "services": {
+        "title": "Services de streaming",
+        "data": {
+          "service_netflix": "Netflix",
+          "service_disney": "Disney+",
+          "service_prime": "Prime Video",
+          "service_hbo_max": "HBO Max",
+          "service_apple_tv": "Apple TV+",
+          "service_paramount": "Paramount+",
+          "service_canal": "CANAL+",
+          "service_crunchyroll": "Crunchyroll",
+          "service_mubi": "MUBI",
+          "service_adn": "ADN"
+        }
+      },
+      "discovery": {
+        "title": "Découverte",
+        "data": {
+          "visible_count": "Titres visibles",
+          "prefetch_count": "Titres préchargés",
+          "max_depth": "Profondeur maximale"
+        }
+      },
+      "top_catalog": {
+        "title": "Top Streaming / IMDb",
+        "data": {
+          "top_enabled": "Activer Top Streaming",
+          "min_imdb_votes": "Votes IMDb minimum",
+          "exclude_short_films": "Exclure les courts métrages (< 40 min)"
+        }
+      },
+      "decades": {
+        "title": "Décennies",
+        "description": "Choisissez la décennie à modifier.",
+        "data": {
+          "decade": "Décennie"
+        }
+      },
+      "decade_edit": {
+        "title": "Décennie {decade}",
+        "description": "Réglages détaillés pour les années {decade}.",
+        "data": {
+          "enabled": "Activer cette décennie",
+          "top_count": "Nombre de titres par catégorie",
+          "movies": "Films",
+          "animation": "Animation",
+          "series": "Séries"
+        }
+      },
+      "family": {
+        "title": "Famille",
+        "data": {
+          "family_enabled": "Activer Famille",
+          "target_age": "Âge cible",
+          "allow_unrated": "Autoriser les contenus non classifiés",
+          "family_movies": "Films",
+          "family_animation": "Animation",
+          "family_series": "Séries"
+        }
+      },
+      "classification": {
+        "title": "Classification d'âge",
+        "data": {
+          "classification_enabled": "Afficher les classifications",
+          "classification_france": "Priorité France",
+          "us_fallback": "Fallback US",
+          "us_tv": "Autoriser les classifications TV US"
+        }
+      },
+      "players": {
+        "title": "Destinations de lecture",
+        "description": "Ajoutez une destination ou sélectionnez une destination existante pour la modifier.",
+        "data": {
+          "player_select": "Destination"
+        }
+      },
+      "player_edit": {
+        "title": "Destination de lecture",
+        "data": {
+          "player_id": "Identifiant interne",
+          "player_name": "Nom affiché",
+          "player_media_player": "Media player principal",
+          "player_remote": "Remote",
+          "player_adb_player": "Media player Android Debug Bridge",
+          "delete_player": "Supprimer cette destination"
+        }
+      }
+    },
+    "error": {
+      "invalid_player_id": "L'identifiant de destination est invalide.",
+      "player_already_exists": "Une destination utilise déjà cet identifiant."
     }
   }
 }
