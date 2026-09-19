@@ -4,6 +4,7 @@
 - Ajoute une page **Synthèse** en tête du menu **Configurer**.
 - La synthèse est en lecture seule et affiche les valeurs réellement actives : fréquence d'actualisation, services, découverte, Top/IMDb, décennies et volumes, Famille, classifications et destinations de lecture.
 - Les décennies affichent également leurs catégories actives (🎬 Films · ✨ Animation · 📺 Séries).
+- Ajoute un réglage **Décennie par défaut** dans l'IHM ; la carte Top Streaming l'utilise automatiquement, sauf surcharge locale explicite via `default_decade:` dans le YAML Lovelace.
 - Version de développement : `0.7.0-beta.2`.
 
 ## 0.7.0-beta.1
