@@ -127,10 +127,10 @@
           "discovery": "Découverte",
           "top_catalog": "Top Streaming / IMDb",
           "decades": "Décennies",
-          "decade_details": "Détails par décennie",
           "family": "Famille",
           "classification": "Classification d'âge",
-          "players": "Destinations de lecture"
+          "players": "Destinations de lecture",
+          "default_decade": "Décennie par défaut"
         }
       },
       "general": {
@@ -172,10 +172,9 @@
       },
       "decades": {
         "title": "Décennies",
-        "description": "Choisissez la décennie affichée par défaut et les décennies disponibles dans Top Streaming. La décennie par défaut restera toujours active.",
+        "description": "Choisissez la décennie à modifier.",
         "data": {
-          "default_decade": "Décennie par défaut",
-          "enabled_decades": "Décennies actives"
+          "decade": "Décennie"
         }
       },
       "decade_edit": {
@@ -231,11 +230,11 @@
         "title": "Synthèse des paramètres",
         "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
       },
-      "decade_details": {
-        "title": "Détails par décennie",
-        "description": "Choisissez la décennie dont vous souhaitez modifier le nombre de titres et les catégories.",
+      "default_decade": {
+        "title": "Décennie par défaut",
+        "description": "Choisissez la décennie affichée automatiquement à l’ouverture de la carte Top Streaming. Elle restera activée.",
         "data": {
-          "decade": "Décennie à modifier"
+          "default_decade": "Décennie par défaut"
         }
       }
     },
