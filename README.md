@@ -1,5 +1,14 @@
 # Streaming Top FR 0.6.5
 
+<p align="center">
+  <img src="custom_components/streaming_top_fr/brand/logo.png" alt="Streaming Top FR" width="220">
+</p>
+
+<p align="center">
+  <strong>Streaming Top FR for Home Assistant</strong><br>
+  Découvrez, classez et lancez les meilleurs films et séries disponibles sur vos services de streaming en France.
+</p>
+
 Carte Home Assistant multi-services pour découvrir des films et séries disponibles en France, les classer (`Ma liste`, `Déjà vus`, `Pas intéressé`) et lancer les plateformes déjà validées vers des destinations configurables.
 
 
