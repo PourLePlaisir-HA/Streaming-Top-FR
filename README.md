@@ -2,6 +2,38 @@
 
 Carte Home Assistant multi-services pour découvrir des films et séries disponibles en France, les classer (`Ma liste`, `Déjà vus`, `Pas intéressé`) et lancer les plateformes déjà validées vers des destinations configurables.
 
+
+## Installation
+
+### Via HACS — dépôt personnalisé
+
+1. Ouvrez **HACS** dans Home Assistant.
+2. Ajoutez `https://github.com/PourLePlaisir-HA/Streaming-Top-FR` comme **dépôt personnalisé** de type **Integration**.
+3. Recherchez **Streaming Top FR** puis installez l'intégration.
+4. Redémarrez Home Assistant.
+5. Ajoutez l'intégration depuis **Paramètres → Appareils et services → Ajouter une intégration → Streaming Top FR**.
+6. Copiez et adaptez `streaming_top_fr.yaml` dans `/config/streaming_top_fr.yaml` si vous souhaitez personnaliser les services, destinations, filtres et classements.
+
+Les exemples de destinations présents dans le dépôt sont volontairement génériques : remplacez les entités `media_player`, `remote` et `adb_player` par celles de votre propre installation.
+
+### Cartes Lovelace
+
+Après installation et redémarrage, les cartes sont servies par l'intégration :
+
+```yaml
+type: custom:streaming-top-fr-card
+title: Streaming
+```
+
+et :
+
+```yaml
+type: custom:streaming-top-fr-catalog-card
+title: Top Streaming
+default_decade: "1990"
+default_category: movies
+```
+
 ## Nouveau 0.6.5 — classement ancré sur la popularité France
 
 Le Top Streaming n'est plus construit à partir d'un tri IMDb mondial. **JustWatch France `POPULAR` définit désormais le pool de candidats réellement populaires en France et disponibles sur les services activés**, puis la note IMDb et le volume de votes servent uniquement à classer la qualité à l'intérieur de ce pool via la pondération bayésienne existante.
