@@ -258,6 +258,10 @@ class LocalLibraryScanner:
             if parents:
                 title_source = parents[-1]
 
+        # Release names commonly use dots/underscores as separators.
+        # Normalize them before looking for technical tags so tails such as
+        # "_1080p_FR_EN_x264..." are reliably removed.
+        title_source = re.sub(r"[._]+", " ", title_source)
         title_source = _RELEASE_WORDS.sub("", title_source)
         title_source = _YEAR.sub("", title_source)
         title = self._clean_local_title(title_source) or self._clean_name(stem)
