@@ -4,6 +4,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS, CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS
 from .storage import StreamingTopStore
@@ -20,6 +21,16 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass, entry):
     hass.data.setdefault(DOMAIN, {})
+
+    # v0.7.1 replaces the legacy text sensor with a Home Assistant-native
+    # problem binary sensor. Remove the old registry entry once so users do
+    # not keep an unavailable sensor.streaming_top_fr after upgrading.
+    registry = er.async_get(hass)
+    legacy_status_entity = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_status"
+    )
+    if legacy_status_entity:
+        registry.async_remove(legacy_status_entity)
 
     # v0.7 migrates the v0.6.x YAML configuration into native ConfigEntry
     # options once, while leaving the YAML file untouched as a rollback path.
