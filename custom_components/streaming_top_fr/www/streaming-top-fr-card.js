@@ -448,8 +448,52 @@ class StreamingLocalCard extends HTMLElement {
   }
   _label(cat){return{movies:"Films",series:"Séries",animation:"Animation",documentaries:"Documentaires"}[cat]||cat}
   _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation",documentaries:"mdi:earth"}[cat]||"mdi:movie-open"}
+  _collectionKey(item){
+    const parts=String(item?.relative_path||"").split("/").filter(Boolean);
+    // A direct child such as Movies/Film.mkv is not a collection.
+    // A nested path such as Movies/Indiana Jones/Film.mkv is.
+    if(parts.length<3)return null;
+    return parts.slice(0,2).join("/").toLocaleLowerCase("fr");
+  }
+  _sortMovieCollections(items){
+    const source=[...(items||[])];
+    const groups=new Map();
+    for(const item of source){
+      const key=this._collectionKey(item);
+      if(!key)continue;
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(item);
+    }
+
+    const sorted=new Map();
+    for(const [key,group] of groups.entries()){
+      if(group.length<2)continue;
+      sorted.set(key,[...group].sort((a,b)=>{
+        const ay=Number(a?.year);
+        const by=Number(b?.year);
+        const aYear=Number.isFinite(ay)&&ay>0?ay:Number.MAX_SAFE_INTEGER;
+        const bYear=Number.isFinite(by)&&by>0?by:Number.MAX_SAFE_INTEGER;
+        return aYear-bYear||
+          String(a?.title||a?.parsed_title||a?.filename||"").localeCompare(
+            String(b?.title||b?.parsed_title||b?.filename||""),"fr"
+          );
+      }));
+    }
+
+    if(!sorted.size)return source;
+    const cursor=new Map();
+    return source.map(item=>{
+      const key=this._collectionKey(item);
+      const group=key?sorted.get(key):null;
+      if(!group)return item;
+      const index=cursor.get(key)||0;
+      cursor.set(key,index+1);
+      return group[index]||item;
+    });
+  }
   _rawItems(category=this._category){
-    return(this._data?.items||[]).filter(i=>i.bucket===category)
+    const items=(this._data?.items||[]).filter(i=>i.bucket===category);
+    return category==="movies"?this._sortMovieCollections(items):items;
   }
   _seriesGroups(){
     const groups=new Map();
