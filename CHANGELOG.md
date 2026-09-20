@@ -1,3 +1,11 @@
+## 0.7.1-beta.2
+
+- Stabilise la hauteur de la navigation Famille sur mobile et tablette (issue #2).
+- Étend l'actualisation automatique de 2–24 h à 2–168 h (7 jours).
+- Remplace le capteur texte de diagnostic par un `binary_sensor` Home Assistant avec `device_class: problem`.
+- Supprime automatiquement l'ancien `sensor.streaming_top_fr` de l'entity registry lors de la migration.
+- Conserve les attributs de diagnostic existants sur le nouveau binary sensor.
+
 # Changelog
 
 ## 0.7.1-beta.1
