@@ -65,6 +65,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "smb_base_uri": "",
         "smb_auth_mode": "vlc_saved",
         "extensions": ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],
+        "category_folders": {
+            "movies": ["Films"],
+            "series": ["Series", "Séries"],
+            "animation": ["Animation", "Animations", "Dessins Animés"],
+            "documentaries": ["Documentaires", "Documentaries"],
+        },
         "scan_hidden": False,
     },
     "top_catalog": deepcopy(DEFAULT_TOP_CATALOG),
@@ -267,6 +273,22 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         auth_mode = (_clean_string(local_library.get("smb_auth_mode")) or "vlc_saved").casefold()
         if auth_mode not in {"vlc_saved"}:
             auth_mode = "vlc_saved"
+        raw_folders = local_library.get("category_folders") or {}
+        normalized_folders = {}
+        for category, folder_defaults in defaults["category_folders"].items():
+            value = (
+                raw_folders.get(category, folder_defaults)
+                if isinstance(raw_folders, dict)
+                else folder_defaults
+            )
+            if isinstance(value, str):
+                value = [part.strip() for part in value.split(",") if part.strip()]
+            if not isinstance(value, list):
+                value = folder_defaults
+            normalized_folders[category] = [
+                str(item).strip() for item in value if str(item).strip()
+            ] or list(folder_defaults)
+
         settings["local_library"] = {
             "enabled": _as_bool(local_library.get("enabled"), defaults["enabled"]),
             "root_path": _clean_string(local_library.get("root_path")) or "",
@@ -277,6 +299,7 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
                 for value in extensions
                 if str(value).strip()
             ],
+            "category_folders": normalized_folders,
             "scan_hidden": _as_bool(
                 local_library.get("scan_hidden"), defaults["scan_hidden"]
             ),
