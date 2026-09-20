@@ -1536,7 +1536,13 @@ class JustWatchClient:
         return None, None
 
     async def _async_age_certification(
-        self, object_id, media_type, details_url=None, title=None, year=None
+        self,
+        object_id,
+        media_type,
+        details_url=None,
+        title=None,
+        year=None,
+        preferred_imdb_id=None,
     ):
         """Resolve both FR and US age classifications without conversion."""
         kind = "movie" if media_type == "movie" else "show"
@@ -1552,7 +1558,7 @@ class JustWatchClient:
                 }
 
         jw_fr_age = None
-        imdb_id = None
+        imdb_id = self._normalize_imdb_id(preferred_imdb_id)
 
         # JustWatch can expose a French age rating and sometimes the canonical IMDb id.
         if object_id is not None:
@@ -1573,7 +1579,8 @@ class JustWatchClient:
                     ) as resp:
                         if resp.status < 400:
                             data = await resp.json()
-                            imdb_id = _find_imdb_id(data)
+                            if not imdb_id:
+                                imdb_id = _find_imdb_id(data)
                             jw_fr_age = normalize_fr_age_certification(
                                 data.get("age_certification")
                                 or data.get("ageCertification")
@@ -2619,7 +2626,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v3:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v4:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2799,17 +2806,28 @@ class JustWatchClient:
         details_url = "https://www.justwatch.com" + full_path if full_path else None
         rating, rating_source = self._rating(content)
 
+        ext = content.get("externalIds") or {}
+        justwatch_imdb = self._normalize_imdb_id(ext.get("imdbId"))
+
         age_info = None
         if include_age:
             age_info = await self._async_age_certification(
-                object_id, media_type, details_url, localized_title, release_year
+                object_id,
+                media_type,
+                details_url,
+                localized_title,
+                release_year,
+                preferred_imdb_id=justwatch_imdb,
             )
         age_info = age_info or {"fr": None, "us": None, "imdb_id": None}
         age_value, age_country = self.select_age(age_info, classification)
 
-        ext = content.get("externalIds") or {}
+        # Canonical poster source remains IMDb. The crucial point is that for
+        # a JustWatch-confirmed work, its explicit externalIds.imdbId is the
+        # strongest binding to the correct IMDb title. Age-resolution and
+        # autocomplete ids are only fallbacks.
         imdb_id = self._normalize_imdb_id(
-            age_info.get("imdb_id") or ext.get("imdbId") or expected_imdb
+            justwatch_imdb or age_info.get("imdb_id") or expected_imdb
         )
         poster_lookup = await self._async_imdb_posters([imdb_id]) if imdb_id else {}
         jw_poster = poster_url(content.get("fullPosterUrl"))
