@@ -9,7 +9,7 @@
           "update_hours": "Actualisation automatique (heures)"
         },
         "data_description": {
-          "update_hours": "Intervalle entre deux mises à jour automatiques, de 2 à 24 heures."
+          "update_hours": "Intervalle entre deux mises à jour automatiques, de 2 à 168 heures (7 jours)."
         }
       },
       "services": {
