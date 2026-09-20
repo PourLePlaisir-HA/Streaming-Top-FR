@@ -2656,7 +2656,11 @@ class JustWatchClient:
                     wanted_sequel == cached_sequel
                     or (wanted_sequel is None and cached_sequel is None)
                 )
-                if sequel_cache_valid:
+                cache_quality_valid = (
+                    cached.get("metadata_status") in {"matched", "imdb_only"}
+                    and bool(cached.get("poster"))
+                )
+                if sequel_cache_valid and cache_quality_valid:
                     if cached.get("age_resolved"):
                         age = {
                             "fr": cached.get("age_fr"),
