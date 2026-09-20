@@ -1,5 +1,5 @@
 DOMAIN = "streaming_top_fr"
-PLATFORMS = ["sensor"]
+PLATFORMS = ["binary_sensor"]
 CONF_UPDATE_HOURS = "update_hours"
 DEFAULT_UPDATE_HOURS = 6
 NETFLIX_COUNTRIES_TSV = "https://www.netflix.com/tudum/top10/data/all-weeks-countries.tsv"
