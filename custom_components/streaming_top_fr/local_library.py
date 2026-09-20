@@ -132,6 +132,14 @@ class LocalLibraryScanner:
                 ):
                     continue
 
+                # Keep only genuinely useful previous enrichment.
+                # Old unmatched rows or rows without a poster must be retried;
+                # otherwise a transient 403 can freeze a broken state forever.
+                old_status = str(old_item.get("metadata_status") or "")
+                old_poster = old_item.get("poster")
+                if old_status not in {"matched", "imdb_only"} or not old_poster:
+                    continue
+
                 parsed_title = item.get("title")
                 parsed_year = item.get("year")
                 for field in metadata_fields:
