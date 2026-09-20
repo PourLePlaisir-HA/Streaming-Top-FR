@@ -49,6 +49,9 @@ _CONTEXTUAL_RELEASE_PREFIX = re.compile(
     r"vof|vfq|vfi|vf2|vff|vf|vo|2160p|1080p|720p|4k|uhd|hdr|dv|"
     r"bluray|blu\s*ray|web|remux|x26[45]|h\.?26[45]))"
 )
+_LOOKUP_VOLUME_SUFFIX = re.compile(
+    r"(?i)\s*(?:#\s*\d{1,3}|vol(?:ume)?\.?\s*\d{1,3}|tome\s*\d{1,3})\s*$"
+)
 
 DEFAULT_CATEGORY_FOLDERS = {
     "movies": ["Films"],
@@ -244,6 +247,17 @@ class LocalLibraryScanner:
             cleaned = re.sub(r"\s+", " ", cleaned).strip(" -_.! ")
         return cleaned
 
+    @classmethod
+    def _lookup_title(cls, title: str) -> str:
+        """Return a safer catalogue-search title while preserving display text.
+
+        Explicit collection-volume suffixes are not usually part of the
+        canonical work title. Bare sequel numbers are deliberately untouched.
+        """
+        value = str(title or "").strip()
+        reduced = _LOOKUP_VOLUME_SUFFIX.sub("", value).strip(" -_.")
+        return reduced or value
+
     def _parse_media(
         self, path: Path, relative: Path, settings: dict[str, Any]
     ) -> dict[str, Any]:
@@ -274,6 +288,7 @@ class LocalLibraryScanner:
         title_source = _RELEASE_WORDS.sub("", title_source)
         title_source = _YEAR.sub("", title_source)
         title = self._clean_local_title(title_source) or self._clean_name(stem)
+        lookup_title = self._lookup_title(title)
         year = int(year_match.group(1)) if year_match else None
 
         bucket = self._bucket_from_path(relative, settings, media_type)
@@ -285,6 +300,7 @@ class LocalLibraryScanner:
             "media_type": media_type,
             "bucket": bucket,
             "title": title,
+            "lookup_title": lookup_title,
             "year": year,
             "season": season,
             "episode": episode,
