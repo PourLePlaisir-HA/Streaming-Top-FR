@@ -536,19 +536,6 @@ class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    async def async_step_local_library(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        self._ensure_loaded()
-        assert self._settings is not None
-        if user_input is not None:
-            _apply_local_library(self._settings, user_input)
-            return self._save()
-        return self.async_show_form(
-            step_id="local_library",
-            data_schema=_local_library_schema(self._settings),
-        )
-
     async def async_step_services(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -775,6 +762,19 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                     ): _number(2, 168)
                 }
             ),
+        )
+
+    async def async_step_local_library(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_local_library(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="local_library",
+            data_schema=_local_library_schema(self._settings),
         )
 
     async def async_step_services(
