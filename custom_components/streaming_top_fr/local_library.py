@@ -44,6 +44,11 @@ _LANGUAGE_QUOTED_SUBTITLE = re.compile(
     r"(?i)\b(?:vf|vff|vfq|vfi|vf2|french|truefrench)\s*"
     r"[\"“”«]\s*(?P<subtitle>[^\"“”»]+?)\s*[\"“”»]"
 )
+_CONTEXTUAL_RELEASE_PREFIX = re.compile(
+    r"(?i)\b(?:hybrid)\b(?=\s+(?:multi|french|truefrench|vostfr|vost|"
+    r"vof|vfq|vfi|vf2|vff|vf|vo|2160p|1080p|720p|4k|uhd|hdr|dv|"
+    r"bluray|blu\s*ray|web|remux|x26[45]|h\.?26[45]))"
+)
 
 DEFAULT_CATEGORY_FOLDERS = {
     "movies": ["Films"],
@@ -262,6 +267,10 @@ class LocalLibraryScanner:
         # Normalize them before looking for technical tags so tails such as
         # "_1080p_FR_EN_x264..." are reliably removed.
         title_source = re.sub(r"[._]+", " ", title_source)
+        # Some release markers such as "Hybrid" are meaningful words in real
+        # titles, so only treat them as release noise when followed by an
+        # unmistakable technical/language tag.
+        title_source = _CONTEXTUAL_RELEASE_PREFIX.sub("", title_source)
         title_source = _RELEASE_WORDS.sub("", title_source)
         title_source = _YEAR.sub("", title_source)
         title = self._clean_local_title(title_source) or self._clean_name(stem)
