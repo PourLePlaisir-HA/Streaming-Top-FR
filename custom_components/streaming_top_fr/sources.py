@@ -3045,8 +3045,10 @@ class JustWatchClient:
             self.store.set_metadata(cache_key, result)
         return result
 
-    async def async_enrich_local_items(self, items, classification=None):
-        """Enrich local-library items in place while preserving path identity."""
+    async def async_enrich_local_items(
+        self, items, classification=None, family=None
+    ):
+        """Enrich local-library items and derive local Family eligibility."""
         works = [item for item in (items or []) if isinstance(item, dict)]
         if not works:
             return works
@@ -3128,6 +3130,32 @@ class JustWatchClient:
                     item["lookup_title"] = lookup_title
                     item["local_id"] = local_id
                     item["media_key"] = local_media_key
+
+        family = family or {}
+        classification = classification or {}
+        family_enabled = bool(family.get("enabled", True))
+        target_age = family.get("target_age", 11)
+        allow_unrated = bool(family.get("allow_unrated", False))
+
+        for item in works:
+            if not family_enabled:
+                item["family_eligible"] = False
+                item["family_match_certification"] = None
+                item["family_match_country"] = None
+                continue
+
+            allowed, matched_value, matched_country = self._family_age_allowed(
+                {
+                    "fr": item.get("age_fr"),
+                    "us": item.get("age_us"),
+                },
+                target_age,
+                allow_unrated,
+                classification,
+            )
+            item["family_eligible"] = bool(allowed)
+            item["family_match_certification"] = matched_value
+            item["family_match_country"] = matched_country
 
         if self.store:
             await self.store.async_save()
