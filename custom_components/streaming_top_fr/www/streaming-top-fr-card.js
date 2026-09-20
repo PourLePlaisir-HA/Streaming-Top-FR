@@ -489,46 +489,84 @@ class StreamingLocalCard extends HTMLElement {
     const items=(this._data?.items||[]).filter(i=>i.bucket===category);
     return category==="movies"?this._sortMovieCollections(items):items;
   }
-  _seriesGroups(){
+  _episodicSeasonGroups(category){
+    const raw=this._rawItems(category);
+    const standalone=[];
     const groups=new Map();
-    for(const item of this._rawItems("series")){
-      const fallbackTitle=String(item.parsed_title||item.title||item.filename||"").trim().toLocaleLowerCase("fr");
-      const key=String(item.imdb_id||item.canonical_media_key||`series:${fallbackTitle}`).trim();
-      if(!groups.has(key))groups.set(key,[]);
-      groups.get(key).push(item);
+
+    for(const item of raw){
+      const episodic=item?.episodic===true||
+        (item?.season!==null&&item?.season!==undefined&&
+         item?.episode!==null&&item?.episode!==undefined);
+      if(!episodic){
+        standalone.push(item);
+        continue;
+      }
+
+      const fallbackTitle=String(
+        item.parsed_title||item.title||item.filename||""
+      ).trim().toLocaleLowerCase("fr");
+      const seriesKey=String(
+        item.imdb_id||item.canonical_media_key||
+        `series:${category}:${fallbackTitle}`
+      ).trim();
+      const season=Number(item.season??0);
+      const seasonKey=`${seriesKey}:season:${season}`;
+      if(!groups.has(seasonKey)){
+        groups.set(seasonKey,{seriesKey,season,episodes:[]});
+      }
+      groups.get(seasonKey).episodes.push(item);
     }
-    const out=[];
-    for(const [key,episodes] of groups.entries()){
+
+    const seasons=[];
+    for(const [seasonKey,group] of groups.entries()){
+      const episodes=group.episodes;
       episodes.sort((a,b)=>
-        Number(a.season??0)-Number(b.season??0)||
         Number(a.episode??0)-Number(b.episode??0)||
-        String(a.relative_path||"").localeCompare(String(b.relative_path||""),"fr")
+        String(a.relative_path||"").localeCompare(
+          String(b.relative_path||""),"fr"
+        )
       );
+
+      // The representative is deliberately chosen inside this season.
+      // If a season-specific poster becomes available, it is therefore
+      // naturally used instead of a poster taken from another season.
       const representative=
         episodes.find(i=>i.poster&&i.rating!=null)||
         episodes.find(i=>i.poster)||
         episodes.find(i=>i.metadata_status==="matched")||
         episodes[0];
-      const seasons=[...new Set(episodes.map(i=>Number(i.season??0)))].sort((a,b)=>a-b);
-      out.push({
+
+      seasons.push({
         ...representative,
-        is_series_group:true,
-        series_key:key,
+        is_season_group:true,
+        series_key:group.seriesKey,
+        season_key:seasonKey,
         episodes,
-        seasons,
         episode_count:episodes.length,
-        season_count:seasons.length,
-        season:null,
+        season:group.season,
         episode:null,
         filename:null,
         relative_path:null,
         smb_uri:null,
       });
     }
-    return out.sort((a,b)=>String(a.title||a.parsed_title||"").localeCompare(String(b.title||b.parsed_title||""),"fr"));
+
+    const combined=[...standalone,...seasons];
+    return combined.sort((a,b)=>{
+      const at=String(a.title||a.parsed_title||a.filename||"");
+      const bt=String(b.title||b.parsed_title||b.filename||"");
+      return at.localeCompare(bt,"fr")||
+        Number(a.season??-1)-Number(b.season??-1);
+    });
   }
-  _items(){return this._category==="series"?this._seriesGroups():this._rawItems()}
-  _categoryCount(cat){return cat==="series"?this._seriesGroups().length:this._rawItems(cat).length}
+  _displayItems(category=this._category){
+    return ["series","animation","documentaries"].includes(category)
+      ?this._episodicSeasonGroups(category)
+      :this._rawItems(category);
+  }
+  _items(){return this._displayItems()}
+  _categoryCount(cat){return this._displayItems(cat).length}
   _normalizeCategory(){
     const cats=this._categories();
     if(cats.length&&!cats.includes(this._category))this._category=cats[0];
@@ -573,7 +611,7 @@ class StreamingLocalCard extends HTMLElement {
   async _refresh(){await this._load(true)}
   _metadata(item){
     const parts=[];
-    if(item.is_series_group){
+    if(item.is_season_group){
       if(item.year)parts.push(String(item.year));
     }else if(item.media_type==="tv"&&item.season!=null&&item.episode!=null){
       parts.push(`S${String(item.season).padStart(2,"0")}E${String(item.episode).padStart(2,"0")}`);
@@ -597,8 +635,8 @@ class StreamingLocalCard extends HTMLElement {
       :'<div class="poster-fallback"><ha-icon icon="mdi:movie-open-outline"></ha-icon></div>';
     const meta=this._metadata(item);
     const title=item.title||item.parsed_title||item.filename||"Sans titre";
-    const seriesExtra=item.is_series_group
-      ?`${item.season_count} saison${item.season_count>1?"s":""} · ${item.episode_count} épisode${item.episode_count>1?"s":""}`
+    const seriesExtra=item.is_season_group
+      ?`Saison ${item.season??"?"} · ${item.episode_count} épisode${item.episode_count>1?"s":""}`
       :"";
     return `<button class="media" data-index="${index}" title="${this._esc(item.filename||title)}">
       <div class="poster">${poster}${this._status(item)}</div>
@@ -607,12 +645,14 @@ class StreamingLocalCard extends HTMLElement {
       ${seriesExtra?`<div class="series-extra">${this._esc(seriesExtra)}</div>`:""}
     </button>`;
   }
-  _seriesDetail(item,seasonValue=null){
+  _seasonDetail(item){
     const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
-    const seasons=(item.seasons||[]).length?item.seasons:[0];
-    const selectedSeason=seasonValue==null?seasons[0]:Number(seasonValue);
-    const episodes=(item.episodes||[]).filter(ep=>Number(ep.season??0)===selectedSeason);
-    const selectedId=this._seriesSelection?.[item.series_key]||null;
+    const episodes=[...(item.episodes||[])].sort((a,b)=>
+      Number(a.episode??0)-Number(b.episode??0)||
+      String(a.relative_path||"").localeCompare(String(b.relative_path||""),"fr")
+    );
+    const selectionKey=item.season_key||`${item.series_key||"series"}:season:${item.season??0}`;
+    const selectedId=this._seriesSelection?.[selectionKey]||null;
     const m=document.createElement("div");m.className="modalbg";
     const title=item.title||item.parsed_title||"Sans titre";
     const meta=this._metadata(item);
@@ -621,7 +661,6 @@ class StreamingLocalCard extends HTMLElement {
       :item.metadata_status==="imdb_only"
       ?"IMDb uniquement"
       :"Non identifié";
-    const seasonTabs=seasons.map(season=>`<button class="season-tab ${Number(season)===selectedSeason?"active":""}" data-season="${season}">Saison ${season||"?"}</button>`).join("");
     const episodeRows=episodes.map((ep,index)=>{
       const epNo=ep.episode!=null?Number(ep.episode):index+1;
       const code=ep.season!=null&&ep.episode!=null
@@ -637,30 +676,29 @@ class StreamingLocalCard extends HTMLElement {
       <button class="modal-close" aria-label="Fermer">×</button>
       <div class="modal-head">
         ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
-        <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div><div class="series-summary">${item.season_count} saison${item.season_count>1?"s":""} · ${item.episode_count} épisode${item.episode_count>1?"s":""}</div></div>
+        <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div><div class="series-summary">Saison ${this._esc(item.season??"?")} · ${item.episode_count} épisode${item.episode_count>1?"s":""}</div></div>
       </div>
       <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
       <div class="details">
         <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
       </div>
-      <div class="season-tabs">${seasonTabs}</div>
       <div class="episode-list">${episodeRows||'<div class="state">Aucun épisode détecté pour cette saison.</div>'}</div>
-      <div class="episode-help">Sélectionnez l’épisode à lire. Le fichier associé sera utilisé pour la future lecture VLC.</div>
+      <div class="episode-help">Sélectionnez l’épisode à lire. Seuls les épisodes réellement présents dans la vidéothèque sont affichés.</div>
     </div>`;
     m.onclick=e=>{if(e.target===m)m.remove()};
     m.querySelector(".modal-close").onclick=()=>m.remove();
-    m.querySelectorAll("[data-season]").forEach(b=>b.addEventListener("click",()=>this._seriesDetail(item,Number(b.dataset.season))));
     m.querySelectorAll("[data-episode-index]").forEach(b=>b.addEventListener("click",()=>{
       const ep=episodes[Number(b.dataset.episodeIndex)];
       if(!ep)return;
       this._seriesSelection=this._seriesSelection||{};
-      this._seriesSelection[item.series_key]=ep.local_id;
-      this._seriesDetail(item,selectedSeason);
+      this._seriesSelection[selectionKey]=ep.local_id;
+      this._seasonDetail(item);
     }));
     this.shadowRoot.appendChild(m);
   }
+
   _detail(item){
-    if(item?.is_series_group){this._seriesDetail(item);return}
+    if(item?.is_season_group){this._seasonDetail(item);return}
     const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
     const m=document.createElement("div");m.className="modalbg";
     const title=item.title||item.parsed_title||item.filename||"Sans titre";
