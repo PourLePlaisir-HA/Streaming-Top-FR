@@ -54,6 +54,11 @@ FIELD_PLAYER_REMOTE = "player_remote"
 FIELD_PLAYER_ADB = "player_adb_player"
 FIELD_ADD_ANOTHER = "add_another"
 FIELD_DELETE_PLAYER = "delete_player"
+FIELD_LOCAL_ENABLED = "local_enabled"
+FIELD_LOCAL_ROOT = "local_root_path"
+FIELD_LOCAL_SMB = "local_smb_base_uri"
+FIELD_LOCAL_EXTENSIONS = "local_extensions"
+FIELD_LOCAL_SCAN_HIDDEN = "local_scan_hidden"
 
 
 def _number(minimum: int, maximum: int, step: int = 1) -> selector.NumberSelector:
@@ -120,6 +125,55 @@ def _apply_discovery(settings: dict[str, Any], user_input: dict[str, Any]) -> No
         "prefetch_count": prefetch,
         "max_depth": max_depth,
     }
+
+def _local_library_schema(settings: dict[str, Any]) -> vol.Schema:
+    local = settings.get("local_library") or {}
+    extensions = local.get("extensions") or [
+        "mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"
+    ]
+    return vol.Schema(
+        {
+            vol.Optional(
+                FIELD_LOCAL_ENABLED,
+                default=bool(local.get("enabled", False)),
+            ): selector.BooleanSelector(),
+            vol.Required(
+                FIELD_LOCAL_ROOT,
+                default=str(local.get("root_path") or ""),
+            ): selector.TextSelector(),
+            vol.Required(
+                FIELD_LOCAL_SMB,
+                default=str(local.get("smb_base_uri") or ""),
+            ): selector.TextSelector(),
+            vol.Required(
+                FIELD_LOCAL_EXTENSIONS,
+                default=", ".join(str(value) for value in extensions),
+            ): selector.TextSelector(),
+            vol.Optional(
+                FIELD_LOCAL_SCAN_HIDDEN,
+                default=bool(local.get("scan_hidden", False)),
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+def _apply_local_library(
+    settings: dict[str, Any], user_input: dict[str, Any]
+) -> None:
+    extensions = [
+        value.strip().lstrip(".").lower()
+        for value in str(user_input.get(FIELD_LOCAL_EXTENSIONS) or "").split(",")
+        if value.strip()
+    ]
+    settings["local_library"] = {
+        "enabled": bool(user_input.get(FIELD_LOCAL_ENABLED, False)),
+        "root_path": str(user_input.get(FIELD_LOCAL_ROOT) or "").strip(),
+        "smb_base_uri": str(user_input.get(FIELD_LOCAL_SMB) or "").strip().rstrip("/"),
+        "extensions": extensions
+        or ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],
+        "scan_hidden": bool(user_input.get(FIELD_LOCAL_SCAN_HIDDEN, False)),
+    }
+
 
 
 def _top_schema(settings: dict[str, Any]) -> vol.Schema:
@@ -258,6 +312,7 @@ def _apply_family(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
 
 def _classification_schema(settings: dict[str, Any]) -> vol.Schema:
     classification = settings.get("classification") or {}
+    local_library = settings.get("local_library") or {}
     return vol.Schema(
         {
             vol.Optional(
@@ -415,6 +470,9 @@ def _summary_placeholders(
         "classification_france": _status(classification.get("france", True)),
         "us_fallback": _status(classification.get("us_fallback", True)),
         "us_tv": _status(classification.get("us_tv", True)),
+        "local_enabled": _status(local_library.get("enabled", False)),
+        "local_root_path": str(local_library.get("root_path") or "—"),
+        "local_smb_base_uri": str(local_library.get("smb_base_uri") or "—"),
         "players": ", ".join(player_names) if player_names else "—",
         "player_count": str(len(player_names)),
     }
@@ -476,6 +534,19 @@ class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): _number(2, 168),
                 }
             ),
+        )
+
+    async def async_step_local_library(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_local_library(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="local_library",
+            data_schema=_local_library_schema(self._settings),
         )
 
     async def async_step_services(
@@ -664,6 +735,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                 "default_decade",
                 "family",
                 "classification",
+                "local_library",
                 "players",
             ],
         )
