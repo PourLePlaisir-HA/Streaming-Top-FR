@@ -1,11 +1,13 @@
 from pathlib import Path
 import importlib.util
+import sys
 
 
 MODULE = Path("custom_components/streaming_top_fr/local_library.py")
 spec = importlib.util.spec_from_file_location("streaming_top_fr_local_library", MODULE)
 module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 scanner = module.LocalLibraryScanner(None)
