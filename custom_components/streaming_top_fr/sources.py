@@ -850,7 +850,6 @@ class JustWatchClient:
         self.store = store
         self._sem = asyncio.Semaphore(4)
         self._provider_packages: dict[str, list[str]] | None = None
-        self._jw_blocked_until: datetime | None = None
         self._provider_package_names: dict[str, list[str]] = {}
 
     async def _async_disney_fetch_page(self, url: str) -> dict[str, str] | None:
@@ -1025,15 +1024,6 @@ class JustWatchClient:
         return result
 
     async def _post(self, payload):
-        now = datetime.now(timezone.utc)
-        if self._jw_blocked_until and now < self._jw_blocked_until:
-            remaining = max(
-                1, int((self._jw_blocked_until - now).total_seconds() // 60) + 1
-            )
-            raise RuntimeError(
-                f"JustWatch temporairement en pause après HTTP 403 ({remaining} min)"
-            )
-
         async with self.session.post(
             JUSTWATCH_GRAPHQL,
             json=payload,
@@ -1047,46 +1037,25 @@ class JustWatchClient:
             timeout=30,
         ) as resp:
             text = await resp.text()
-            if resp.status == 403:
-                self._jw_blocked_until = now + timedelta(
-                    minutes=JUSTWATCH_BLOCK_MINUTES
-                )
-                raise RuntimeError("JustWatch HTTP 403 — mise en pause temporaire")
             if resp.status >= 400:
-                raise RuntimeError(f"JustWatch HTTP {resp.status}")
+                raise RuntimeError(f"JustWatch HTTP {resp.status}: {text[:500]}")
             data = await resp.json()
 
-        self._jw_blocked_until = None
         if data.get("errors"):
             raise RuntimeError(data["errors"][0].get("message", "Erreur GraphQL"))
         return data.get("data") or {}
 
-    async def _async_imdb_id(self, title, year=None, media_type=None, strict=False):
+    async def _async_imdb_id(self, title, year=None, media_type=None):
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v7" if strict else "imdb-id"
-        cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
-        wanted_title_for_cache = _matching_slug(str(title), media_type)
+        cache_key = f"imdb-id:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
             if _cache_fresh(cached) and cached.get("imdb_id"):
-                if not strict:
-                    return cached.get("imdb_id")
-                cached_title = _matching_slug(
-                    str(cached.get("resolved_title") or ""), media_type
-                )
-                wanted_sequel = _bare_sequel_number(wanted_title_for_cache)
-                cached_sequel = _bare_sequel_number(cached_title)
-                if (
-                    cached_title
-                    and wanted_sequel == cached_sequel
-                ):
-                    return cached.get("imdb_id")
+                return cached.get("imdb_id")
 
         imdb_id = None
-        resolved_title = None
-        resolved_year = None
         try:
             url = (
                 "https://v3.sg.media-imdb.com/suggestion/titles/x/"
@@ -1111,165 +1080,32 @@ class JustWatchClient:
                             want_year = int(year) if year else None
                         except (TypeError, ValueError):
                             pass
-                        want_title = _matching_slug(str(title), media_type)
+                        want_title = _slug(str(title))
                         want_tv = media_type in ("tv", "show")
 
-                        if strict:
-                            def strict_score(hit):
-                                hit_title = _matching_slug(
-                                    str(hit.get("l") or ""), media_type
-                                )
-                                if not want_title or not hit_title:
-                                    return -1000
-
-                                want_sequel = _bare_sequel_number(want_title)
-                                hit_sequel = _bare_sequel_number(hit_title)
-                                if (
-                                    want_sequel != hit_sequel
-                                    and (want_sequel is not None or hit_sequel is not None)
-                                ):
-                                    return -1000
-
-                                similarity = SequenceMatcher(
-                                    None, want_title, hit_title
-                                ).ratio()
-                                contains = (
-                                    want_title in hit_title
-                                    or hit_title in want_title
-                                )
-
-                                hit_year = hit.get("y")
-                                try:
-                                    hit_year = int(hit_year) if hit_year else None
-                                except (TypeError, ValueError):
-                                    hit_year = None
-
-                                exact_year = bool(
-                                    want_year and hit_year and hit_year == want_year
-                                )
-                                expanded_title = bool(
-                                    exact_year
-                                    and len(want_title) >= 7
-                                    and hit_title.startswith(want_title + "-")
-                                )
-                                local_subtitle_alias = bool(
-                                    exact_year
-                                    and len(hit_title) >= 5
-                                    and want_title.startswith(hit_title + "-")
-                                )
-                                first_installment_alias = bool(
-                                    exact_year
-                                    and want_title != hit_title
-                                    and _first_installment_base_slug(want_title)
-                                    == _first_installment_base_slug(hit_title)
-                                )
-                                localized_title_alias = bool(
-                                    exact_year
-                                    and want_title != hit_title
-                                    and _localized_title_alias(want_title, hit_title)
-                                )
-
-                                # Title similarity is mandatory. Year/type alone
-                                # must never be enough to identify local media.
-                                if hit_title == want_title:
-                                    points = 14
-                                elif similarity >= 0.94:
-                                    points = 12
-                                elif similarity >= 0.88:
-                                    points = 9
-                                elif contains and similarity >= 0.72:
-                                    points = 8
-                                elif expanded_title:
-                                    points = 9
-                                elif local_subtitle_alias:
-                                    points = 10
-                                elif first_installment_alias:
-                                    points = 10
-                                elif localized_title_alias:
-                                    points = 10
-                                else:
-                                    return -1000
-
-                                # A known conflicting year is a hard rejection.
-                                if want_year and hit_year:
-                                    delta = abs(hit_year - want_year)
-                                    if delta > 1:
-                                        return -1000
-                                    points += 8 if delta == 0 else 3
-
-                                qid = str(hit.get("qid") or "").casefold()
-                                tv_show_types = {
-                                    "tvseries", "tvminiseries", "tvshort"
-                                }
-                                rejected_non_movie_types = {
-                                    "tvepisode", "videogame", "podcastseries",
-                                    "podcastepisode", "musicvideo",
-                                }
-                                if want_tv:
-                                    if qid and qid not in tv_show_types:
-                                        return -1000
-                                else:
-                                    if qid in tv_show_types or qid in rejected_non_movie_types:
-                                        return -1000
+                        def score(hit):
+                            points = 0
+                            hit_title = _slug(str(hit.get("l") or ""))
+                            hit_year = hit.get("y")
+                            qid = str(hit.get("qid") or "").lower()
+                            if hit_title == want_title:
+                                points += 8
+                            elif want_title and (want_title in hit_title or hit_title in want_title):
+                                points += 3
+                            if want_year and hit_year == want_year:
+                                points += 6
+                            elif want_year and isinstance(hit_year, int) and abs(hit_year - want_year) <= 1:
                                 points += 2
-                                return points
+                            is_tv = qid in {"tvseries", "tvminiseries", "tvepisode", "tvmovie"}
+                            if want_tv == is_tv:
+                                points += 3
+                            return points
 
-                            ranked = sorted(
-                                (
-                                    (strict_score(hit), hit)
-                                    for hit in hits
-                                ),
-                                key=lambda entry: entry[0],
-                                reverse=True,
-                            )
-                            ranked = [entry for entry in ranked if entry[0] > -1000]
-                            minimum = 16 if want_year else 11
-                            if ranked and ranked[0][0] >= minimum:
-                                # If two different IMDb titles are essentially
-                                # tied, fail closed instead of choosing a random
-                                # poster. A future manual mapping can resolve it.
-                                ambiguous = (
-                                    len(ranked) > 1
-                                    and ranked[1][0] >= minimum
-                                    and ranked[0][0] - ranked[1][0] <= 1
-                                    and ranked[0][1].get("id") != ranked[1][1].get("id")
-                                )
-                                if not ambiguous:
-                                    imdb_id = ranked[0][1].get("id")
-                        else:
-                            def score(hit):
-                                points = 0
-                                hit_title = _slug(str(hit.get("l") or ""))
-                                hit_year = hit.get("y")
-                                qid = str(hit.get("qid") or "").lower()
-                                if hit_title == want_title:
-                                    points += 8
-                                elif want_title and (
-                                    want_title in hit_title
-                                    or hit_title in want_title
-                                ):
-                                    points += 3
-                                if want_year and hit_year == want_year:
-                                    points += 6
-                                elif (
-                                    want_year
-                                    and isinstance(hit_year, int)
-                                    and abs(hit_year - want_year) <= 1
-                                ):
-                                    points += 2
-                                is_tv = qid in {
-                                    "tvseries", "tvminiseries", "tvepisode", "tvmovie"
-                                }
-                                if want_tv == is_tv:
-                                    points += 3
-                                return points
-
-                            if hits:
-                                best = max(hits, key=score)
-                                if score(best) >= 3:
-                                    imdb_id = best.get("id")
-                                    resolved_title = best.get("l")
-                                    resolved_year = best.get("y")
+                        if hits:
+                            best = max(hits, key=score)
+                            # Require at least a plausible title/type/year match.
+                            if score(best) >= 3:
+                                imdb_id = best.get("id")
                     else:
                         _LOGGER.debug("IMDb suggestion HTTP %s for %s", resp.status, title)
         except Exception as err:
@@ -1280,8 +1116,6 @@ class JustWatchClient:
                 cache_key,
                 {
                     "imdb_id": imdb_id,
-                    "resolved_title": resolved_title,
-                    "resolved_year": resolved_year,
                     "cached_at": datetime.now(timezone.utc).isoformat(),
                     "cache_schema": METADATA_CACHE_SCHEMA,
                 },
@@ -1724,13 +1558,7 @@ class JustWatchClient:
         return None, None
 
     async def _async_age_certification(
-        self,
-        object_id,
-        media_type,
-        details_url=None,
-        title=None,
-        year=None,
-        preferred_imdb_id=None,
+        self, object_id, media_type, details_url=None, title=None, year=None
     ):
         """Resolve both FR and US age classifications without conversion."""
         kind = "movie" if media_type == "movie" else "show"
@@ -1746,7 +1574,7 @@ class JustWatchClient:
                 }
 
         jw_fr_age = None
-        imdb_id = self._normalize_imdb_id(preferred_imdb_id)
+        imdb_id = None
 
         # JustWatch can expose a French age rating and sometimes the canonical IMDb id.
         if object_id is not None:
@@ -1767,8 +1595,7 @@ class JustWatchClient:
                     ) as resp:
                         if resp.status < 400:
                             data = await resp.json()
-                            if not imdb_id:
-                                imdb_id = _find_imdb_id(data)
+                            imdb_id = _find_imdb_id(data)
                             jw_fr_age = normalize_fr_age_certification(
                                 data.get("age_certification")
                                 or data.get("ageCertification")
@@ -1959,14 +1786,7 @@ class JustWatchClient:
         return result
 
     async def _async_provider_candidates(self, provider, media_type, first):
-        """Fetch provider popularity with persistent stale-cache fallback."""
-        cache_key = f"provider-popular-v1:{provider}:{media_type}:{int(first)}"
-        cached = self.store.get_metadata(cache_key) if self.store else None
-        if _cache_fresh_hours(cached, PROVIDER_CACHE_HOURS):
-            cached_items = cached.get("items")
-            if isinstance(cached_items, list):
-                return cached_items
-
+        """Fetch a provider-local popularity slice from JustWatch."""
         packages = await self.async_resolve_provider_packages()
         package_codes = packages.get(provider) or []
         if not package_codes:
@@ -1988,18 +1808,8 @@ class JustWatchClient:
             },
             "query": self.POPULAR_QUERY,
         }
-        try:
-            data = await self._post(payload)
-            edges = ((data.get("popularTitles") or {}).get("edges") or [])
-        except Exception:
-            cached_items = (cached or {}).get("items")
-            if isinstance(cached_items, list) and cached_items:
-                _LOGGER.warning(
-                    "Using stale JustWatch provider cache for %s/%s",
-                    provider, media_type,
-                )
-                return cached_items
-            raise
+        data = await self._post(payload)
+        edges = ((data.get("popularTitles") or {}).get("edges") or [])
 
         out = []
         seen = set()
@@ -2057,15 +1867,6 @@ class JustWatchClient:
                     "providers": self._provider_offers(node),
                     "source": "JustWatch popularité plateforme",
                 }
-            )
-        if self.store and out:
-            self.store.set_metadata(
-                cache_key,
-                {
-                    "items": out,
-                    "cached_at": datetime.now(timezone.utc).isoformat(),
-                    "cache_schema": METADATA_CACHE_SCHEMA,
-                },
             )
         return out
 
@@ -2203,8 +2004,8 @@ class JustWatchClient:
             f"top-catalog-v5:{provider_signature}:{decade}:{category}:{top_count}:"
             f"votes{min_imdb_votes}:short{int(exclude_short_films)}"
         )
-        cached = self.store.get_metadata(cache_key) if self.store else None
-        if cached:
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
             if _cache_fresh_hours(cached, TOP_CATALOG_CACHE_HOURS):
                 ranked_pool = cached.get("ranked_pool")
                 if isinstance(ranked_pool, list):
@@ -2243,34 +2044,9 @@ class JustWatchClient:
         # Up to 100 locally popular candidates gives a Top 65 enough reserve for
         # status exclusions without reopening the worldwide IMDb catalogue.
         candidate_count = min(100, max(40, top_count + 35))
-        try:
-            fr_edges, fr_sort_mode = await self._async_top_popular_edges(
-                "FR", "FR", fr_filter, candidate_count
-            )
-        except Exception as err:
-            ranked_pool = (cached or {}).get("ranked_pool")
-            if isinstance(ranked_pool, list) and ranked_pool:
-                visible = [
-                    dict(item)
-                    for item in ranked_pool
-                    if item.get("media_key") not in excluded_keys
-                ][:top_count]
-                await self.async_enrich_imdb_posters(visible)
-                for index, item in enumerate(visible, start=1):
-                    item["rank"] = index
-                algorithm = dict((cached or {}).get("algorithm") or {})
-                algorithm["excluded_count"] = len(excluded_keys)
-                algorithm["visible_count"] = len(visible)
-                algorithm["stale_cache"] = True
-                return {
-                    "items": visible,
-                    "error": None,
-                    "cached": True,
-                    "stale": True,
-                    "stale_reason": str(err),
-                    "algorithm": algorithm,
-                }
-            raise
+        fr_edges, fr_sort_mode = await self._async_top_popular_edges(
+            "FR", "FR", fr_filter, candidate_count
+        )
         seen = set()
 
         def parse_edges(edges, popularity_market):
@@ -3471,4 +3247,416 @@ class JustWatchClient:
 
         if self.store:
             await self.store.async_save()
+
+class LocalMetadataClient(JustWatchClient):
+    """Metadata client dedicated to Streaming Local.
+
+    It deliberately owns its concurrency, cooldown and cache namespace so a
+    NAS scan can never throttle or alter the historical Streaming/Top engine.
+    """
+
+    def __init__(self, session, store=None):
+        super().__init__(session, store)
+        self._sem = asyncio.Semaphore(1)
+        self._local_jw_blocked_until: datetime | None = None
+        self._local_last_jw_request = 0.0
+
+    async def _post(self, payload):
+        # Local-only GraphQL path: strictly serialized and rate-limited.
+        now = datetime.now(timezone.utc)
+        loop = asyncio.get_running_loop()
+        elapsed = loop.time() - self._local_last_jw_request
+        if elapsed < 1.0:
+            await asyncio.sleep(1.0 - elapsed)
+        self._local_last_jw_request = loop.time()
+        if self._local_jw_blocked_until and now < self._local_jw_blocked_until:
+            remaining = max(
+                1, int((self._local_jw_blocked_until - now).total_seconds() // 60) + 1
+            )
+            raise RuntimeError(
+                f"JustWatch temporairement en pause après HTTP 403 ({remaining} min)"
+            )
+
+        async with self.session.post(
+            JUSTWATCH_GRAPHQL,
+            json=payload,
+            headers={
+                "User-Agent": UA,
+                "Origin": "https://www.justwatch.com",
+                "Referer": "https://www.justwatch.com/fr/",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        ) as resp:
+            text = await resp.text()
+            if resp.status == 403:
+                self._local_jw_blocked_until = now + timedelta(
+                    minutes=JUSTWATCH_BLOCK_MINUTES
+                )
+                raise RuntimeError("JustWatch HTTP 403 — mise en pause temporaire")
+            if resp.status >= 400:
+                raise RuntimeError(f"JustWatch HTTP {resp.status}")
+            data = await resp.json()
+
+        self._local_jw_blocked_until = None
+        if data.get("errors"):
+            raise RuntimeError(data["errors"][0].get("message", "Erreur GraphQL"))
+        return data.get("data") or {}
+
+    async def _async_imdb_id(self, title, year=None, media_type=None, strict=False):
+        """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
+        if not title:
+            return None
+        cache_prefix = (
+            "local-imdb-id-strict-v1" if strict else "local-imdb-id-v1"
+        )
+        cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
+        wanted_title_for_cache = _matching_slug(str(title), media_type)
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh(cached) and cached.get("imdb_id"):
+                if not strict:
+                    return cached.get("imdb_id")
+                cached_title = _matching_slug(
+                    str(cached.get("resolved_title") or ""), media_type
+                )
+                wanted_sequel = _bare_sequel_number(wanted_title_for_cache)
+                cached_sequel = _bare_sequel_number(cached_title)
+                if (
+                    cached_title
+                    and wanted_sequel == cached_sequel
+                ):
+                    return cached.get("imdb_id")
+
+        imdb_id = None
+        resolved_title = None
+        resolved_year = None
+        try:
+            url = (
+                "https://v3.sg.media-imdb.com/suggestion/titles/x/"
+                + quote(str(title).strip().lower(), safe="")
+                + ".json"
+            )
+            async with self._sem:
+                async with self.session.get(
+                    url,
+                    headers={"User-Agent": UA, "Accept": "application/json"},
+                    timeout=20,
+                ) as resp:
+                    if resp.status < 400:
+                        data = await resp.json()
+                        hits = [
+                            h for h in (data.get("d") or [])
+                            if str(h.get("id") or "").startswith("tt")
+                        ]
+
+                        want_year = None
+                        try:
+                            want_year = int(year) if year else None
+                        except (TypeError, ValueError):
+                            pass
+                        want_title = _matching_slug(str(title), media_type)
+                        want_tv = media_type in ("tv", "show")
+
+                        if strict:
+                            def strict_score(hit):
+                                hit_title = _matching_slug(
+                                    str(hit.get("l") or ""), media_type
+                                )
+                                if not want_title or not hit_title:
+                                    return -1000
+
+                                want_sequel = _bare_sequel_number(want_title)
+                                hit_sequel = _bare_sequel_number(hit_title)
+                                if (
+                                    want_sequel != hit_sequel
+                                    and (want_sequel is not None or hit_sequel is not None)
+                                ):
+                                    return -1000
+
+                                similarity = SequenceMatcher(
+                                    None, want_title, hit_title
+                                ).ratio()
+                                contains = (
+                                    want_title in hit_title
+                                    or hit_title in want_title
+                                )
+
+                                hit_year = hit.get("y")
+                                try:
+                                    hit_year = int(hit_year) if hit_year else None
+                                except (TypeError, ValueError):
+                                    hit_year = None
+
+                                exact_year = bool(
+                                    want_year and hit_year and hit_year == want_year
+                                )
+                                expanded_title = bool(
+                                    exact_year
+                                    and len(want_title) >= 7
+                                    and hit_title.startswith(want_title + "-")
+                                )
+                                local_subtitle_alias = bool(
+                                    exact_year
+                                    and len(hit_title) >= 5
+                                    and want_title.startswith(hit_title + "-")
+                                )
+                                first_installment_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _first_installment_base_slug(want_title)
+                                    == _first_installment_base_slug(hit_title)
+                                )
+                                localized_title_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _localized_title_alias(want_title, hit_title)
+                                )
+
+                                # Title similarity is mandatory. Year/type alone
+                                # must never be enough to identify local media.
+                                if hit_title == want_title:
+                                    points = 14
+                                elif similarity >= 0.94:
+                                    points = 12
+                                elif similarity >= 0.88:
+                                    points = 9
+                                elif contains and similarity >= 0.72:
+                                    points = 8
+                                elif expanded_title:
+                                    points = 9
+                                elif local_subtitle_alias:
+                                    points = 10
+                                elif first_installment_alias:
+                                    points = 10
+                                elif localized_title_alias:
+                                    points = 10
+                                else:
+                                    return -1000
+
+                                # A known conflicting year is a hard rejection.
+                                if want_year and hit_year:
+                                    delta = abs(hit_year - want_year)
+                                    if delta > 1:
+                                        return -1000
+                                    points += 8 if delta == 0 else 3
+
+                                qid = str(hit.get("qid") or "").casefold()
+                                tv_show_types = {
+                                    "tvseries", "tvminiseries", "tvshort"
+                                }
+                                rejected_non_movie_types = {
+                                    "tvepisode", "videogame", "podcastseries",
+                                    "podcastepisode", "musicvideo",
+                                }
+                                if want_tv:
+                                    if qid and qid not in tv_show_types:
+                                        return -1000
+                                else:
+                                    if qid in tv_show_types or qid in rejected_non_movie_types:
+                                        return -1000
+                                points += 2
+                                return points
+
+                            ranked = sorted(
+                                (
+                                    (strict_score(hit), hit)
+                                    for hit in hits
+                                ),
+                                key=lambda entry: entry[0],
+                                reverse=True,
+                            )
+                            ranked = [entry for entry in ranked if entry[0] > -1000]
+                            minimum = 16 if want_year else 11
+                            if ranked and ranked[0][0] >= minimum:
+                                # If two different IMDb titles are essentially
+                                # tied, fail closed instead of choosing a random
+                                # poster. A future manual mapping can resolve it.
+                                ambiguous = (
+                                    len(ranked) > 1
+                                    and ranked[1][0] >= minimum
+                                    and ranked[0][0] - ranked[1][0] <= 1
+                                    and ranked[0][1].get("id") != ranked[1][1].get("id")
+                                )
+                                if not ambiguous:
+                                    imdb_id = ranked[0][1].get("id")
+                        else:
+                            def score(hit):
+                                points = 0
+                                hit_title = _slug(str(hit.get("l") or ""))
+                                hit_year = hit.get("y")
+                                qid = str(hit.get("qid") or "").lower()
+                                if hit_title == want_title:
+                                    points += 8
+                                elif want_title and (
+                                    want_title in hit_title
+                                    or hit_title in want_title
+                                ):
+                                    points += 3
+                                if want_year and hit_year == want_year:
+                                    points += 6
+                                elif (
+                                    want_year
+                                    and isinstance(hit_year, int)
+                                    and abs(hit_year - want_year) <= 1
+                                ):
+                                    points += 2
+                                is_tv = qid in {
+                                    "tvseries", "tvminiseries", "tvepisode", "tvmovie"
+                                }
+                                if want_tv == is_tv:
+                                    points += 3
+                                return points
+
+                            if hits:
+                                best = max(hits, key=score)
+                                if score(best) >= 3:
+                                    imdb_id = best.get("id")
+                                    resolved_title = best.get("l")
+                                    resolved_year = best.get("y")
+                    else:
+                        _LOGGER.debug("IMDb suggestion HTTP %s for %s", resp.status, title)
+        except Exception as err:
+            _LOGGER.debug("IMDb suggestion failed for %s: %s", title, err)
+
+        if self.store:
+            self.store.set_metadata(
+                cache_key,
+                {
+                    "imdb_id": imdb_id,
+                    "resolved_title": resolved_title,
+                    "resolved_year": resolved_year,
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "cache_schema": METADATA_CACHE_SCHEMA,
+                },
+            )
+        return imdb_id
+
+    async def _async_age_certification(
+        self,
+        object_id,
+        media_type,
+        details_url=None,
+        title=None,
+        year=None,
+        preferred_imdb_id=None,
+    ):
+        """Resolve both FR and US age classifications without conversion."""
+        kind = "movie" if media_type == "movie" else "show"
+        cache_id = object_id if object_id is not None else details_url or title or "unknown"
+        cache_key = f"local-age-v1:{kind}:{cache_id}"
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh(cached):
+                return {
+                    "fr": cached.get("age_fr"),
+                    "us": cached.get("age_us"),
+                    "imdb_id": cached.get("imdb_id"),
+                }
+
+        jw_fr_age = None
+        imdb_id = self._normalize_imdb_id(preferred_imdb_id)
+
+        # JustWatch can expose a French age rating and sometimes the canonical IMDb id.
+        if object_id is not None:
+            url = (
+                f"https://apis.justwatch.com/content/titles/{kind}/{object_id}"
+                "/locale/fr_FR"
+            )
+            try:
+                async with self._sem:
+                    async with self.session.get(
+                        url,
+                        headers={
+                            "User-Agent": UA,
+                            "Accept": "application/json",
+                            "Referer": "https://www.justwatch.com/fr/",
+                        },
+                        timeout=20,
+                    ) as resp:
+                        if resp.status < 400:
+                            data = await resp.json()
+                            if not imdb_id:
+                                imdb_id = _find_imdb_id(data)
+                            jw_fr_age = normalize_fr_age_certification(
+                                data.get("age_certification")
+                                or data.get("ageCertification")
+                            )
+                        else:
+                            _LOGGER.debug(
+                                "JustWatch detail HTTP %s for %s/%s",
+                                resp.status, kind, object_id,
+                            )
+            except Exception as err:
+                _LOGGER.debug(
+                    "JustWatch detail failed for %s/%s: %s", kind, object_id, err
+                )
+
+        # French JustWatch public-page fallback.
+        if not jw_fr_age and details_url:
+            try:
+                async with self._sem:
+                    async with self.session.get(
+                        details_url,
+                        headers={
+                            "User-Agent": UA,
+                            "Accept": "text/html,application/xhtml+xml",
+                            "Accept-Language": "fr-FR,fr;q=0.9",
+                            "Referer": "https://www.justwatch.com/fr/",
+                        },
+                        timeout=20,
+                    ) as resp:
+                        if resp.status < 400:
+                            page = await resp.text()
+                            match = re.search(
+                                r'"(?:ageCertification|age_certification)"\s*:\s*"([^"]+)"',
+                                page, re.I,
+                            )
+                            if match:
+                                jw_fr_age = normalize_fr_age_certification(match.group(1))
+                            if not jw_fr_age:
+                                cleaned = re.sub(
+                                    r"(?is)<(?:script|style)\b.*?</(?:script|style)>",
+                                    " ", page,
+                                )
+                                cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+                                cleaned = html.unescape(cleaned)
+                                cleaned = re.sub(r"\s+", " ", cleaned)
+                                match = re.search(
+                                    r"\b(TP|10|12|16|18)\s+Âge\b", cleaned, re.I
+                                )
+                                if match:
+                                    jw_fr_age = normalize_fr_age_certification(match.group(1))
+            except Exception as err:
+                _LOGGER.debug(
+                    "JustWatch French age fallback failed for %s: %s", details_url, err
+                )
+
+        if not imdb_id:
+            imdb_id = await self._async_imdb_id(title, year, media_type)
+
+        imdb_certs = await self._async_imdb_certificates(imdb_id) if imdb_id else {}
+        imdb_fr = normalize_fr_age_certification(imdb_certs.get("FR")) if imdb_certs else None
+        imdb_us = normalize_us_age_certification(imdb_certs.get("US")) if imdb_certs else None
+
+        # IMDb France has priority, with JustWatch France as fallback.
+        fr_age = imdb_fr or jw_fr_age
+        us_age = imdb_us
+
+        result = {"fr": fr_age, "us": us_age, "imdb_id": imdb_id}
+        if self.store:
+            self.store.set_metadata(
+                cache_key,
+                {
+                    "age_fr": fr_age,
+                    "age_us": us_age,
+                    "imdb_id": imdb_id,
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "cache_schema": METADATA_CACHE_SCHEMA,
+                },
+            )
+        return result
+
+
 
