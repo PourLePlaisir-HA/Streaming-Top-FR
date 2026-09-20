@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.8.0-beta.6";
+const STFR_VERSION = "0.8.0-beta.5";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -441,15 +441,15 @@ class StreamingLocalCard extends HTMLElement {
   getCardSize(){return 6}
   _esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
   _categories(){
-    // Fixed two-row navigation keeps the card geometry stable.
-    return ["movies","series","animation","documentaries","family"];
+    // Keep all library sections visible, even when a category currently has
+    // zero items. This makes scan/classification problems immediately visible
+    // instead of silently hiding the missing category.
+    return ["movies","series","animation","documentaries"];
   }
-  _label(cat){return{movies:"Films",series:"Séries",animation:"Animation",documentaries:"Documentaires",family:"Famille"}[cat]||cat}
-  _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation",documentaries:"mdi:earth",family:"mdi:account-group"}[cat]||"mdi:movie-open"}
+  _label(cat){return{movies:"Films",series:"Séries",animation:"Animation",documentaries:"Documentaires"}[cat]||cat}
+  _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation",documentaries:"mdi:earth"}[cat]||"mdi:movie-open"}
   _collectionKey(item){
     const parts=String(item?.relative_path||"").split("/").filter(Boolean);
-    // A direct child such as Movies/Film.mkv is not a collection.
-    // A nested path such as Movies/Indiana Jones/Film.mkv is.
     if(parts.length<3)return null;
     return parts.slice(0,2).join("/").toLocaleLowerCase("fr");
   }
@@ -462,13 +462,11 @@ class StreamingLocalCard extends HTMLElement {
       if(!groups.has(key))groups.set(key,[]);
       groups.get(key).push(item);
     }
-
     const sorted=new Map();
     for(const [key,group] of groups.entries()){
       if(group.length<2)continue;
       sorted.set(key,[...group].sort((a,b)=>{
-        const ay=Number(a?.year);
-        const by=Number(b?.year);
+        const ay=Number(a?.year),by=Number(b?.year);
         const aYear=Number.isFinite(ay)&&ay>0?ay:Number.MAX_SAFE_INTEGER;
         const bYear=Number.isFinite(by)&&by>0?by:Number.MAX_SAFE_INTEGER;
         return aYear-bYear||
@@ -477,12 +475,10 @@ class StreamingLocalCard extends HTMLElement {
           );
       }));
     }
-
     if(!sorted.size)return source;
     const cursor=new Map();
     return source.map(item=>{
-      const key=this._collectionKey(item);
-      const group=key?sorted.get(key):null;
+      const key=this._collectionKey(item),group=key?sorted.get(key):null;
       if(!group)return item;
       const index=cursor.get(key)||0;
       cursor.set(key,index+1);
@@ -531,42 +527,8 @@ class StreamingLocalCard extends HTMLElement {
     }
     return out.sort((a,b)=>String(a.title||a.parsed_title||"").localeCompare(String(b.title||b.parsed_title||""),"fr"));
   }
-  _familySettings(){
-    return this._data?.family||{enabled:true,target_age:11,allow_unrated:false,movies:true,animation:true,series:true}
-  }
-  _familyItems(){
-    const family=this._familySettings();
-    if(family.enabled===false)return[];
-    const out=[];
-    if(family.movies!==false){
-      out.push(...this._rawItems("movies").filter(i=>i.family_eligible===true));
-    }
-    if(family.animation!==false){
-      out.push(...this._rawItems("animation").filter(i=>i.family_eligible===true));
-    }
-    if(family.series!==false){
-      out.push(...this._seriesGroups().filter(i=>i.family_eligible===true));
-    }
-    return out.sort((a,b)=>{
-      const ay=Number(a?.year);const by=Number(b?.year);
-      const aYear=Number.isFinite(ay)&&ay>0?ay:Number.MAX_SAFE_INTEGER;
-      const bYear=Number.isFinite(by)&&by>0?by:Number.MAX_SAFE_INTEGER;
-      return aYear-bYear||
-        String(a?.title||a?.parsed_title||"").localeCompare(
-          String(b?.title||b?.parsed_title||""),"fr"
-        );
-    });
-  }
-  _items(){
-    if(this._category==="series")return this._seriesGroups();
-    if(this._category==="family")return this._familyItems();
-    return this._rawItems();
-  }
-  _categoryCount(cat){
-    if(cat==="series")return this._seriesGroups().length;
-    if(cat==="family")return this._familyItems().length;
-    return this._rawItems(cat).length;
-  }
+  _items(){return this._category==="series"?this._seriesGroups():this._rawItems()}
+  _categoryCount(cat){return cat==="series"?this._seriesGroups().length:this._rawItems(cat).length}
   _normalizeCategory(){
     const cats=this._categories();
     if(cats.length&&!cats.includes(this._category))this._category=cats[0];
@@ -763,26 +725,25 @@ class StreamingLocalCard extends HTMLElement {
     this.shadowRoot.innerHTML=`<style>
       :host{display:block}
       ha-card{overflow:hidden}
-      .wrap{padding:18px}
-      .top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-      .title{font-size:1.2rem;font-weight:850}
-      .status{font-size:.72rem;color:var(--secondary-text-color)}
+      .wrap{padding:16px}
+      .top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+      .title{font-size:1.25rem;font-weight:800}
+      .status{font-size:.82rem;color:var(--secondary-text-color)}
       .spacer{flex:1}
       button{font:inherit;color:var(--primary-text-color)}
-      .refresh{width:38px;height:38px;border:0;border-radius:50%;background:var(--secondary-background-color);cursor:pointer;font-size:18px}
-      .local-nav{display:grid;grid-template-rows:auto auto;gap:8px;margin-bottom:12px;min-height:88px}
-      .tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin:0;scrollbar-width:none}
-      .tab{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:9px 14px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap;font-weight:800}
+      .refresh{width:36px;height:36px;border:0;border-radius:50%;background:var(--secondary-background-color);cursor:pointer;font-size:20px}
+      .tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+      .tab{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap}
       .tab.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
       .tab ha-icon{--mdc-icon-size:18px}
-      .rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(155px,175px);gap:13px;overflow-x:auto;padding:2px 2px 12px;scroll-snap-type:x proximity}
+      .rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(145px,170px);gap:12px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}
       .media{display:block;min-width:0;padding:0;border:0;background:none;text-align:left;cursor:pointer;scroll-snap-align:start}
       .poster{position:relative;aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:var(--secondary-background-color);box-shadow:0 2px 8px rgba(0,0,0,.18)}
       .poster img{width:100%;height:100%;display:block;object-fit:cover}
       .poster-fallback{width:100%;height:100%;display:grid;place-items:center;color:var(--secondary-text-color)}
       .poster-fallback ha-icon{--mdc-icon-size:48px}
-      .media-title{margin-top:10px;font-weight:800;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-      .media-meta{margin-top:4px;min-height:17px;color:var(--secondary-text-color);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .media-title{margin-top:8px;font-weight:800;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+      .media-meta{margin-top:4px;min-height:17px;color:var(--secondary-text-color);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .series-extra{margin-top:3px;color:var(--secondary-text-color);font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .match{position:absolute;top:7px;left:7px;border-radius:999px;padding:4px 7px;background:rgba(0,0,0,.72);color:#fff;font-size:.68rem;font-weight:800}
       .match.imdb{background:rgba(155,110,0,.88)}.match.unmatched{background:rgba(130,35,35,.88)}.match.pending{background:rgba(30,30,30,.72)}
@@ -807,14 +768,11 @@ class StreamingLocalCard extends HTMLElement {
       .episode-main small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .episode-row ha-icon{flex:0 0 auto;color:var(--primary-color)}
       .episode-help{margin-top:12px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.35}
-      @media(max-width:600px){.wrap{padding:14px 11px}.local-nav{min-height:84px}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}}
+      @media(max-width:600px){.wrap{padding:14px 11px}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}}
     </style>
     <ha-card><div class="wrap">
       <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-      ${cats.length?`<div class="local-nav">
-        <div class="tabs tabs-primary">${["movies","series","animation"].map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>
-        <div class="tabs tabs-secondary">${["documentaries","family"].map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>
-      </div>`:""}
+      ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
       ${body}
     </div></ha-card>`;
     this._bind();
