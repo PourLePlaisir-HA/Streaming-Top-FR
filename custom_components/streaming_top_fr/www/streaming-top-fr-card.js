@@ -442,10 +442,10 @@ class StreamingLocalCard extends HTMLElement {
   _esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
   _categories(){
     const items=this._data?.items||[];
-    return ["movies","series","animation"].filter(cat=>items.some(i=>i.bucket===cat));
+    return ["movies","series","animation","documentaries"].filter(cat=>items.some(i=>i.bucket===cat));
   }
-  _label(cat){return{movies:"Films",series:"Séries",animation:"Animation"}[cat]||cat}
-  _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation"}[cat]||"mdi:movie-open"}
+  _label(cat){return{movies:"Films",series:"Séries",animation:"Animation",documentaries:"Documentaires"}[cat]||cat}
+  _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation",documentaries:"mdi:earth"}[cat]||"mdi:movie-open"}
   _items(){return(this._data?.items||[]).filter(i=>i.bucket===this._category)}
   _normalizeCategory(){
     const cats=this._categories();
