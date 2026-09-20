@@ -60,6 +60,10 @@ FIELD_LOCAL_SMB = "local_smb_base_uri"
 FIELD_LOCAL_AUTH_MODE = "local_smb_auth_mode"
 FIELD_LOCAL_EXTENSIONS = "local_extensions"
 FIELD_LOCAL_SCAN_HIDDEN = "local_scan_hidden"
+FIELD_LOCAL_MOVIES_FOLDERS = "local_movies_folders"
+FIELD_LOCAL_SERIES_FOLDERS = "local_series_folders"
+FIELD_LOCAL_ANIMATION_FOLDERS = "local_animation_folders"
+FIELD_LOCAL_DOCUMENTARIES_FOLDERS = "local_documentaries_folders"
 
 
 def _number(minimum: int, maximum: int, step: int = 1) -> selector.NumberSelector:
@@ -161,6 +165,22 @@ def _local_library_schema(settings: dict[str, Any]) -> vol.Schema:
                 FIELD_LOCAL_EXTENSIONS,
                 default=", ".join(str(value) for value in extensions),
             ): selector.TextSelector(),
+            vol.Required(
+                FIELD_LOCAL_MOVIES_FOLDERS,
+                default=", ".join((local.get("category_folders") or {}).get("movies") or ["Films"]),
+            ): selector.TextSelector(),
+            vol.Required(
+                FIELD_LOCAL_SERIES_FOLDERS,
+                default=", ".join((local.get("category_folders") or {}).get("series") or ["Series", "Séries"]),
+            ): selector.TextSelector(),
+            vol.Required(
+                FIELD_LOCAL_ANIMATION_FOLDERS,
+                default=", ".join((local.get("category_folders") or {}).get("animation") or ["Animation", "Animations", "Dessins Animés"]),
+            ): selector.TextSelector(),
+            vol.Required(
+                FIELD_LOCAL_DOCUMENTARIES_FOLDERS,
+                default=", ".join((local.get("category_folders") or {}).get("documentaries") or ["Documentaires", "Documentaries"]),
+            ): selector.TextSelector(),
             vol.Optional(
                 FIELD_LOCAL_SCAN_HIDDEN,
                 default=bool(local.get("scan_hidden", False)),
@@ -177,6 +197,14 @@ def _apply_local_library(
         for value in str(user_input.get(FIELD_LOCAL_EXTENSIONS) or "").split(",")
         if value.strip()
     ]
+    def _folders(field: str, fallback: list[str]) -> list[str]:
+        values = [
+            value.strip()
+            for value in str(user_input.get(field) or "").split(",")
+            if value.strip()
+        ]
+        return values or fallback
+
     settings["local_library"] = {
         "enabled": bool(user_input.get(FIELD_LOCAL_ENABLED, False)),
         "root_path": str(user_input.get(FIELD_LOCAL_ROOT) or "").strip(),
@@ -184,6 +212,18 @@ def _apply_local_library(
         "smb_auth_mode": str(user_input.get(FIELD_LOCAL_AUTH_MODE) or "vlc_saved"),
         "extensions": extensions
         or ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],
+        "category_folders": {
+            "movies": _folders(FIELD_LOCAL_MOVIES_FOLDERS, ["Films"]),
+            "series": _folders(FIELD_LOCAL_SERIES_FOLDERS, ["Series", "Séries"]),
+            "animation": _folders(
+                FIELD_LOCAL_ANIMATION_FOLDERS,
+                ["Animation", "Animations", "Dessins Animés"],
+            ),
+            "documentaries": _folders(
+                FIELD_LOCAL_DOCUMENTARIES_FOLDERS,
+                ["Documentaires", "Documentaries"],
+            ),
+        },
         "scan_hidden": bool(user_input.get(FIELD_LOCAL_SCAN_HIDDEN, False)),
     }
 
