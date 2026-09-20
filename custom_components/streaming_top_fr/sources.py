@@ -936,7 +936,7 @@ class JustWatchClient:
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v2" if strict else "imdb-id"
+        cache_prefix = "imdb-id-strict-v3" if strict else "imdb-id"
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -987,6 +987,21 @@ class JustWatchClient:
                                     or hit_title in want_title
                                 )
 
+                                hit_year = hit.get("y")
+                                try:
+                                    hit_year = int(hit_year) if hit_year else None
+                                except (TypeError, ValueError):
+                                    hit_year = None
+
+                                exact_year = bool(
+                                    want_year and hit_year and hit_year == want_year
+                                )
+                                expanded_title = bool(
+                                    exact_year
+                                    and len(want_title) >= 7
+                                    and hit_title.startswith(want_title + "-")
+                                )
+
                                 # Title similarity is mandatory. Year/type alone
                                 # must never be enough to identify local media.
                                 if hit_title == want_title:
@@ -997,14 +1012,10 @@ class JustWatchClient:
                                     points = 9
                                 elif contains and similarity >= 0.72:
                                     points = 8
+                                elif expanded_title:
+                                    points = 9
                                 else:
                                     return -1000
-
-                                hit_year = hit.get("y")
-                                try:
-                                    hit_year = int(hit_year) if hit_year else None
-                                except (TypeError, ValueError):
-                                    hit_year = None
 
                                 # A known conflicting year is a hard rejection.
                                 if want_year and hit_year:
@@ -2626,7 +2637,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v4:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v5:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2681,6 +2692,22 @@ class JustWatchClient:
 
             similarity = SequenceMatcher(None, wanted_slug, candidate_slug).ratio()
             contains = wanted_slug in candidate_slug or candidate_slug in wanted_slug
+
+            candidate_year = content.get("originalReleaseYear")
+            try:
+                candidate_year = int(candidate_year) if candidate_year else None
+            except (TypeError, ValueError):
+                candidate_year = None
+
+            exact_year = bool(
+                wanted_year and candidate_year and candidate_year == wanted_year
+            )
+            expanded_title = bool(
+                exact_year
+                and len(wanted_slug) >= 7
+                and candidate_slug.startswith(wanted_slug + "-")
+            )
+
             if candidate_slug == wanted_slug:
                 points = 12
             elif similarity >= 0.94:
@@ -2689,14 +2716,16 @@ class JustWatchClient:
                 points = 8
             elif contains and similarity >= 0.72:
                 points = 6
+            elif expanded_title:
+                # Local files often use the short theatrical title while
+                # catalogues carry a longer subtitle/alternate-title suffix
+                # (e.g. "Don Juan" -> "Don Juan ou si Don Juan était une femme").
+                # Accept only with an exact year; ambiguity handling below still
+                # rejects tied works.
+                points = 9
             else:
                 return -999
 
-            candidate_year = content.get("originalReleaseYear")
-            try:
-                candidate_year = int(candidate_year) if candidate_year else None
-            except (TypeError, ValueError):
-                candidate_year = None
             if wanted_year and candidate_year:
                 delta = abs(candidate_year - wanted_year)
                 if delta > 1:
