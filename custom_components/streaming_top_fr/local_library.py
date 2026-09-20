@@ -25,7 +25,8 @@ _RELEASE_WORDS = re.compile(
     r"\b(?:2160p|1080p|720p|576p|4k|uhd|hdr10\+?|hdr|dolby[ ._-]?vision|dv|"
     r"bluray|blu[ ._-]?ray|bdrip|brrip|web[ ._-]?dl|webrip|hdtv|remux|"
     r"x26[45]|h\.?26[45]|hevc|av1|aac|ac3|eac3|dts(?:-hd)?|truehd|"
-    r"multi|french|vostfr|vf2|vff|vo|proper|repack)\b.*$",
+    r"multi|french|truefrench|vostfr|vost|vof|vfq|vfi|vf2|vff|vo|dubbed|"
+    r"subfrench|proper|repack|web|mhd)\b.*$",
     re.IGNORECASE,
 )
 _YEAR = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
