@@ -59,6 +59,29 @@ def _matching_slug(value: str, media_type: str | None = None) -> str:
     return slug
 
 
+def _bare_sequel_number(slug: str) -> int | None:
+    """Return a bare terminal sequel number, excluding explicit part labels.
+
+    Examples:
+      "la-verite-si-je-mens-2" -> 2
+      "la-verite-si-je-mens"   -> None
+      "dune-partie-1"          -> None
+
+    This deliberately targets true numbered sequels only; collection markers
+    (#1 / Vol. 1) are removed earlier and part/chapter labels have their own
+    matching rules.
+    """
+    parts = [part for part in str(slug or "").split("-") if part]
+    if not parts or not parts[-1].isdigit():
+        return None
+    if len(parts) >= 2 and parts[-2] in {
+        "part", "partie", "chapter", "chapitre", "volume", "vol", "tome",
+    }:
+        return None
+    value = int(parts[-1])
+    return value if 1 <= value <= 99 else None
+
+
 def _localized_title_alias(wanted_slug: str, candidate_slug: str) -> bool:
     """Recognize strong original/localized title variants.
 
@@ -1034,7 +1057,7 @@ class JustWatchClient:
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v7" if strict else "imdb-id"
+        cache_prefix = "imdb-id-strict-v8" if strict else "imdb-id"
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -1075,6 +1098,14 @@ class JustWatchClient:
                                     str(hit.get("l") or ""), media_type
                                 )
                                 if not want_title or not hit_title:
+                                    return -1000
+
+                                want_sequel = _bare_sequel_number(want_title)
+                                hit_sequel = _bare_sequel_number(hit_title)
+                                if (
+                                    want_sequel != hit_sequel
+                                    and (want_sequel is not None or hit_sequel is not None)
+                                ):
                                     return -1000
 
                                 similarity = SequenceMatcher(
@@ -2757,7 +2788,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v12:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2833,6 +2864,14 @@ class JustWatchClient:
                 points = 20
             else:
                 if not wanted_slug or not candidate_slug:
+                    return -999
+
+                wanted_sequel = _bare_sequel_number(wanted_slug)
+                candidate_sequel = _bare_sequel_number(candidate_slug)
+                if (
+                    wanted_sequel != candidate_sequel
+                    and (wanted_sequel is not None or candidate_sequel is not None)
+                ):
                     return -999
 
                 similarity = SequenceMatcher(None, wanted_slug, candidate_slug).ratio()
