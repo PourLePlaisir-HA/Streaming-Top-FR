@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.7.1-beta.2";
+const STFR_VERSION = "0.7.1";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
