@@ -325,7 +325,6 @@ def _apply_family(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
 
 def _classification_schema(settings: dict[str, Any]) -> vol.Schema:
     classification = settings.get("classification") or {}
-    local_library = settings.get("local_library") or {}
     return vol.Schema(
         {
             vol.Optional(
@@ -453,6 +452,7 @@ def _summary_placeholders(
 
     family = settings.get("family") or {}
     classification = settings.get("classification") or {}
+    local_library = settings.get("local_library") or {}
     players = settings.get("players") or {}
     player_names = [
         str(player.get("name") or player_id)
