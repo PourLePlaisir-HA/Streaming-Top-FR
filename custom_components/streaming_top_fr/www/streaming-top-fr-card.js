@@ -466,13 +466,27 @@ class StreamingLocalCard extends HTMLElement {
   async _enrich(){
     if(!this._hass||this._enriching)return;
     this._enriching=true;this._render();
+    let retry=false;
     try{
       const result=await this._hass.callWS({type:"streaming_top_fr/enrich_local_library"});
-      this._data={...(this._data||{}),...(result||{})};
-      this._normalizeCategory();
-      this._error=null;
+      const currentRevision=Number(this._data?.scan_revision||0);
+      const resultRevision=Number(result?.scan_revision||0);
+
+      // Never let an enrichment started from an older filesystem snapshot
+      // restore files that a later rescan has already removed or moved.
+      if(resultRevision&&currentRevision&&resultRevision<currentRevision){
+        retry=Boolean(this._data?.enabled&&this._data?.count>0&&!this._data?.metadata_complete);
+      }else{
+        this._data={...(this._data||{}),...(result||{})};
+        this._normalizeCategory();
+        this._error=null;
+        retry=Boolean(result?.stale&&this._data?.enabled&&this._data?.count>0&&!this._data?.metadata_complete);
+      }
     }catch(e){this._error=String(e)}
-    finally{this._enriching=false;this._render()}
+    finally{
+      this._enriching=false;this._render();
+      if(retry)void this._enrich();
+    }
   }
   async _refresh(){await this._load(true)}
   _metadata(item){
