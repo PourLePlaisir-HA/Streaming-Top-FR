@@ -31,8 +31,15 @@ _RELEASE_WORDS = re.compile(
     re.IGNORECASE,
 )
 _YEAR = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
-_EPISODE = re.compile(r"(?i)\bS(?P<season>\d{1,2})[ ._-]*E(?P<episode>\d{1,3})\b")
-_EPISODE_ALT = re.compile(r"(?i)\b(?P<season>\d{1,2})x(?P<episode>\d{1,3})\b")
+_EPISODE = re.compile(
+    r"(?i)\bS\s*(?P<season>\d{1,2})[ ._-]*E\s*(?P<episode>\d{1,3})\b"
+)
+_EPISODE_ALT = re.compile(
+    r"(?i)\b(?P<season>\d{1,2})\s*x\s*(?P<episode>\d{1,3})\b"
+)
+_SEASON_FOLDER = re.compile(
+    r"(?i)^(?:season|saison|s)[ ._-]*\d{1,2}$"
+)
 _COLLECTION_PREFIX = re.compile(
     r"(?i)^\s*(?:n\s*[°ºo]?|no\.?|nr\.?|#)\s*\d{1,4}\s*[-–—_:]\s*"
 )
@@ -325,8 +332,20 @@ class LocalLibraryScanner:
         title_source = stem
         if episode_match:
             title_source = stem[: episode_match.start()]
-            # For TV libraries the parent show directory is usually a better title.
-            parents = [p for p in relative.parts[:-1] if not re.match(r"(?i)^season[ ._-]*\d+$", p)]
+
+            # Episodic media can live under Series, Animation or Documentaries.
+            # Prefer the actual programme folder, never the category or
+            # Season/Saison folder itself.
+            category_tokens = set().union(
+                *self._category_folders(settings).values()
+            )
+            parents = []
+            for parent in relative.parts[:-1]:
+                if _SEASON_FOLDER.match(parent.strip()):
+                    continue
+                if self._normalize_folder_name(parent) in category_tokens:
+                    continue
+                parents.append(parent)
             if parents:
                 title_source = parents[-1]
 
@@ -357,4 +376,5 @@ class LocalLibraryScanner:
             "year": year,
             "season": season,
             "episode": episode,
+            "episodic": bool(episode_match),
         }
