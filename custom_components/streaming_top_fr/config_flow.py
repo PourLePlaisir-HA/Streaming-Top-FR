@@ -57,6 +57,7 @@ FIELD_DELETE_PLAYER = "delete_player"
 FIELD_LOCAL_ENABLED = "local_enabled"
 FIELD_LOCAL_ROOT = "local_root_path"
 FIELD_LOCAL_SMB = "local_smb_base_uri"
+FIELD_LOCAL_AUTH_MODE = "local_smb_auth_mode"
 FIELD_LOCAL_EXTENSIONS = "local_extensions"
 FIELD_LOCAL_SCAN_HIDDEN = "local_scan_hidden"
 
@@ -146,6 +147,17 @@ def _local_library_schema(settings: dict[str, Any]) -> vol.Schema:
                 default=str(local.get("smb_base_uri") or ""),
             ): selector.TextSelector(),
             vol.Required(
+                FIELD_LOCAL_AUTH_MODE,
+                default=str(local.get("smb_auth_mode") or "vlc_saved"),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(value="vlc_saved", label="VLC — identifiants mémorisés"),
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Required(
                 FIELD_LOCAL_EXTENSIONS,
                 default=", ".join(str(value) for value in extensions),
             ): selector.TextSelector(),
@@ -169,6 +181,7 @@ def _apply_local_library(
         "enabled": bool(user_input.get(FIELD_LOCAL_ENABLED, False)),
         "root_path": str(user_input.get(FIELD_LOCAL_ROOT) or "").strip(),
         "smb_base_uri": str(user_input.get(FIELD_LOCAL_SMB) or "").strip().rstrip("/"),
+        "smb_auth_mode": str(user_input.get(FIELD_LOCAL_AUTH_MODE) or "vlc_saved"),
         "extensions": extensions
         or ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],
         "scan_hidden": bool(user_input.get(FIELD_LOCAL_SCAN_HIDDEN, False)),
