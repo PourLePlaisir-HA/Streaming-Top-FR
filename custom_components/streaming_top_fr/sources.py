@@ -42,7 +42,7 @@ def _matching_slug(value: str, media_type: str | None = None) -> str:
     # Treat common conjunction spellings as equivalent for catalogue matching:
     # "Lilo and Stitch", "Lilo & Stitch" and "Lilo et Stitch".
     normalized = normalized.replace("&", " and ")
-    normalized = re.sub(r"(?i)\\b(?:and|et)\\b", " and ", normalized)
+    normalized = re.sub(r"(?i)\b(?:and|et)\b", " and ", normalized)
     slug = _slug(normalized)
     if media_type in {"tv", "show"}:
         for suffix in (
