@@ -2937,9 +2937,12 @@ class JustWatchClient:
 
         unique = {}
         for item in works:
+            lookup_title = str(
+                item.get("lookup_title") or item.get("title") or ""
+            ).strip()
             key = (
                 "tv" if item.get("media_type") == "tv" else "movie",
-                str(item.get("title") or "").strip(),
+                lookup_title,
                 item.get("year"),
             )
             if key[1]:
@@ -2964,10 +2967,12 @@ class JustWatchClient:
                     local_id = item.get("local_id")
                     local_media_key = item.get("media_key") or local_id
                     parsed_title = item.get("title")
+                    lookup_title = item.get("lookup_title") or parsed_title
                     for field, value in metadata.items():
                         if value is not None:
                             item[field] = value
                     item["parsed_title"] = parsed_title
+                    item["lookup_title"] = lookup_title
                     item["local_id"] = local_id
                     item["media_key"] = local_media_key
 
