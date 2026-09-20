@@ -76,6 +76,40 @@ def _first_installment_base_slug(slug: str) -> str:
     return value
 
 
+def _franchise_prefix_alias(wanted_slug: str, candidate_slug: str) -> bool:
+    """Match localized franchise numbering against a descriptive local title.
+
+    Examples:
+      "largo-winch-le-prix-de-l-argent" <-> "largo-winch-3"
+      "mission-impossible-dead-reckoning" <-> "mission-impossible-7"
+
+    The caller must additionally require an exact release year. We require at
+    least two meaningful leading tokens and a numeric sequel marker on one
+    side, so this never acts as a generic same-franchise fuzzy match.
+    """
+    wanted = [p for p in str(wanted_slug or "").split("-") if p]
+    candidate = [p for p in str(candidate_slug or "").split("-") if p]
+    if len(wanted) < 2 or len(candidate) < 2:
+        return False
+
+    common = 0
+    for left, right in zip(wanted, candidate):
+        if left != right:
+            break
+        common += 1
+    if common < 2:
+        return False
+
+    wanted_tail = wanted[common:]
+    candidate_tail = candidate[common:]
+    has_number = any(part.isdigit() for part in wanted_tail + candidate_tail)
+    if not has_number:
+        return False
+
+    # One side must be substantially more descriptive than the numbered alias.
+    return abs(len(wanted) - len(candidate)) >= 2
+
+
 def fallback_key(media_type: str, title: str) -> str:
     return f"{media_type}:{_slug(title)}"
 
@@ -2674,7 +2708,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v9:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v10:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2774,6 +2808,11 @@ class JustWatchClient:
                     and _first_installment_base_slug(wanted_slug)
                     == _first_installment_base_slug(candidate_slug)
                 )
+                franchise_number_alias = bool(
+                    exact_year
+                    and wanted_slug != candidate_slug
+                    and _franchise_prefix_alias(wanted_slug, candidate_slug)
+                )
 
                 if candidate_slug == wanted_slug:
                     points = 12
@@ -2788,6 +2827,8 @@ class JustWatchClient:
                 elif local_subtitle_alias:
                     points = 10
                 elif first_installment_alias:
+                    points = 10
+                elif franchise_number_alias:
                     points = 10
                 else:
                     return -999
