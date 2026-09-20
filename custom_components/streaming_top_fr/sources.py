@@ -2577,35 +2577,41 @@ class JustWatchClient:
             content = node.get("content") or {}
             candidate_title = str(content.get("title") or "").strip()
             candidate_slug = _slug(candidate_title)
-            points = 0
+            if not wanted_slug or not candidate_slug:
+                return -999
 
+            similarity = SequenceMatcher(None, wanted_slug, candidate_slug).ratio()
+            contains = wanted_slug in candidate_slug or candidate_slug in wanted_slug
             if candidate_slug == wanted_slug:
-                points += 10
-            elif wanted_slug and candidate_slug and (
-                wanted_slug in candidate_slug or candidate_slug in wanted_slug
-            ):
-                points += 4
+                points = 12
+            elif similarity >= 0.94:
+                points = 10
+            elif similarity >= 0.88:
+                points = 8
+            elif contains and similarity >= 0.72:
+                points = 6
+            else:
+                return -999
 
             candidate_year = content.get("originalReleaseYear")
             try:
                 candidate_year = int(candidate_year) if candidate_year else None
             except (TypeError, ValueError):
                 candidate_year = None
-            if wanted_year and candidate_year == wanted_year:
-                points += 8
-            elif (
-                wanted_year
-                and candidate_year
-                and abs(candidate_year - wanted_year) <= 1
-            ):
-                points += 3
+            if wanted_year and candidate_year:
+                delta = abs(candidate_year - wanted_year)
+                if delta > 1:
+                    return -999
+                points += 8 if delta == 0 else 3
 
             ext = content.get("externalIds") or {}
             candidate_imdb = self._normalize_imdb_id(ext.get("imdbId"))
             if expected_imdb and candidate_imdb == expected_imdb:
-                points += 16
+                points += 12
             elif expected_imdb and candidate_imdb and candidate_imdb != expected_imdb:
-                points -= 8
+                # A conflicting autocomplete result must not veto an otherwise
+                # exact JustWatch title/year match; it only lowers confidence.
+                points -= 2
 
             return points
 
@@ -2618,14 +2624,21 @@ class JustWatchClient:
 
         selected = candidates[0][1] if candidates else None
         selected_score = candidates[0][0] if candidates else None
-        minimum_score = 12 if wanted_year else 9
+        minimum_score = 16 if wanted_year else 10
 
-        if selected is not None and expected_imdb:
-            selected_ext = ((selected.get("content") or {}).get("externalIds") or {})
-            selected_imdb = self._normalize_imdb_id(selected_ext.get("imdbId"))
-            # An explicit conflicting IMDb id is a stronger signal than a
-            # fuzzy title match. Do not attach metadata from the wrong work.
-            if selected_imdb and selected_imdb != expected_imdb:
+        # If two different works are effectively tied, fail closed instead of
+        # selecting whichever JustWatch happened to return first.
+        if (
+            selected is not None
+            and len(candidates) > 1
+            and candidates[1][0] >= minimum_score
+            and selected_score is not None
+            and selected_score - candidates[1][0] <= 1
+        ):
+            first_id = selected.get("objectId") or selected.get("id")
+            second = candidates[1][1]
+            second_id = second.get("objectId") or second.get("id")
+            if first_id != second_id:
                 selected = None
 
         if selected is None or selected_score is None or selected_score < minimum_score:
