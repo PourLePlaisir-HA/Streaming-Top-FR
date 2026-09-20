@@ -330,8 +330,6 @@ def _register_ws(hass):
                 "scan_revision": result.revision,
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
-                "family": settings.get("family") or {},
-                "classification": settings.get("classification") or {},
                 "items": items,
                 "errors": list(result.errors),
             },
@@ -383,7 +381,6 @@ def _register_ws(hass):
         await coordinator.justwatch.async_enrich_local_items(
             result.items,
             settings.get("classification") or {},
-            settings.get("family") or {},
         )
 
         # A refresh may have completed while metadata enrichment was running.
@@ -412,8 +409,6 @@ def _register_ws(hass):
                 "scan_revision": result.revision,
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
-                "family": settings.get("family") or {},
-                "classification": settings.get("classification") or {},
                 "items": items,
                 "errors": list(result.errors),
             },
