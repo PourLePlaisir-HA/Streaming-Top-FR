@@ -36,6 +36,24 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value).strip("-")
 
 
+def _matching_slug(value: str, media_type: str | None = None) -> str:
+    """Normalize harmless catalogue suffixes for title matching only."""
+    slug = _slug(value)
+    if media_type in {"tv", "show"}:
+        for suffix in (
+            "-la-serie",
+            "-la-series",
+            "-the-series",
+            "-tv-series",
+            "-serie",
+            "-series",
+        ):
+            if slug.endswith(suffix) and len(slug) > len(suffix):
+                slug = slug[: -len(suffix)].rstrip("-")
+                break
+    return slug
+
+
 def fallback_key(media_type: str, title: str) -> str:
     return f"{media_type}:{_slug(title)}"
 
@@ -950,12 +968,14 @@ class JustWatchClient:
                             want_year = int(year) if year else None
                         except (TypeError, ValueError):
                             pass
-                        want_title = _slug(str(title))
+                        want_title = _matching_slug(str(title), media_type)
                         want_tv = media_type in ("tv", "show")
 
                         if strict:
                             def strict_score(hit):
-                                hit_title = _slug(str(hit.get("l") or ""))
+                                hit_title = _matching_slug(
+                                    str(hit.get("l") or ""), media_type
+                                )
                                 if not want_title or not hit_title:
                                     return -1000
 
@@ -1084,6 +1104,78 @@ class JustWatchClient:
     def _normalize_imdb_id(imdb_id):
         value = str(imdb_id or "").strip().lower()
         return value if re.fullmatch(r"tt\d{7,10}", value) else None
+
+    async def _async_imdb_local_detail(self, imdb_id):
+        """Fetch poster + basic metadata for a verified local IMDb id."""
+        imdb_id = self._normalize_imdb_id(imdb_id)
+        if not imdb_id:
+            return None
+
+        cache_key = f"imdb-local-detail-v1:{imdb_id}"
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh_hours(cached, IMDB_POSTER_CACHE_DAYS * 24):
+                return cached
+
+        query = f"""
+        query LocalTitleDetail {{
+          title(id: "{imdb_id}") {{
+            titleText {{ text }}
+            releaseYear {{ year }}
+            primaryImage {{ url width height }}
+            ratingsSummary {{ aggregateRating voteCount }}
+            plot {{ plotText {{ plainText }} }}
+          }}
+        }}
+        """
+        try:
+            async with self._sem:
+                async with self.session.post(
+                    "https://caching.graphql.imdb.com/",
+                    json={"query": query},
+                    headers={
+                        "User-Agent": UA,
+                        "Accept": "application/graphql+json, application/json",
+                        "Content-Type": "application/json",
+                        "Origin": "https://www.imdb.com",
+                        "Referer": "https://www.imdb.com/",
+                        "x-imdb-client-name": "imdb-web-next",
+                        "x-imdb-user-language": "fr-FR",
+                        "x-imdb-user-country": "FR",
+                    },
+                    timeout=25,
+                ) as resp:
+                    if resp.status >= 400:
+                        _LOGGER.debug(
+                            "IMDb local detail HTTP %s for %s", resp.status, imdb_id
+                        )
+                        return None
+                    payload = await resp.json()
+        except Exception as err:
+            _LOGGER.debug("IMDb local detail failed for %s: %s", imdb_id, err)
+            return None
+
+        title_data = ((payload.get("data") or {}).get("title") or {})
+        image = title_data.get("primaryImage") or {}
+        ratings = title_data.get("ratingsSummary") or {}
+        plot = ((title_data.get("plot") or {}).get("plotText") or {})
+        result = {
+            "imdb_id": imdb_id,
+            "title": ((title_data.get("titleText") or {}).get("text") or None),
+            "year": ((title_data.get("releaseYear") or {}).get("year") or None),
+            "poster": image.get("url"),
+            "rating": ratings.get("aggregateRating"),
+            "imdb_votes": ratings.get("voteCount"),
+            "description": plot.get("plainText"),
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "cache_schema": METADATA_CACHE_SCHEMA,
+        }
+        if result["poster"] and not str(result["poster"]).startswith(("http://", "https://")):
+            result["poster"] = None
+
+        if self.store:
+            self.store.set_metadata(cache_key, result)
+        return result
 
     async def _async_imdb_posters(self, imdb_ids):
         """Return IMDb primary poster URLs keyed by canonical IMDb id.
@@ -2527,7 +2619,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v2:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v3:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2569,14 +2661,14 @@ class JustWatchClient:
         except Exception as err:
             _LOGGER.debug("JustWatch local search failed for %s: %s", title, err)
 
-        wanted_slug = _slug(title)
+        wanted_slug = _matching_slug(title, media_type)
 
         def candidate_score(node):
             if not isinstance(node, dict) or node.get("objectType") != object_type:
                 return -999
             content = node.get("content") or {}
             candidate_title = str(content.get("title") or "").strip()
-            candidate_slug = _slug(candidate_title)
+            candidate_slug = _matching_slug(candidate_title, media_type)
             if not wanted_slug or not candidate_slug:
                 return -999
 
@@ -2642,26 +2734,30 @@ class JustWatchClient:
                 selected = None
 
         if selected is None or selected_score is None or selected_score < minimum_score:
-            poster_lookup = (
-                await self._async_imdb_posters([expected_imdb])
+            imdb_detail = (
+                await self._async_imdb_local_detail(expected_imdb)
                 if expected_imdb
-                else {}
-            )
+                else None
+            ) or {}
             result = {
-                "title": title,
-                "year": wanted_year,
-                "poster": poster_lookup.get(expected_imdb) if expected_imdb else None,
-                "poster_source": "imdb" if expected_imdb and poster_lookup.get(expected_imdb) else None,
-                "description": None,
-                "rating": None,
-                "rating_source": None,
+                "title": imdb_detail.get("title") or title,
+                "year": imdb_detail.get("year") or wanted_year,
+                "poster": imdb_detail.get("poster"),
+                "poster_source": "imdb" if imdb_detail.get("poster") else None,
+                "description": imdb_detail.get("description"),
+                "rating": imdb_detail.get("rating"),
+                "rating_source": "IMDb" if imdb_detail.get("rating") is not None else None,
+                "imdb_votes": imdb_detail.get("imdb_votes"),
                 "age_certification": None,
                 "age_country": None,
                 "age_fr": None,
                 "age_us": None,
                 "age_resolved": False,
                 "imdb_id": expected_imdb,
-                "details_url": None,
+                "details_url": (
+                    f"https://www.imdb.com/title/{expected_imdb}/"
+                    if expected_imdb else None
+                ),
                 "providers": {},
                 "canonical_media_key": (
                     f"imdb:{expected_imdb}" if expected_imdb else None
