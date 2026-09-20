@@ -473,7 +473,7 @@ class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(
                         CONF_UPDATE_HOURS,
                         default=self._update_hours,
-                    ): _number(2, 24),
+                    ): _number(2, 168),
                 }
             ),
         )
@@ -700,7 +700,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                     vol.Required(
                         CONF_UPDATE_HOURS,
                         default=self._update_hours,
-                    ): _number(2, 24)
+                    ): _number(2, 168)
                 }
             ),
         )

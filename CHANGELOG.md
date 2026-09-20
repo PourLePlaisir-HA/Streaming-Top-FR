@@ -1,4 +1,17 @@
+## 0.7.1
+
+- Stabilise la hauteur de la navigation Famille sur mobile et tablette (issue #2).
+- Étend l'actualisation automatique de 2–24 h à 2–168 h (7 jours).
+- Remplace le capteur texte de diagnostic par un `binary_sensor` Home Assistant avec `device_class: problem`.
+- Supprime automatiquement l'ancien `sensor.streaming_top_fr` de l'entity registry lors de la migration.
+- Conserve les attributs de diagnostic existants sur le nouveau binary sensor.
+
 # Changelog
+
+## 0.7.1-beta.1
+- Améliore la stabilité visuelle de la carte **Top Streaming** sur mobile et tablette.
+- Réserve en permanence la hauteur de la ligne de sous-catégories **Famille** (Films / Animation / Séries), même lorsqu'elle est masquée.
+- Évite ainsi le décalage vertical du texte descriptif et des affiches lors du passage vers ou depuis **Famille**.
 
 ## 0.7.0
 - Première version stable de la branche **v0.7** après validation des trois bêta.

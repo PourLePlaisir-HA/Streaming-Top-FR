@@ -9,7 +9,7 @@
           "update_hours": "Automatic refresh (hours)"
         },
         "data_description": {
-          "update_hours": "Interval between automatic updates, from 2 to 24 hours."
+          "update_hours": "Interval between automatic updates, from 2 to 168 hours (7 days)."
         }
       },
       "services": {
