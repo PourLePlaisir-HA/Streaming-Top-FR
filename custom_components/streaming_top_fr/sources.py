@@ -281,6 +281,8 @@ def _find_imdb_id(value: Any) -> str | None:
 
 DISNEY_RESOLUTION_CACHE_HOURS = 24
 TOP_CATALOG_CACHE_HOURS = 12
+PROVIDER_CACHE_HOURS = 2
+JUSTWATCH_BLOCK_MINUTES = 30
 IMDB_POSTER_CACHE_DAYS = 90
 IMDB_POSTER_BATCH_SIZE = 20
 
@@ -848,6 +850,7 @@ class JustWatchClient:
         self.store = store
         self._sem = asyncio.Semaphore(4)
         self._provider_packages: dict[str, list[str]] | None = None
+        self._jw_blocked_until: datetime | None = None
         self._provider_package_names: dict[str, list[str]] = {}
 
     async def _async_disney_fetch_page(self, url: str) -> dict[str, str] | None:
@@ -1022,6 +1025,15 @@ class JustWatchClient:
         return result
 
     async def _post(self, payload):
+        now = datetime.now(timezone.utc)
+        if self._jw_blocked_until and now < self._jw_blocked_until:
+            remaining = max(
+                1, int((self._jw_blocked_until - now).total_seconds() // 60) + 1
+            )
+            raise RuntimeError(
+                f"JustWatch temporairement en pause après HTTP 403 ({remaining} min)"
+            )
+
         async with self.session.post(
             JUSTWATCH_GRAPHQL,
             json=payload,
@@ -1035,10 +1047,16 @@ class JustWatchClient:
             timeout=30,
         ) as resp:
             text = await resp.text()
+            if resp.status == 403:
+                self._jw_blocked_until = now + timedelta(
+                    minutes=JUSTWATCH_BLOCK_MINUTES
+                )
+                raise RuntimeError("JustWatch HTTP 403 — mise en pause temporaire")
             if resp.status >= 400:
-                raise RuntimeError(f"JustWatch HTTP {resp.status}: {text[:500]}")
+                raise RuntimeError(f"JustWatch HTTP {resp.status}")
             data = await resp.json()
 
+        self._jw_blocked_until = None
         if data.get("errors"):
             raise RuntimeError(data["errors"][0].get("message", "Erreur GraphQL"))
         return data.get("data") or {}
@@ -1941,7 +1959,14 @@ class JustWatchClient:
         return result
 
     async def _async_provider_candidates(self, provider, media_type, first):
-        """Fetch a provider-local popularity slice from JustWatch."""
+        """Fetch provider popularity with persistent stale-cache fallback."""
+        cache_key = f"provider-popular-v1:{provider}:{media_type}:{int(first)}"
+        cached = self.store.get_metadata(cache_key) if self.store else None
+        if _cache_fresh_hours(cached, PROVIDER_CACHE_HOURS):
+            cached_items = cached.get("items")
+            if isinstance(cached_items, list):
+                return cached_items
+
         packages = await self.async_resolve_provider_packages()
         package_codes = packages.get(provider) or []
         if not package_codes:
@@ -1963,8 +1988,18 @@ class JustWatchClient:
             },
             "query": self.POPULAR_QUERY,
         }
-        data = await self._post(payload)
-        edges = ((data.get("popularTitles") or {}).get("edges") or [])
+        try:
+            data = await self._post(payload)
+            edges = ((data.get("popularTitles") or {}).get("edges") or [])
+        except Exception:
+            cached_items = (cached or {}).get("items")
+            if isinstance(cached_items, list) and cached_items:
+                _LOGGER.warning(
+                    "Using stale JustWatch provider cache for %s/%s",
+                    provider, media_type,
+                )
+                return cached_items
+            raise
 
         out = []
         seen = set()
@@ -2022,6 +2057,15 @@ class JustWatchClient:
                     "providers": self._provider_offers(node),
                     "source": "JustWatch popularité plateforme",
                 }
+            )
+        if self.store and out:
+            self.store.set_metadata(
+                cache_key,
+                {
+                    "items": out,
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "cache_schema": METADATA_CACHE_SCHEMA,
+                },
             )
         return out
 
@@ -2159,8 +2203,8 @@ class JustWatchClient:
             f"top-catalog-v5:{provider_signature}:{decade}:{category}:{top_count}:"
             f"votes{min_imdb_votes}:short{int(exclude_short_films)}"
         )
-        if self.store:
-            cached = self.store.get_metadata(cache_key)
+        cached = self.store.get_metadata(cache_key) if self.store else None
+        if cached:
             if _cache_fresh_hours(cached, TOP_CATALOG_CACHE_HOURS):
                 ranked_pool = cached.get("ranked_pool")
                 if isinstance(ranked_pool, list):
@@ -2199,9 +2243,34 @@ class JustWatchClient:
         # Up to 100 locally popular candidates gives a Top 65 enough reserve for
         # status exclusions without reopening the worldwide IMDb catalogue.
         candidate_count = min(100, max(40, top_count + 35))
-        fr_edges, fr_sort_mode = await self._async_top_popular_edges(
-            "FR", "FR", fr_filter, candidate_count
-        )
+        try:
+            fr_edges, fr_sort_mode = await self._async_top_popular_edges(
+                "FR", "FR", fr_filter, candidate_count
+            )
+        except Exception as err:
+            ranked_pool = (cached or {}).get("ranked_pool")
+            if isinstance(ranked_pool, list) and ranked_pool:
+                visible = [
+                    dict(item)
+                    for item in ranked_pool
+                    if item.get("media_key") not in excluded_keys
+                ][:top_count]
+                await self.async_enrich_imdb_posters(visible)
+                for index, item in enumerate(visible, start=1):
+                    item["rank"] = index
+                algorithm = dict((cached or {}).get("algorithm") or {})
+                algorithm["excluded_count"] = len(excluded_keys)
+                algorithm["visible_count"] = len(visible)
+                algorithm["stale_cache"] = True
+                return {
+                    "items": visible,
+                    "error": None,
+                    "cached": True,
+                    "stale": True,
+                    "stale_reason": str(err),
+                    "algorithm": algorithm,
+                }
+            raise
         seen = set()
 
         def parse_edges(edges, popularity_market):
