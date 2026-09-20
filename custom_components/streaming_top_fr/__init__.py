@@ -8,7 +8,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS, CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS
 from .storage import StreamingTopStore
-from .sources import NetflixOfficialClient, JustWatchClient
+from .sources import NetflixOfficialClient, JustWatchClient, LocalMetadataClient
 from .coordinator import StreamingTopCoordinator
 from .playback import SUPPORTED_PLAYBACK_PROVIDERS, async_launch, log_launch_failure
 from .local_library import LocalLibraryScanner
@@ -61,11 +61,13 @@ async def async_setup_entry(hass, entry):
         store,
         entry,
     )
+    local_metadata = LocalMetadataClient(session, store)
     await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
         "store": store,
         "local_library": LocalLibraryScanner(hass),
+        "local_metadata": local_metadata,
     }
     await _register_frontend(hass)
     _register_ws(hass)
@@ -378,7 +380,7 @@ def _register_ws(hass):
             return
 
         source_revision = result.revision
-        await coordinator.justwatch.async_enrich_local_items(
+        await data["local_metadata"].async_enrich_local_items(
             result.items,
             settings.get("classification") or {},
         )
