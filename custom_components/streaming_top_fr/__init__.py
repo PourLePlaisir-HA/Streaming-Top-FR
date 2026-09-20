@@ -327,6 +327,7 @@ def _register_ws(hass):
                 "root_path": local_settings.get("root_path") or "",
                 "smb_base_uri": local_settings.get("smb_base_uri") or "",
                 "count": len(items),
+                "scan_revision": result.revision,
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
                 "items": items,
@@ -376,10 +377,18 @@ def _register_ws(hass):
             )
             return
 
+        source_revision = result.revision
         await coordinator.justwatch.async_enrich_local_items(
             result.items,
             settings.get("classification") or {},
         )
+
+        # A refresh may have completed while metadata enrichment was running.
+        # Never send the old inventory back to the card in that case.
+        current = scanner.last_result
+        stale = current.revision != source_revision
+        if stale:
+            result = current
 
         items = [dict(item) for item in result.items]
         for item in items:
@@ -395,7 +404,9 @@ def _register_ws(hass):
             {
                 "ok": True,
                 "enabled": True,
+                "stale": stale,
                 "count": len(items),
+                "scan_revision": result.revision,
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
                 "items": items,
@@ -429,6 +440,7 @@ def _register_ws(hass):
             {
                 "ok": not result.errors,
                 "count": len(result.items),
+                "scan_revision": result.revision,
                 "errors": list(result.errors),
             },
         )
