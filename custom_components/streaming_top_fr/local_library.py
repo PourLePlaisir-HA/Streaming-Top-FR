@@ -206,6 +206,12 @@ class LocalLibraryScanner:
             previous = cleaned
             cleaned = _COLLECTION_PREFIX.sub("", cleaned).strip(" -_.")
             cleaned = _STUDIO_PREFIX.sub("", cleaned).strip(" -_.")
+            # Removing a parsed year such as "(1994)" can leave empty
+            # punctuation behind. Drop only empty bracket groups so meaningful
+            # parenthetical title text is preserved.
+            cleaned = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", " ", cleaned)
+            cleaned = re.sub(r"\s*[-–—_:]+\s*$", "", cleaned)
+            cleaned = re.sub(r"\s+", " ", cleaned).strip(" -_.")
         return cleaned
 
     def _parse_media(
