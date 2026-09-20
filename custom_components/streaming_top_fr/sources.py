@@ -37,8 +37,13 @@ def _slug(value: str) -> str:
 
 
 def _matching_slug(value: str, media_type: str | None = None) -> str:
-    """Normalize harmless catalogue suffixes for title matching only."""
-    slug = _slug(value)
+    """Normalize harmless catalogue/title variants for matching only."""
+    normalized = str(value or "")
+    # Treat common conjunction spellings as equivalent for catalogue matching:
+    # "Lilo and Stitch", "Lilo & Stitch" and "Lilo et Stitch".
+    normalized = normalized.replace("&", " and ")
+    normalized = re.sub(r"(?i)\\b(?:and|et)\\b", " and ", normalized)
+    slug = _slug(normalized)
     if media_type in {"tv", "show"}:
         for suffix in (
             "-la-serie",
@@ -953,7 +958,7 @@ class JustWatchClient:
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v5" if strict else "imdb-id"
+        cache_prefix = "imdb-id-strict-v6" if strict else "imdb-id"
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2669,7 +2674,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v8:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v9:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
