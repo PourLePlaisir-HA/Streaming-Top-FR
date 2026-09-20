@@ -953,7 +953,7 @@ class JustWatchClient:
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v4" if strict else "imdb-id"
+        cache_prefix = "imdb-id-strict-v5" if strict else "imdb-id"
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -1018,6 +1018,11 @@ class JustWatchClient:
                                     and len(want_title) >= 7
                                     and hit_title.startswith(want_title + "-")
                                 )
+                                local_subtitle_alias = bool(
+                                    exact_year
+                                    and len(hit_title) >= 5
+                                    and want_title.startswith(hit_title + "-")
+                                )
                                 first_installment_alias = bool(
                                     exact_year
                                     and want_title != hit_title
@@ -1037,6 +1042,8 @@ class JustWatchClient:
                                     points = 8
                                 elif expanded_title:
                                     points = 9
+                                elif local_subtitle_alias:
+                                    points = 10
                                 elif first_installment_alias:
                                     points = 10
                                 else:
@@ -2662,7 +2669,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v7:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v8:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2751,6 +2758,11 @@ class JustWatchClient:
                     and len(wanted_slug) >= 7
                     and candidate_slug.startswith(wanted_slug + "-")
                 )
+                local_subtitle_alias = bool(
+                    exact_year
+                    and len(candidate_slug) >= 5
+                    and wanted_slug.startswith(candidate_slug + "-")
+                )
                 first_installment_alias = bool(
                     exact_year
                     and wanted_slug != candidate_slug
@@ -2768,6 +2780,8 @@ class JustWatchClient:
                     points = 6
                 elif expanded_title:
                     points = 9
+                elif local_subtitle_alias:
+                    points = 10
                 elif first_installment_alias:
                     points = 10
                 else:
