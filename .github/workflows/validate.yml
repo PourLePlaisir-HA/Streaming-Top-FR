@@ -25,6 +25,11 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q custom_components/streaming_top_fr
 
+      - name: Guard historical Streaming engine
+        run: |
+          git fetch --depth=1 origin refs/tags/0.7.1:refs/tags/0.7.1
+          python scripts/check_historical_engine.py
+
       - name: Validate JSON
         run: |
           python -m json.tool custom_components/streaming_top_fr/manifest.json >/dev/null
