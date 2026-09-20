@@ -236,13 +236,21 @@
           "local_smb_base_uri": "Base SMB URI for VLC",
           "local_smb_auth_mode": "VLC SMB authentication",
           "local_extensions": "Video extensions",
+          "local_movies_folders": "Movie folders",
+          "local_series_folders": "TV show folders",
+          "local_animation_folders": "Animation folders",
+          "local_documentaries_folders": "Documentary folders",
           "local_scan_hidden": "Scan hidden folders"
         },
         "data_description": {
           "local_root_path": "Example: /medias/videos",
           "local_smb_base_uri": "Example: smb://192.168.0.200/videos — without username or password.",
           "local_smb_auth_mode": "For now, VLC reuses the SMB credentials already saved in VLC.",
-          "local_extensions": "Comma-separated list, for example: mkv, avi, mp4, m4v"
+          "local_extensions": "Comma-separated list, for example: mkv, avi, mp4, m4v",
+          "local_movies_folders": "Folder names recognized as Movies, comma-separated.",
+          "local_series_folders": "Folder names recognized as TV shows, comma-separated.",
+          "local_animation_folders": "Folder names recognized as Animation, comma-separated.",
+          "local_documentaries_folders": "Folder names recognized as Documentaries, comma-separated."
         }
       }
     },
