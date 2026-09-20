@@ -59,6 +59,48 @@ def _matching_slug(value: str, media_type: str | None = None) -> str:
     return slug
 
 
+def _localized_title_alias(wanted_slug: str, candidate_slug: str) -> bool:
+    """Recognize strong original/localized title variants.
+
+    The caller must require an exact release year. This helper only accepts
+    either a catalogue title of at least three tokens embedded in the local
+    title, or a distinctive shared franchise prefix of at least two tokens.
+    """
+    wanted = [part for part in str(wanted_slug or "").split("-") if part]
+    candidate = [part for part in str(candidate_slug or "").split("-") if part]
+    if not wanted or not candidate:
+        return False
+
+    # Example:
+    # "Indiana Jones and the Raiders of the Lost Ark"
+    # -> "Raiders of the Lost Ark".
+    if len(candidate) >= 3:
+        needle = "-" + "-".join(candidate) + "-"
+        haystack = "-" + "-".join(wanted) + "-"
+        if needle in haystack:
+            return True
+    if len(wanted) >= 3:
+        needle = "-" + "-".join(wanted) + "-"
+        haystack = "-" + "-".join(candidate) + "-"
+        if needle in haystack:
+            return True
+
+    # Example: original English franchise title vs localized French title
+    # where only "Indiana Jones" remains identical.
+    if len(wanted) >= 4 and len(candidate) >= 4:
+        common = 0
+        for left, right in zip(wanted, candidate):
+            if left != right:
+                break
+            common += 1
+        if common >= 2:
+            prefix_chars = sum(len(part) for part in wanted[:common])
+            if prefix_chars >= 8:
+                return True
+
+    return False
+
+
 def _first_installment_base_slug(slug: str) -> str:
     """Return a base title when a filename only adds a first-part label."""
     value = str(slug or "").strip("-")
@@ -992,7 +1034,7 @@ class JustWatchClient:
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v6" if strict else "imdb-id"
+        cache_prefix = "imdb-id-strict-v7" if strict else "imdb-id"
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -1068,6 +1110,11 @@ class JustWatchClient:
                                     and _first_installment_base_slug(want_title)
                                     == _first_installment_base_slug(hit_title)
                                 )
+                                localized_title_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _localized_title_alias(want_title, hit_title)
+                                )
 
                                 # Title similarity is mandatory. Year/type alone
                                 # must never be enough to identify local media.
@@ -1084,6 +1131,8 @@ class JustWatchClient:
                                 elif local_subtitle_alias:
                                     points = 10
                                 elif first_installment_alias:
+                                    points = 10
+                                elif localized_title_alias:
                                     points = 10
                                 else:
                                     return -1000
@@ -2708,7 +2757,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v10:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2813,6 +2862,11 @@ class JustWatchClient:
                     and wanted_slug != candidate_slug
                     and _franchise_prefix_alias(wanted_slug, candidate_slug)
                 )
+                localized_title_alias = bool(
+                    exact_year
+                    and wanted_slug != candidate_slug
+                    and _localized_title_alias(wanted_slug, candidate_slug)
+                )
 
                 if candidate_slug == wanted_slug:
                     points = 12
@@ -2829,6 +2883,8 @@ class JustWatchClient:
                 elif first_installment_alias:
                     points = 10
                 elif franchise_number_alias:
+                    points = 10
+                elif localized_title_alias:
                     points = 10
                 else:
                     return -999
