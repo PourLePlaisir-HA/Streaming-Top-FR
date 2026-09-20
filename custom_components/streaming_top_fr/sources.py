@@ -914,11 +914,12 @@ class JustWatchClient:
             raise RuntimeError(data["errors"][0].get("message", "Erreur GraphQL"))
         return data.get("data") or {}
 
-    async def _async_imdb_id(self, title, year=None, media_type=None):
+    async def _async_imdb_id(self, title, year=None, media_type=None, strict=False):
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_key = f"imdb-id:{media_type or 'title'}:{year or ''}:{_slug(title)}"
+        cache_prefix = "imdb-id-strict-v2" if strict else "imdb-id"
+        cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
             if _cache_fresh(cached) and cached.get("imdb_id"):
@@ -952,29 +953,117 @@ class JustWatchClient:
                         want_title = _slug(str(title))
                         want_tv = media_type in ("tv", "show")
 
-                        def score(hit):
-                            points = 0
-                            hit_title = _slug(str(hit.get("l") or ""))
-                            hit_year = hit.get("y")
-                            qid = str(hit.get("qid") or "").lower()
-                            if hit_title == want_title:
-                                points += 8
-                            elif want_title and (want_title in hit_title or hit_title in want_title):
-                                points += 3
-                            if want_year and hit_year == want_year:
-                                points += 6
-                            elif want_year and isinstance(hit_year, int) and abs(hit_year - want_year) <= 1:
-                                points += 2
-                            is_tv = qid in {"tvseries", "tvminiseries", "tvepisode", "tvmovie"}
-                            if want_tv == is_tv:
-                                points += 3
-                            return points
+                        if strict:
+                            def strict_score(hit):
+                                hit_title = _slug(str(hit.get("l") or ""))
+                                if not want_title or not hit_title:
+                                    return -1000
 
-                        if hits:
-                            best = max(hits, key=score)
-                            # Require at least a plausible title/type/year match.
-                            if score(best) >= 3:
-                                imdb_id = best.get("id")
+                                similarity = SequenceMatcher(
+                                    None, want_title, hit_title
+                                ).ratio()
+                                contains = (
+                                    want_title in hit_title
+                                    or hit_title in want_title
+                                )
+
+                                # Title similarity is mandatory. Year/type alone
+                                # must never be enough to identify local media.
+                                if hit_title == want_title:
+                                    points = 14
+                                elif similarity >= 0.94:
+                                    points = 12
+                                elif similarity >= 0.88:
+                                    points = 9
+                                elif contains and similarity >= 0.72:
+                                    points = 8
+                                else:
+                                    return -1000
+
+                                hit_year = hit.get("y")
+                                try:
+                                    hit_year = int(hit_year) if hit_year else None
+                                except (TypeError, ValueError):
+                                    hit_year = None
+
+                                # A known conflicting year is a hard rejection.
+                                if want_year and hit_year:
+                                    delta = abs(hit_year - want_year)
+                                    if delta > 1:
+                                        return -1000
+                                    points += 8 if delta == 0 else 3
+
+                                qid = str(hit.get("qid") or "").casefold()
+                                tv_show_types = {
+                                    "tvseries", "tvminiseries", "tvshort"
+                                }
+                                rejected_non_movie_types = {
+                                    "tvepisode", "videogame", "podcastseries",
+                                    "podcastepisode", "musicvideo",
+                                }
+                                if want_tv:
+                                    if qid and qid not in tv_show_types:
+                                        return -1000
+                                else:
+                                    if qid in tv_show_types or qid in rejected_non_movie_types:
+                                        return -1000
+                                points += 2
+                                return points
+
+                            ranked = sorted(
+                                (
+                                    (strict_score(hit), hit)
+                                    for hit in hits
+                                ),
+                                key=lambda entry: entry[0],
+                                reverse=True,
+                            )
+                            ranked = [entry for entry in ranked if entry[0] > -1000]
+                            minimum = 16 if want_year else 11
+                            if ranked and ranked[0][0] >= minimum:
+                                # If two different IMDb titles are essentially
+                                # tied, fail closed instead of choosing a random
+                                # poster. A future manual mapping can resolve it.
+                                ambiguous = (
+                                    len(ranked) > 1
+                                    and ranked[1][0] >= minimum
+                                    and ranked[0][0] - ranked[1][0] <= 1
+                                    and ranked[0][1].get("id") != ranked[1][1].get("id")
+                                )
+                                if not ambiguous:
+                                    imdb_id = ranked[0][1].get("id")
+                        else:
+                            def score(hit):
+                                points = 0
+                                hit_title = _slug(str(hit.get("l") or ""))
+                                hit_year = hit.get("y")
+                                qid = str(hit.get("qid") or "").lower()
+                                if hit_title == want_title:
+                                    points += 8
+                                elif want_title and (
+                                    want_title in hit_title
+                                    or hit_title in want_title
+                                ):
+                                    points += 3
+                                if want_year and hit_year == want_year:
+                                    points += 6
+                                elif (
+                                    want_year
+                                    and isinstance(hit_year, int)
+                                    and abs(hit_year - want_year) <= 1
+                                ):
+                                    points += 2
+                                is_tv = qid in {
+                                    "tvseries", "tvminiseries", "tvepisode", "tvmovie"
+                                }
+                                if want_tv == is_tv:
+                                    points += 3
+                                return points
+
+                            if hits:
+                                best = max(hits, key=score)
+                                if score(best) >= 3:
+                                    imdb_id = best.get("id")
                     else:
                         _LOGGER.debug("IMDb suggestion HTTP %s for %s", resp.status, title)
         except Exception as err:
@@ -2438,7 +2527,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v1:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v2:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2454,7 +2543,9 @@ class JustWatchClient:
                     cached["age_country"] = country
                 return cached
 
-        expected_imdb = await self._async_imdb_id(title, wanted_year, media_type)
+        expected_imdb = await self._async_imdb_id(
+            title, wanted_year, media_type, strict=True
+        )
 
         payload = {
             "operationName": "SearchStreamingTitle",
