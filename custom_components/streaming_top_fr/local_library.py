@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -35,21 +36,29 @@ _EPISODE_ALT = re.compile(r"(?i)\b(?P<season>\d{1,2})x(?P<episode>\d{1,3})\b")
 class LocalScanResult:
     items: list[dict[str, Any]]
     errors: list[str]
+    revision: int = 0
 
 
 class LocalLibraryScanner:
     def __init__(self, hass):
         self.hass = hass
-        self._last_result = LocalScanResult(items=[], errors=[])
+        self._last_result = LocalScanResult(items=[], errors=[], revision=0)
+        self._scan_revision = 0
+        self._scan_lock = asyncio.Lock()
 
     @property
     def last_result(self) -> LocalScanResult:
         return self._last_result
 
     async def async_scan(self, settings: dict[str, Any]) -> LocalScanResult:
-        result = await self.hass.async_add_executor_job(self._scan, settings)
-        self._last_result = result
-        return result
+        # Serialize scans so an older, slower filesystem walk can never
+        # overwrite the result of a newer refresh request.
+        async with self._scan_lock:
+            result = await self.hass.async_add_executor_job(self._scan, settings)
+            self._scan_revision += 1
+            result.revision = self._scan_revision
+            self._last_result = result
+            return result
 
     def _scan(self, settings: dict[str, Any]) -> LocalScanResult:
         if not settings.get("enabled", False):
