@@ -83,7 +83,60 @@ class LocalLibraryScanner:
         # Serialize scans so an older, slower filesystem walk can never
         # overwrite the result of a newer refresh request.
         async with self._scan_lock:
+            previous = {
+                str(item.get("relative_path") or ""): item
+                for item in self._last_result.items
+                if isinstance(item, dict) and item.get("relative_path")
+            }
             result = await self.hass.async_add_executor_job(self._scan, settings)
+
+            # Preserve validated metadata for files that are strictly unchanged.
+            # Deleted/moved files are not present under the same relative path,
+            # so stale artefacts still disappear correctly after a refresh.
+            metadata_fields = {
+                "title",
+                "year",
+                "poster",
+                "poster_source",
+                "description",
+                "rating",
+                "rating_source",
+                "imdb_votes",
+                "age_certification",
+                "age_country",
+                "age_fr",
+                "age_us",
+                "age_resolved",
+                "imdb_id",
+                "details_url",
+                "providers",
+                "canonical_media_key",
+                "metadata_status",
+                "match_score",
+                "resolved_media_type",
+            }
+            for item in result.items:
+                old_item = previous.get(str(item.get("relative_path") or ""))
+                if not old_item:
+                    continue
+                if (
+                    int(item.get("size") or -1) != int(old_item.get("size") or -2)
+                    or int(item.get("mtime") or -1) != int(old_item.get("mtime") or -2)
+                ):
+                    continue
+
+                parsed_title = item.get("title")
+                parsed_year = item.get("year")
+                for field in metadata_fields:
+                    if field in old_item and old_item.get(field) is not None:
+                        item[field] = old_item.get(field)
+                item["parsed_title"] = old_item.get("parsed_title") or parsed_title
+                item["lookup_title"] = (
+                    old_item.get("lookup_title") or item.get("lookup_title") or parsed_title
+                )
+                if item.get("year") is None:
+                    item["year"] = parsed_year
+
             self._scan_revision += 1
             result.revision = self._scan_revision
             self._last_result = result
