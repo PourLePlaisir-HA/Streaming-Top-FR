@@ -58,7 +58,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "mubi": False,
         "adn": False,
     },
-    "players": deepcopy(DEFAULT_PLAYERS),
+    "players": deepcopy(DEFAULT_PLAYERS),\n    "local_library": {\n        "enabled": False,\n        "root_path": "",\n        "smb_base_uri": "",\n        "extensions": ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],\n        "scan_hidden": False,\n    },
     "top_catalog": deepcopy(DEFAULT_TOP_CATALOG),
     "family": deepcopy(DEFAULT_FAMILY),
     "classification": {
