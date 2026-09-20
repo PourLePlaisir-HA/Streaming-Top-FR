@@ -3079,6 +3079,43 @@ class JustWatchClient:
             for key, metadata in zip(chunk, results):
                 if isinstance(metadata, Exception) or not metadata:
                     continue
+
+                media_type, title, year = key
+
+                # Explicit collection-volume labels (#1, Vol. 1, Tome 1...)
+                # can represent physical files/discs of a TV programme rather
+                # than movie sequels. The scanner cannot infer that from the
+                # filename alone because there is no SxxExx marker. If the
+                # strict movie lookup fails, retry the same canonical lookup
+                # title as a TV show. This keeps normal movies strict while
+                # restoring TV compilations such as "La Télé des Inconnus #1".
+                has_volume_lookup_alias = any(
+                    str(item.get("lookup_title") or "").strip()
+                    and str(item.get("lookup_title") or "").strip()
+                    != str(item.get("title") or "").strip()
+                    for item in unique[key]
+                )
+                if (
+                    media_type == "movie"
+                    and metadata.get("metadata_status") == "unmatched"
+                    and has_volume_lookup_alias
+                ):
+                    try:
+                        tv_metadata = await self.async_search_local_title(
+                            title, "tv", year, classification
+                        )
+                    except Exception as err:
+                        _LOGGER.debug(
+                            "Local TV fallback failed for %s: %s", title, err
+                        )
+                        tv_metadata = None
+                    if (
+                        tv_metadata
+                        and tv_metadata.get("metadata_status") != "unmatched"
+                    ):
+                        metadata = dict(tv_metadata)
+                        metadata["resolved_media_type"] = "tv"
+
                 for item in unique[key]:
                     local_id = item.get("local_id")
                     local_media_key = item.get("media_key") or local_id
