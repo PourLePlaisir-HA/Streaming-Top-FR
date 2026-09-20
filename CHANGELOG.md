@@ -1,4 +1,4 @@
-## 0.7.1-beta.2
+## 0.7.1
 
 - Stabilise la hauteur de la navigation Famille sur mobile et tablette (issue #2).
 - Étend l'actualisation automatique de 2–24 h à 2–168 h (7 jours).
