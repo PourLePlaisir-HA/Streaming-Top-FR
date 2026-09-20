@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 import re
+import unicodedata
 from typing import Any
 from urllib.parse import quote
 
@@ -30,6 +31,20 @@ _RELEASE_WORDS = re.compile(
 _YEAR = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
 _EPISODE = re.compile(r"(?i)\bS(?P<season>\d{1,2})[ ._-]*E(?P<episode>\d{1,3})\b")
 _EPISODE_ALT = re.compile(r"(?i)\b(?P<season>\d{1,2})x(?P<episode>\d{1,3})\b")
+_COLLECTION_PREFIX = re.compile(
+    r"(?i)^\s*(?:n\s*[°ºo]?|no\.?|nr\.?|#)\s*\d{1,4}\s*[-–—_:]\s*"
+)
+_STUDIO_PREFIX = re.compile(
+    r"(?i)^\s*(?:walt\s+disney|disney|pixar|dreamworks(?:\s+animation)?|studio\s+ghibli)"
+    r"\s*[-–—_:]\s*"
+)
+
+DEFAULT_CATEGORY_FOLDERS = {
+    "movies": ["Films"],
+    "series": ["Series", "Séries"],
+    "animation": ["Animation", "Animations", "Dessins Animés"],
+    "documentaries": ["Documentaires", "Documentaries"],
+}
 
 
 @dataclass(slots=True)
@@ -98,7 +113,7 @@ class LocalLibraryScanner:
                     rel = path.relative_to(root)
                     if not scan_hidden and any(part.startswith(".") for part in rel.parts):
                         continue
-                    parsed = self._parse_media(path, rel)
+                    parsed = self._parse_media(path, rel, settings)
                     relative_posix = rel.as_posix()
                     parsed.update(
                         {
@@ -139,7 +154,63 @@ class LocalLibraryScanner:
         cleaned = re.sub(r"\s+", " ", cleaned).strip(" -_.")
         return cleaned
 
-    def _parse_media(self, path: Path, relative: Path) -> dict[str, Any]:
+    @staticmethod
+    def _normalize_folder_name(value: str) -> str:
+        normalized = unicodedata.normalize("NFKD", str(value or ""))
+        normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        normalized = normalized.replace("_", " ").replace(".", " ")
+        return re.sub(r"\s+", " ", normalized).strip().casefold()
+
+    @classmethod
+    def _category_folders(cls, settings: dict[str, Any]) -> dict[str, set[str]]:
+        configured = settings.get("category_folders") or {}
+        out: dict[str, set[str]] = {}
+        for category, defaults in DEFAULT_CATEGORY_FOLDERS.items():
+            raw = configured.get(category, defaults) if isinstance(configured, dict) else defaults
+            if isinstance(raw, str):
+                raw = [part.strip() for part in raw.split(",") if part.strip()]
+            if not isinstance(raw, list):
+                raw = defaults
+            out[category] = {
+                cls._normalize_folder_name(value)
+                for value in raw
+                if str(value).strip()
+            }
+        return out
+
+    @classmethod
+    def _bucket_from_path(
+        cls, relative: Path, settings: dict[str, Any], media_type: str
+    ) -> str:
+        folders = cls._category_folders(settings)
+        # Prefer the most specific (deepest) matching parent folder.
+        for part in reversed(relative.parts[:-1]):
+            token = cls._normalize_folder_name(part)
+            for category in ("documentaries", "animation", "series", "movies"):
+                if token in folders.get(category, set()):
+                    return category
+
+        # Compatibility fallback for libraries configured before folder mapping.
+        tokens = {cls._normalize_folder_name(part) for part in relative.parts[:-1]}
+        if tokens & {"documentaires", "documentaries", "documentary"}:
+            return "documentaries"
+        if tokens & {"animation", "animations", "anime", "animes", "dessins animes"}:
+            return "animation"
+        return "series" if media_type == "tv" else "movies"
+
+    @classmethod
+    def _clean_local_title(cls, value: str) -> str:
+        cleaned = cls._clean_name(value)
+        previous = None
+        while cleaned and cleaned != previous:
+            previous = cleaned
+            cleaned = _COLLECTION_PREFIX.sub("", cleaned).strip(" -_.")
+            cleaned = _STUDIO_PREFIX.sub("", cleaned).strip(" -_.")
+        return cleaned
+
+    def _parse_media(
+        self, path: Path, relative: Path, settings: dict[str, Any]
+    ) -> dict[str, Any]:
         stem = path.stem
         episode_match = _EPISODE.search(stem) or _EPISODE_ALT.search(stem)
         year_match = _YEAR.search(stem)
@@ -158,13 +229,12 @@ class LocalLibraryScanner:
 
         title_source = _RELEASE_WORDS.sub("", title_source)
         title_source = _YEAR.sub("", title_source)
-        title = self._clean_name(title_source) or self._clean_name(stem)
+        title = self._clean_local_title(title_source) or self._clean_name(stem)
         year = int(year_match.group(1)) if year_match else None
 
-        bucket = "series" if media_type == "tv" else "movies"
-        path_tokens = {part.casefold() for part in relative.parts}
-        if any(token in path_tokens for token in {"animation", "animations", "anime", "animes"}):
-            bucket = "animation"
+        bucket = self._bucket_from_path(relative, settings, media_type)
+        if bucket == "series":
+            media_type = "tv"
 
         return {
             "media_key": None,
