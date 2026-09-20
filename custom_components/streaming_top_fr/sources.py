@@ -54,6 +54,23 @@ def _matching_slug(value: str, media_type: str | None = None) -> str:
     return slug
 
 
+def _first_installment_base_slug(slug: str) -> str:
+    """Return a base title when a filename only adds a first-part label."""
+    value = str(slug or "").strip("-")
+    for suffix in (
+        "-partie-1",
+        "-part-1",
+        "-part-one",
+        "-part-i",
+        "-chapitre-1",
+        "-chapter-1",
+        "-chapter-one",
+    ):
+        if value.endswith(suffix) and len(value) > len(suffix) + 2:
+            return value[: -len(suffix)].rstrip("-")
+    return value
+
+
 def fallback_key(media_type: str, title: str) -> str:
     return f"{media_type}:{_slug(title)}"
 
@@ -936,7 +953,7 @@ class JustWatchClient:
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v3" if strict else "imdb-id"
+        cache_prefix = "imdb-id-strict-v4" if strict else "imdb-id"
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -1001,6 +1018,12 @@ class JustWatchClient:
                                     and len(want_title) >= 7
                                     and hit_title.startswith(want_title + "-")
                                 )
+                                first_installment_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _first_installment_base_slug(want_title)
+                                    == _first_installment_base_slug(hit_title)
+                                )
 
                                 # Title similarity is mandatory. Year/type alone
                                 # must never be enough to identify local media.
@@ -1014,6 +1037,8 @@ class JustWatchClient:
                                     points = 8
                                 elif expanded_title:
                                     points = 9
+                                elif first_installment_alias:
+                                    points = 10
                                 else:
                                     return -1000
 
@@ -2637,7 +2662,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v5:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v6:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2707,6 +2732,12 @@ class JustWatchClient:
                 and len(wanted_slug) >= 7
                 and candidate_slug.startswith(wanted_slug + "-")
             )
+            first_installment_alias = bool(
+                exact_year
+                and wanted_slug != candidate_slug
+                and _first_installment_base_slug(wanted_slug)
+                == _first_installment_base_slug(candidate_slug)
+            )
 
             if candidate_slug == wanted_slug:
                 points = 12
@@ -2718,11 +2749,13 @@ class JustWatchClient:
                 points = 6
             elif expanded_title:
                 # Local files often use the short theatrical title while
-                # catalogues carry a longer subtitle/alternate-title suffix
-                # (e.g. "Don Juan" -> "Don Juan ou si Don Juan était une femme").
-                # Accept only with an exact year; ambiguity handling below still
-                # rejects tied works.
+                # catalogues carry a longer subtitle/alternate-title suffix.
                 points = 9
+            elif first_installment_alias:
+                # Libraries often append "partie 1" to the first film of a
+                # franchise even when the official catalogue title has no such
+                # suffix (e.g. "Dune partie 1" -> "Dune", exact year required).
+                points = 10
             else:
                 return -999
 
