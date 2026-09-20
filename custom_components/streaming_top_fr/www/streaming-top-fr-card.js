@@ -446,7 +446,49 @@ class StreamingLocalCard extends HTMLElement {
   }
   _label(cat){return{movies:"Films",series:"Séries",animation:"Animation",documentaries:"Documentaires"}[cat]||cat}
   _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation",documentaries:"mdi:earth"}[cat]||"mdi:movie-open"}
-  _items(){return(this._data?.items||[]).filter(i=>i.bucket===this._category)}
+  _rawItems(category=this._category){
+    return(this._data?.items||[]).filter(i=>i.bucket===category)
+  }
+  _seriesGroups(){
+    const groups=new Map();
+    for(const item of this._rawItems("series")){
+      const fallbackTitle=String(item.parsed_title||item.title||item.filename||"").trim().toLocaleLowerCase("fr");
+      const key=String(item.imdb_id||item.canonical_media_key||`series:${fallbackTitle}`).trim();
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(item);
+    }
+    const out=[];
+    for(const [key,episodes] of groups.entries()){
+      episodes.sort((a,b)=>
+        Number(a.season??0)-Number(b.season??0)||
+        Number(a.episode??0)-Number(b.episode??0)||
+        String(a.relative_path||"").localeCompare(String(b.relative_path||""),"fr")
+      );
+      const representative=
+        episodes.find(i=>i.poster&&i.rating!=null)||
+        episodes.find(i=>i.poster)||
+        episodes.find(i=>i.metadata_status==="matched")||
+        episodes[0];
+      const seasons=[...new Set(episodes.map(i=>Number(i.season??0)))].sort((a,b)=>a-b);
+      out.push({
+        ...representative,
+        is_series_group:true,
+        series_key:key,
+        episodes,
+        seasons,
+        episode_count:episodes.length,
+        season_count:seasons.length,
+        season:null,
+        episode:null,
+        filename:null,
+        relative_path:null,
+        smb_uri:null,
+      });
+    }
+    return out.sort((a,b)=>String(a.title||a.parsed_title||"").localeCompare(String(b.title||b.parsed_title||""),"fr"));
+  }
+  _items(){return this._category==="series"?this._seriesGroups():this._rawItems()}
+  _categoryCount(cat){return cat==="series"?this._seriesGroups().length:this._rawItems(cat).length}
   _normalizeCategory(){
     const cats=this._categories();
     if(cats.length&&!cats.includes(this._category))this._category=cats[0];
@@ -491,7 +533,9 @@ class StreamingLocalCard extends HTMLElement {
   async _refresh(){await this._load(true)}
   _metadata(item){
     const parts=[];
-    if(item.media_type==="tv"&&item.season!=null&&item.episode!=null){
+    if(item.is_series_group){
+      if(item.year)parts.push(String(item.year));
+    }else if(item.media_type==="tv"&&item.season!=null&&item.episode!=null){
       parts.push(`S${String(item.season).padStart(2,"0")}E${String(item.episode).padStart(2,"0")}`);
     }else if(item.year){parts.push(String(item.year))}
     if(item.rating!=null){
@@ -513,13 +557,70 @@ class StreamingLocalCard extends HTMLElement {
       :'<div class="poster-fallback"><ha-icon icon="mdi:movie-open-outline"></ha-icon></div>';
     const meta=this._metadata(item);
     const title=item.title||item.parsed_title||item.filename||"Sans titre";
+    const seriesExtra=item.is_series_group
+      ?`${item.season_count} saison${item.season_count>1?"s":""} · ${item.episode_count} épisode${item.episode_count>1?"s":""}`
+      :"";
     return `<button class="media" data-index="${index}" title="${this._esc(item.filename||title)}">
       <div class="poster">${poster}${this._status(item)}</div>
       <div class="media-title">${this._esc(title)}</div>
       <div class="media-meta">${this._esc(meta)}</div>
+      ${seriesExtra?`<div class="series-extra">${this._esc(seriesExtra)}</div>`:""}
     </button>`;
   }
+  _seriesDetail(item,seasonValue=null){
+    const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
+    const seasons=(item.seasons||[]).length?item.seasons:[0];
+    const selectedSeason=seasonValue==null?seasons[0]:Number(seasonValue);
+    const episodes=(item.episodes||[]).filter(ep=>Number(ep.season??0)===selectedSeason);
+    const selectedId=this._seriesSelection?.[item.series_key]||null;
+    const m=document.createElement("div");m.className="modalbg";
+    const title=item.title||item.parsed_title||"Sans titre";
+    const meta=this._metadata(item);
+    const match=item.metadata_status==="matched"
+      ?"JustWatch + IMDb"
+      :item.metadata_status==="imdb_only"
+      ?"IMDb uniquement"
+      :"Non identifié";
+    const seasonTabs=seasons.map(season=>`<button class="season-tab ${Number(season)===selectedSeason?"active":""}" data-season="${season}">Saison ${season||"?"}</button>`).join("");
+    const episodeRows=episodes.map((ep,index)=>{
+      const epNo=ep.episode!=null?Number(ep.episode):index+1;
+      const code=ep.season!=null&&ep.episode!=null
+        ?`S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}`
+        :`Épisode ${epNo}`;
+      const selected=selectedId&&selectedId===ep.local_id;
+      return `<button class="episode-row ${selected?"selected":""}" data-episode-index="${index}">
+        <span class="episode-main"><strong>${this._esc(code)}</strong><small>${this._esc(ep.filename||ep.relative_path||"")}</small></span>
+        <ha-icon icon="${selected?"mdi:check-circle":"mdi:play-circle-outline"}"></ha-icon>
+      </button>`;
+    }).join("");
+    m.innerHTML=`<div class="modal series-modal">
+      <button class="modal-close" aria-label="Fermer">×</button>
+      <div class="modal-head">
+        ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
+        <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div><div class="series-summary">${item.season_count} saison${item.season_count>1?"s":""} · ${item.episode_count} épisode${item.episode_count>1?"s":""}</div></div>
+      </div>
+      <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
+      <div class="details">
+        <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
+      </div>
+      <div class="season-tabs">${seasonTabs}</div>
+      <div class="episode-list">${episodeRows||'<div class="state">Aucun épisode détecté pour cette saison.</div>'}</div>
+      <div class="episode-help">Sélectionnez l’épisode à lire. Le fichier associé sera utilisé pour la future lecture VLC.</div>
+    </div>`;
+    m.onclick=e=>{if(e.target===m)m.remove()};
+    m.querySelector(".modal-close").onclick=()=>m.remove();
+    m.querySelectorAll("[data-season]").forEach(b=>b.addEventListener("click",()=>this._seriesDetail(item,Number(b.dataset.season))));
+    m.querySelectorAll("[data-episode-index]").forEach(b=>b.addEventListener("click",()=>{
+      const ep=episodes[Number(b.dataset.episodeIndex)];
+      if(!ep)return;
+      this._seriesSelection=this._seriesSelection||{};
+      this._seriesSelection[item.series_key]=ep.local_id;
+      this._seriesDetail(item,selectedSeason);
+    }));
+    this.shadowRoot.appendChild(m);
+  }
   _detail(item){
+    if(item?.is_series_group){this._seriesDetail(item);return}
     const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
     const m=document.createElement("div");m.className="modalbg";
     const title=item.title||item.parsed_title||item.filename||"Sans titre";
@@ -603,6 +704,7 @@ class StreamingLocalCard extends HTMLElement {
       .poster-fallback ha-icon{--mdc-icon-size:48px}
       .media-title{margin-top:8px;font-weight:800;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
       .media-meta{margin-top:4px;min-height:17px;color:var(--secondary-text-color);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .series-extra{margin-top:3px;color:var(--secondary-text-color);font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .match{position:absolute;top:7px;left:7px;border-radius:999px;padding:4px 7px;background:rgba(0,0,0,.72);color:#fff;font-size:.68rem;font-weight:800}
       .match.imdb{background:rgba(155,110,0,.88)}.match.unmatched{background:rgba(130,35,35,.88)}.match.pending{background:rgba(30,30,30,.72)}
       .state{padding:28px 12px;text-align:center;color:var(--secondary-text-color)}
@@ -615,11 +717,22 @@ class StreamingLocalCard extends HTMLElement {
       .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
       .modal p{line-height:1.45;color:var(--secondary-text-color)}
       .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
+      .series-summary{margin-top:6px;color:var(--secondary-text-color);font-size:.86rem}
+      .season-tabs{display:flex;gap:8px;overflow-x:auto;margin:18px 0 12px;padding-bottom:2px}
+      .season-tab{border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap;font-weight:800}
+      .season-tab.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
+      .episode-list{display:grid;gap:7px}
+      .episode-row{width:100%;display:flex;align-items:center;gap:10px;border:0;border-radius:12px;padding:10px 12px;background:var(--secondary-background-color);cursor:pointer;text-align:left}
+      .episode-row.selected{outline:2px solid var(--primary-color)}
+      .episode-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+      .episode-main small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .episode-row ha-icon{flex:0 0 auto;color:var(--primary-color)}
+      .episode-help{margin-top:12px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.35}
       @media(max-width:600px){.wrap{padding:14px 11px}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}}
     </style>
     <ha-card><div class="wrap">
       <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-      ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${(d?.items||[]).filter(i=>i.bucket===cat).length})</span></button>`).join("")}</div>`:""}
+      ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
       ${body}
     </div></ha-card>`;
     this._bind();
@@ -630,5 +743,5 @@ customElements.define("streaming-local-card",StreamingLocalCard);
 window.customCards=window.customCards||[];
 window.customCards.push({type:'streaming-top-fr-card',name:'Streaming Top FR',description:'Streaming multi-services France via Netflix officiel + JustWatch'});
 window.customCards.push({type:'streaming-top-fr-catalog-card',name:'Top Streaming FR',description:'Classements par décennie Films / Animation / Séries / Famille disponibles sur vos services'});
-window.customCards.push({type:'streaming-local-card',name:'Streaming Local',description:'Vidéothèque locale Films / Séries / Animation avec métadonnées IMDb / JustWatch'});
+window.customCards.push({type:'streaming-local-card',name:'Streaming Local',description:'Vidéothèque locale Films / Séries / Animation / Documentaires avec métadonnées IMDb / JustWatch'});
 console.info(`STREAMING TOP FR ${STFR_VERSION}`);
