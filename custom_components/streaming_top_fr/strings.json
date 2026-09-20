@@ -239,8 +239,8 @@
           "local_scan_hidden": "Scan hidden folders"
         },
         "data_description": {
-          "local_root_path": "Example: /media/Videotheque",
-          "local_smb_base_uri": "Example: smb://192.168.1.20/Videos — without username or password.",
+          "local_root_path": "Example: /medias/videos",
+          "local_smb_base_uri": "Example: smb://192.168.0.200/videos — without username or password.",
           "local_smb_auth_mode": "For now, VLC reuses the SMB credentials already saved on the Freebox.",
           "local_extensions": "Comma-separated list, for example: mkv, avi, mp4, m4v"
         }
