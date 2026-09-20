@@ -441,8 +441,10 @@ class StreamingLocalCard extends HTMLElement {
   getCardSize(){return 6}
   _esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
   _categories(){
-    const items=this._data?.items||[];
-    return ["movies","series","animation","documentaries"].filter(cat=>items.some(i=>i.bucket===cat));
+    // Keep all library sections visible, even when a category currently has
+    // zero items. This makes scan/classification problems immediately visible
+    // instead of silently hiding the missing category.
+    return ["movies","series","animation","documentaries"];
   }
   _label(cat){return{movies:"Films",series:"Séries",animation:"Animation",documentaries:"Documentaires"}[cat]||cat}
   _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation",documentaries:"mdi:earth"}[cat]||"mdi:movie-open"}
