@@ -65,15 +65,22 @@ class StreamingTopCoordinator(DataUpdateCoordinator):
             # age metadata resolved now. Reserve titles are enriched when they
             # slide into the visible window on a later refresh.
             extra_visible_needed = max(0, visible_count - len(selected))
-            extras = await self.justwatch.async_provider_pool(
-                "netflix",
-                media_type,
-                target_count=needed,
-                max_depth=max_depth,
-                excluded_keys=set(excluded) | official_keys,
-                classification=classification,
-                classification_limit=extra_visible_needed,
-            )
+            try:
+                extras = await self.justwatch.async_provider_pool(
+                    "netflix",
+                    media_type,
+                    target_count=needed,
+                    max_depth=max_depth,
+                    excluded_keys=set(excluded) | official_keys,
+                    classification=classification,
+                    classification_limit=extra_visible_needed,
+                )
+            except Exception as err:
+                _LOGGER.warning(
+                    "Netflix JustWatch refill unavailable for %s: %s",
+                    media_type, err,
+                )
+                return selected
             for item in extras:
                 item["rank"] = None
                 item["global_rank"] = None
@@ -197,6 +204,30 @@ class StreamingTopCoordinator(DataUpdateCoordinator):
                     source_label = (
                         f"Popularité {PROVIDER_NAMES.get(provider, provider)} · JustWatch France"
                     )
+                snapshot_key = f"provider-snapshot-v1:{provider}"
+                has_items = bool(value.get("movies") or value.get("tv"))
+                if not has_items and value.get("error"):
+                    snapshot = self.store.get_metadata(snapshot_key)
+                    snapshot_value = (snapshot or {}).get("value")
+                    if isinstance(snapshot_value, dict) and (
+                        snapshot_value.get("movies") or snapshot_value.get("tv")
+                    ):
+                        value = {
+                            **snapshot_value,
+                            "error": None,
+                            "stale": True,
+                            "stale_reason": str(value.get("error") or ""),
+                        }
+                        has_items = True
+                if has_items and not value.get("stale"):
+                    self.store.set_metadata(
+                        snapshot_key,
+                        {
+                            "value": value,
+                            "cached_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+
                 providers[provider] = {
                     "name": PROVIDER_NAMES.get(provider, provider),
                     **value,
@@ -211,14 +242,33 @@ class StreamingTopCoordinator(DataUpdateCoordinator):
                 )
             except Exception as err:
                 _LOGGER.warning("Top Streaming catalogue refresh failed: %s", err)
-                top_catalog = {
-                    "enabled": bool((self.settings.get("top_catalog") or {}).get("enabled", True)),
-                    "decade_order": [],
-                    "category_order": ["movies", "animation", "series"],
-                    "decades": {},
-                    "error": str(err),
-                    "source_label": "IMDb note + volume de votes · disponibilité JustWatch France",
-                }
+                snapshot = self.store.get_metadata("top-catalog-snapshot-v1")
+                snapshot_value = (snapshot or {}).get("value")
+                if isinstance(snapshot_value, dict) and snapshot_value.get("decades"):
+                    top_catalog = {
+                        **snapshot_value,
+                        "error": None,
+                        "stale": True,
+                        "stale_reason": str(err),
+                    }
+                else:
+                    top_catalog = {
+                        "enabled": bool((self.settings.get("top_catalog") or {}).get("enabled", True)),
+                        "decade_order": [],
+                        "category_order": ["movies", "animation", "series"],
+                        "decades": {},
+                        "error": str(err),
+                        "source_label": "IMDb note + volume de votes · disponibilité JustWatch France",
+                    }
+
+            if top_catalog.get("decades") and not top_catalog.get("stale"):
+                self.store.set_metadata(
+                    "top-catalog-snapshot-v1",
+                    {
+                        "value": top_catalog,
+                        "cached_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
 
             try:
                 await self._async_refresh_stored_posters()
