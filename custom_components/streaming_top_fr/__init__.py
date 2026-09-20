@@ -313,7 +313,13 @@ def _register_ws(hass):
         for item in items:
             if not item.get("media_key"):
                 item["media_key"] = item.get("local_id")
+            # The Home Assistant mount path is backend-only. The frontend only
+            # needs the relative path and future VLC SMB URI.
+            item.pop("local_path", None)
 
+        enriched_count = sum(
+            1 for item in items if item.get("metadata_status")
+        )
         connection.send_result(
             msg["id"],
             {
@@ -321,6 +327,77 @@ def _register_ws(hass):
                 "root_path": local_settings.get("root_path") or "",
                 "smb_base_uri": local_settings.get("smb_base_uri") or "",
                 "count": len(items),
+                "enriched_count": enriched_count,
+                "metadata_complete": bool(items) and enriched_count == len(items),
+                "items": items,
+                "errors": list(result.errors),
+            },
+        )
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/enrich_local_library",
+            vol.Optional("entry_id"): str,
+        }
+    )
+    @websocket_api.async_response
+    async def enrich_local_library(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        coordinator = data["coordinator"]
+        settings = coordinator.settings or (coordinator.data or {}).get("settings") or {}
+        local_settings = settings.get("local_library") or {}
+        scanner = data["local_library"]
+
+        if not local_settings.get("enabled", False):
+            connection.send_error(
+                msg["id"], "local_disabled", "Streaming Local est désactivé"
+            )
+            return
+
+        result = scanner.last_result
+        if not result.items and not result.errors:
+            result = await scanner.async_scan(local_settings)
+
+        if result.errors and not result.items:
+            connection.send_result(
+                msg["id"],
+                {
+                    "ok": False,
+                    "count": 0,
+                    "enriched_count": 0,
+                    "metadata_complete": False,
+                    "items": [],
+                    "errors": list(result.errors),
+                },
+            )
+            return
+
+        await coordinator.justwatch.async_enrich_local_items(
+            result.items,
+            settings.get("classification") or {},
+        )
+
+        items = [dict(item) for item in result.items]
+        for item in items:
+            if not item.get("media_key"):
+                item["media_key"] = item.get("local_id")
+            item.pop("local_path", None)
+
+        enriched_count = sum(
+            1 for item in items if item.get("metadata_status")
+        )
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "enabled": True,
+                "count": len(items),
+                "enriched_count": enriched_count,
+                "metadata_complete": bool(items) and enriched_count == len(items),
                 "items": items,
                 "errors": list(result.errors),
             },
@@ -468,6 +545,7 @@ def _register_ws(hass):
     websocket_api.async_register_command(hass, enrich_item)
     websocket_api.async_register_command(hass, get_family_catalog)
     websocket_api.async_register_command(hass, get_local_library)
+    websocket_api.async_register_command(hass, enrich_local_library)
     websocket_api.async_register_command(hass, refresh_local_library)
     websocket_api.async_register_command(hass, refresh)
     websocket_api.async_register_command(hass, play)
