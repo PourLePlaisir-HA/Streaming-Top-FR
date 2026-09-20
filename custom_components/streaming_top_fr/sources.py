@@ -2662,7 +2662,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v6:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v7:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         if self.store:
             cached = self.store.get_metadata(cache_key)
@@ -2712,11 +2712,6 @@ class JustWatchClient:
             content = node.get("content") or {}
             candidate_title = str(content.get("title") or "").strip()
             candidate_slug = _matching_slug(candidate_title, media_type)
-            if not wanted_slug or not candidate_slug:
-                return -999
-
-            similarity = SequenceMatcher(None, wanted_slug, candidate_slug).ratio()
-            contains = wanted_slug in candidate_slug or candidate_slug in wanted_slug
 
             candidate_year = content.get("originalReleaseYear")
             try:
@@ -2724,55 +2719,65 @@ class JustWatchClient:
             except (TypeError, ValueError):
                 candidate_year = None
 
-            exact_year = bool(
-                wanted_year and candidate_year and candidate_year == wanted_year
-            )
-            expanded_title = bool(
-                exact_year
-                and len(wanted_slug) >= 7
-                and candidate_slug.startswith(wanted_slug + "-")
-            )
-            first_installment_alias = bool(
-                exact_year
-                and wanted_slug != candidate_slug
-                and _first_installment_base_slug(wanted_slug)
-                == _first_installment_base_slug(candidate_slug)
-            )
-
-            if candidate_slug == wanted_slug:
-                points = 12
-            elif similarity >= 0.94:
-                points = 10
-            elif similarity >= 0.88:
-                points = 8
-            elif contains and similarity >= 0.72:
-                points = 6
-            elif expanded_title:
-                # Local files often use the short theatrical title while
-                # catalogues carry a longer subtitle/alternate-title suffix.
-                points = 9
-            elif first_installment_alias:
-                # Libraries often append "partie 1" to the first film of a
-                # franchise even when the official catalogue title has no such
-                # suffix (e.g. "Dune partie 1" -> "Dune", exact year required).
-                points = 10
-            else:
-                return -999
-
             if wanted_year and candidate_year:
                 delta = abs(candidate_year - wanted_year)
                 if delta > 1:
                     return -999
-                points += 8 if delta == 0 else 3
 
             ext = content.get("externalIds") or {}
             candidate_imdb = self._normalize_imdb_id(ext.get("imdbId"))
-            if expected_imdb and candidate_imdb == expected_imdb:
-                points += 12
-            elif expected_imdb and candidate_imdb and candidate_imdb != expected_imdb:
-                # A conflicting autocomplete result must not veto an otherwise
-                # exact JustWatch title/year match; it only lowers confidence.
-                points -= 2
+            imdb_bridge = bool(
+                expected_imdb and candidate_imdb == expected_imdb
+            )
+
+            # A strictly resolved IMDb id is stronger than localized-title text.
+            # This is essential when a local filename uses the original English
+            # title while JustWatch FR returns a completely different French
+            # title (e.g. Indiana Jones / Raiders of the Lost Ark).
+            if imdb_bridge:
+                points = 20
+            else:
+                if not wanted_slug or not candidate_slug:
+                    return -999
+
+                similarity = SequenceMatcher(None, wanted_slug, candidate_slug).ratio()
+                contains = wanted_slug in candidate_slug or candidate_slug in wanted_slug
+
+                exact_year = bool(
+                    wanted_year and candidate_year and candidate_year == wanted_year
+                )
+                expanded_title = bool(
+                    exact_year
+                    and len(wanted_slug) >= 7
+                    and candidate_slug.startswith(wanted_slug + "-")
+                )
+                first_installment_alias = bool(
+                    exact_year
+                    and wanted_slug != candidate_slug
+                    and _first_installment_base_slug(wanted_slug)
+                    == _first_installment_base_slug(candidate_slug)
+                )
+
+                if candidate_slug == wanted_slug:
+                    points = 12
+                elif similarity >= 0.94:
+                    points = 10
+                elif similarity >= 0.88:
+                    points = 8
+                elif contains and similarity >= 0.72:
+                    points = 6
+                elif expanded_title:
+                    points = 9
+                elif first_installment_alias:
+                    points = 10
+                else:
+                    return -999
+
+                if expected_imdb and candidate_imdb and candidate_imdb != expected_imdb:
+                    points -= 2
+
+            if wanted_year and candidate_year:
+                points += 8 if candidate_year == wanted_year else 3
 
             return points
 
