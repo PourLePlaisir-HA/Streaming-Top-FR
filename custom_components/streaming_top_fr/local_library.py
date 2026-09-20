@@ -23,7 +23,8 @@ DEFAULT_EXTENSIONS = {
 
 _RELEASE_WORDS = re.compile(
     r"\b(?:2160p|1080p|720p|576p|4k|uhd|hdr10\+?|hdr|dolby[ ._-]?vision|dv|"
-    r"bluray|blu[ ._-]?ray|bdrip|brrip|web[ ._-]?dl|webrip|hdtv|remux|"
+    r"bluray(?:2160p|1080p|720p|576p)?|blu[ ._-]?ray(?:2160p|1080p|720p|576p)?|"
+    r"bdrip|brrip|web[ ._-]?dl|webrip|hdtv|remux|"
     r"x26[45]|h\.?26[45]|hevc|av1|aac|ac3|eac3|dts(?:-hd)?|truehd|"
     r"multi|french|truefrench|vostfr|vost|vof|vfq|vfi|vf2|vff|vo|dubbed|"
     r"subfrench|proper|repack|web|mhd)\b.*$",
@@ -38,6 +39,10 @@ _COLLECTION_PREFIX = re.compile(
 _STUDIO_PREFIX = re.compile(
     r"(?i)^\s*(?:walt\s+disney|disney|pixar|dreamworks(?:\s+animation)?|studio\s+ghibli)"
     r"\s*[-–—_:]\s*"
+)
+_LANGUAGE_QUOTED_SUBTITLE = re.compile(
+    r"(?i)\b(?:vf|vff|vfq|vfi|vf2|french|truefrench)\s*"
+    r"[\"“”«]\s*(?P<subtitle>[^\"“”»]+?)\s*[\"“”»]"
 )
 
 DEFAULT_CATEGORY_FOLDERS = {
@@ -150,6 +155,18 @@ class LocalLibraryScanner:
         return f"{base}/{encoded}"
 
     @staticmethod
+    def _strip_nested_video_extensions(value: str) -> str:
+        cleaned = str(value or "")
+        # Files occasionally end in chains such as ".mkv.mp4". Path.stem
+        # removes only the last suffix, so remove any remaining video suffixes.
+        while True:
+            suffix = Path(cleaned).suffix.lower()
+            if suffix not in DEFAULT_EXTENSIONS:
+                break
+            cleaned = Path(cleaned).stem
+        return cleaned
+
+    @staticmethod
     def _clean_name(value: str) -> str:
         cleaned = value.replace("_", " ").replace(".", " ")
         cleaned = re.sub(r"\s+", " ", cleaned).strip(" -_.")
@@ -201,6 +218,12 @@ class LocalLibraryScanner:
 
     @classmethod
     def _clean_local_title(cls, value: str) -> str:
+        # Preserve a meaningful quoted subtitle that follows a language tag:
+        #   Title VF "Subtitle" -> Title : Subtitle
+        value = _LANGUAGE_QUOTED_SUBTITLE.sub(
+            lambda match: f" : {match.group('subtitle').strip()} ",
+            str(value or ""),
+        )
         cleaned = cls._clean_name(value)
         previous = None
         while cleaned and cleaned != previous:
@@ -212,13 +235,14 @@ class LocalLibraryScanner:
             # parenthetical title text is preserved.
             cleaned = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", " ", cleaned)
             cleaned = re.sub(r"\s*[-–—_:]+\s*$", "", cleaned)
-            cleaned = re.sub(r"\s+", " ", cleaned).strip(" -_.")
+            cleaned = re.sub(r"\s*[:]+\s*", " : ", cleaned)
+            cleaned = re.sub(r"\s+", " ", cleaned).strip(" -_.! ")
         return cleaned
 
     def _parse_media(
         self, path: Path, relative: Path, settings: dict[str, Any]
     ) -> dict[str, Any]:
-        stem = path.stem
+        stem = self._strip_nested_video_extensions(path.stem)
         episode_match = _EPISODE.search(stem) or _EPISODE_ALT.search(stem)
         year_match = _YEAR.search(stem)
 
