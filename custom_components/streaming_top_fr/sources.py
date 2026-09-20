@@ -60,17 +60,7 @@ def _matching_slug(value: str, media_type: str | None = None) -> str:
 
 
 def _bare_sequel_number(slug: str) -> int | None:
-    """Return a bare terminal sequel number, excluding explicit part labels.
-
-    Examples:
-      "la-verite-si-je-mens-2" -> 2
-      "la-verite-si-je-mens"   -> None
-      "dune-partie-1"          -> None
-
-    This deliberately targets true numbered sequels only; collection markers
-    (#1 / Vol. 1) are removed earlier and part/chapter labels have their own
-    matching rules.
-    """
+    """Return a terminal sequel number, excluding explicit part/volume labels."""
     parts = [part for part in str(slug or "").split("-") if part]
     if not parts or not parts[-1].isdigit():
         return None
@@ -1057,14 +1047,28 @@ class JustWatchClient:
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
         if not title:
             return None
-        cache_prefix = "imdb-id-strict-v8" if strict else "imdb-id"
+        cache_prefix = "imdb-id-strict-v7" if strict else "imdb-id"
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
+        wanted_title_for_cache = _matching_slug(str(title), media_type)
         if self.store:
             cached = self.store.get_metadata(cache_key)
             if _cache_fresh(cached) and cached.get("imdb_id"):
-                return cached.get("imdb_id")
+                if not strict:
+                    return cached.get("imdb_id")
+                cached_title = _matching_slug(
+                    str(cached.get("resolved_title") or ""), media_type
+                )
+                wanted_sequel = _bare_sequel_number(wanted_title_for_cache)
+                cached_sequel = _bare_sequel_number(cached_title)
+                if (
+                    cached_title
+                    and wanted_sequel == cached_sequel
+                ):
+                    return cached.get("imdb_id")
 
         imdb_id = None
+        resolved_title = None
+        resolved_year = None
         try:
             url = (
                 "https://v3.sg.media-imdb.com/suggestion/titles/x/"
@@ -1246,6 +1250,8 @@ class JustWatchClient:
                                 best = max(hits, key=score)
                                 if score(best) >= 3:
                                     imdb_id = best.get("id")
+                                    resolved_title = best.get("l")
+                                    resolved_year = best.get("y")
                     else:
                         _LOGGER.debug("IMDb suggestion HTTP %s for %s", resp.status, title)
         except Exception as err:
@@ -1256,6 +1262,8 @@ class JustWatchClient:
                 cache_key,
                 {
                     "imdb_id": imdb_id,
+                    "resolved_title": resolved_title,
+                    "resolved_year": resolved_year,
                     "cached_at": datetime.now(timezone.utc).isoformat(),
                     "cache_schema": METADATA_CACHE_SCHEMA,
                 },
@@ -2788,21 +2796,32 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v12:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
+        wanted_slug_for_cache = _matching_slug(title, media_type)
         if self.store:
             cached = self.store.get_metadata(cache_key)
             if _cache_fresh(cached) and cached.get("metadata_status"):
-                if cached.get("age_resolved"):
-                    age = {
-                        "fr": cached.get("age_fr"),
-                        "us": cached.get("age_us"),
-                        "imdb_id": cached.get("imdb_id"),
-                    }
-                    value, country = self.select_age(age, classification)
-                    cached["age_certification"] = value
-                    cached["age_country"] = country
-                return cached
+                cached_slug = _matching_slug(
+                    str(cached.get("title") or ""), media_type
+                )
+                wanted_sequel = _bare_sequel_number(wanted_slug_for_cache)
+                cached_sequel = _bare_sequel_number(cached_slug)
+                sequel_cache_valid = (
+                    wanted_sequel == cached_sequel
+                    or (wanted_sequel is None and cached_sequel is None)
+                )
+                if sequel_cache_valid:
+                    if cached.get("age_resolved"):
+                        age = {
+                            "fr": cached.get("age_fr"),
+                            "us": cached.get("age_us"),
+                            "imdb_id": cached.get("imdb_id"),
+                        }
+                        value, country = self.select_age(age, classification)
+                        cached["age_certification"] = value
+                        cached["age_country"] = country
+                    return cached
 
         expected_imdb = await self._async_imdb_id(
             title, wanted_year, media_type, strict=True
@@ -2823,12 +2842,14 @@ class JustWatchClient:
         }
 
         edges = []
+        search_error = None
         try:
             async with self._sem:
                 data = await self._post(payload)
             edges = ((data.get("popularTitles") or {}).get("edges") or [])
         except Exception as err:
-            _LOGGER.debug("JustWatch local search failed for %s: %s", title, err)
+            search_error = err
+            _LOGGER.warning("JustWatch local search failed for %s: %s", title, err)
 
         wanted_slug = _matching_slug(title, media_type)
 
@@ -2996,6 +3017,16 @@ class JustWatchClient:
                 "cached_at": datetime.now(timezone.utc).isoformat(),
                 "cache_schema": METADATA_CACHE_SCHEMA,
             }
+            useful_imdb_fallback = bool(
+                expected_imdb
+                and (
+                    result.get("poster")
+                    or result.get("rating") is not None
+                    or result.get("description")
+                )
+            )
+            if search_error and not useful_imdb_fallback:
+                raise RuntimeError(str(search_error))
             if self.store:
                 self.store.set_metadata(cache_key, result)
             return result
@@ -3084,10 +3115,8 @@ class JustWatchClient:
             self.store.set_metadata(cache_key, result)
         return result
 
-    async def async_enrich_local_items(
-        self, items, classification=None, family=None
-    ):
-        """Enrich local-library items and derive local Family eligibility."""
+    async def async_enrich_local_items(self, items, classification=None):
+        """Enrich local-library items in place while preserving path identity."""
         works = [item for item in (items or []) if isinstance(item, dict)]
         if not works:
             return works
@@ -3106,8 +3135,10 @@ class JustWatchClient:
                 unique.setdefault(key, []).append(item)
 
         keys = list(unique)
-        for start in range(0, len(keys), 8):
-            chunk = keys[start : start + 8]
+        for start in range(0, len(keys), 4):
+            if start:
+                await asyncio.sleep(0.15)
+            chunk = keys[start : start + 4]
             results = await asyncio.gather(
                 *(
                     self.async_search_local_title(
@@ -3169,32 +3200,6 @@ class JustWatchClient:
                     item["lookup_title"] = lookup_title
                     item["local_id"] = local_id
                     item["media_key"] = local_media_key
-
-        family = family or {}
-        classification = classification or {}
-        family_enabled = bool(family.get("enabled", True))
-        target_age = family.get("target_age", 11)
-        allow_unrated = bool(family.get("allow_unrated", False))
-
-        for item in works:
-            if not family_enabled:
-                item["family_eligible"] = False
-                item["family_match_certification"] = None
-                item["family_match_country"] = None
-                continue
-
-            allowed, matched_value, matched_country = self._family_age_allowed(
-                {
-                    "fr": item.get("age_fr"),
-                    "us": item.get("age_us"),
-                },
-                target_age,
-                allow_unrated,
-                classification,
-            )
-            item["family_eligible"] = bool(allowed)
-            item["family_match_certification"] = matched_value
-            item["family_match_country"] = matched_country
 
         if self.store:
             await self.store.async_save()
