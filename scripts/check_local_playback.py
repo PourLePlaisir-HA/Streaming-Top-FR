@@ -38,6 +38,10 @@ except ValueError:
 else:
     raise AssertionError("Non-SMB URI must be rejected")
 
+source = PATH.read_text(encoding="utf-8")
+assert "am force-stop" not in source
+assert "remembered SMB authentication context" in source
+
 print("Local VLC playback command checks passed.")
 
 
@@ -48,7 +52,7 @@ manifest = (ROOT / "custom_components/streaming_top_fr/manifest.json").read_text
 assert "_vlcControls" in card
 assert "data-local-play-player" in card
 assert 'type:"streaming_top_fr/play_local"' in card
-assert 'const STFR_VERSION = "0.9.1";' in card
-assert '"version": "0.9.1"' in manifest
+assert 'const STFR_VERSION = "0.9.2-beta.1";' in card
+assert '"version": "0.9.2-beta.1"' in manifest
 
 print("Local VLC frontend checks passed.")
