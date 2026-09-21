@@ -556,7 +556,8 @@ StreamingTopFrCard.prototype._detail=async function(item){
   const result=await _stfrDetailBeforeLocalCopy.call(this,resolved);
   const modal=this.shadowRoot?.querySelector(".modalbg");
   const diagnostic=resolved?._local_diagnostic;
-  if(modal&&diagnostic){
+  const debugEnabled=this._data?.settings?.debug?.enabled===true;
+  if(modal&&diagnostic&&debugEnabled){
     const panel=document.createElement("details");
     panel.className="stream-local-diagnostic";
     panel.style.cssText="margin:14px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color);padding:8px 0";
