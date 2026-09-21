@@ -45,6 +45,10 @@ cases = [
         "Series/Ma Serie/Saison 3/Ma.Serie.3x04.mp4",
         "series", 3, 4, "Ma Serie",
     ),
+    (
+        "Series/Blake et Mortimer/Blake.et.Mortimer.le.mystere.du.tresor.disparu.S01E01.DOC.FRENCH.1080p.WEB.H264.mkv",
+        "series", 1, 1, "Blake et Mortimer",
+    ),
 ]
 
 for raw, bucket, season, episode, title in cases:
@@ -56,5 +60,22 @@ for raw, bucket, season, episode, title in cases:
     assert result["season"] == season, (raw, result)
     assert result["episode"] == episode, (raw, result)
     assert result["title"] == title, (raw, result)
+    assert result["franchise_title"] == title, (raw, result)
+
+blake = scanner._parse_media(
+    Path(
+        "Series/Blake et Mortimer/"
+        "Blake.et.Mortimer.le.mystere.du.tresor.disparu."
+        "S01E01.DOC.FRENCH.1080p.WEB.H264.mkv"
+    ),
+    Path(
+        "Series/Blake et Mortimer/"
+        "Blake.et.Mortimer.le.mystere.du.tresor.disparu."
+        "S01E01.DOC.FRENCH.1080p.WEB.H264.mkv"
+    ),
+    settings,
+)
+assert blake["franchise_title"] == "Blake et Mortimer", blake
+assert blake["episode_title"] == "le mystere du tresor disparu", blake
 
 print("Streaming Local episodic parser checks passed.")
