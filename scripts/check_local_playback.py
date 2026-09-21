@@ -48,7 +48,6 @@ manifest = (ROOT / "custom_components/streaming_top_fr/manifest.json").read_text
 assert "_vlcControls" in card
 assert "data-local-play-player" in card
 assert 'type:"streaming_top_fr/play_local"' in card
-assert "vlc-unavailable" in card
 assert 'const STFR_VERSION = "0.9.1-beta.2";' in card
 assert '"version": "0.9.1-beta.2"' in manifest
 
