@@ -1,0 +1,66 @@
+name: Normalize Streaming Top FR brand assets
+
+on:
+  push:
+    branches:
+      - dev-1.0.3
+    paths:
+      - .github/workflows/normalize-brand-assets.yml
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: dev-1.0.3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Pillow
+        run: python -m pip install --disable-pip-version-check Pillow
+
+      - name: Normalize brand images
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageFile
+
+          ImageFile.LOAD_TRUNCATED_IMAGES = True
+          brand = Path("custom_components/streaming_top_fr/brand")
+          source = brand / "icon.png"
+
+          image = Image.open(source).convert("RGBA")
+          image.resize((256, 256), Image.Resampling.LANCZOS).save(
+              brand / "icon.png", format="PNG", optimize=True
+          )
+          image.resize((512, 512), Image.Resampling.LANCZOS).save(
+              brand / "icon@2x.png", format="PNG", optimize=True
+          )
+
+          # Keep the existing logo artwork aligned with the normal-density asset.
+          image.resize((256, 256), Image.Resampling.LANCZOS).save(
+              brand / "logo.png", format="PNG", optimize=True
+          )
+          PY
+
+      - name: Commit normalized assets
+        run: |
+          if git diff --quiet && [ -f custom_components/streaming_top_fr/brand/icon@2x.png ]; then
+            echo "Brand assets already normalized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components/streaming_top_fr/brand/icon.png
+          git add custom_components/streaming_top_fr/brand/icon@2x.png
+          git add custom_components/streaming_top_fr/brand/logo.png
+          git commit -m "Normalize Streaming Top FR brand assets"
+          git push origin HEAD:dev-1.0.3
