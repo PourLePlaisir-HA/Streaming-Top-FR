@@ -47,6 +47,9 @@ jobs:
       - name: Check reversible canonical watch registry
         run: python scripts/check_watch_registry.py
 
+      - name: Check Local VLC playback
+        run: python scripts/check_local_playback.py
+
       - name: Validate JSON
         run: |
           python -m json.tool custom_components/streaming_top_fr/manifest.json >/dev/null
