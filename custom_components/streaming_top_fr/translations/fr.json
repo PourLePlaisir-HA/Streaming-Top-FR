@@ -82,10 +82,10 @@
         }
       },
       "playback": {
-        "title": "Lecture sur Android TV / Freebox",
-        "description": "La lecture automatique est facultative. Elle nécessite les intégrations Home Assistant fournissant les entités **remote** et **Android Debug Bridge**.",
+        "title": "Lecture directe",
+        "description": "La lecture directe est facultative. Désactivez-la pour utiliser Streaming Top FR uniquement comme catalogue et vidéothèque.",
         "data": {
-          "configure_player": "Configurer une destination maintenant"
+          "playback_enabled": "Activer la lecture directe"
         }
       },
       "player": {
@@ -131,7 +131,8 @@
           "classification": "Classification d'âge",
           "players": "Destinations de lecture",
           "default_decade": "Décennie par défaut",
-          "local_library": "Streaming Local"
+          "local_library": "Streaming Local",
+          "playback": "Lecture directe"
         }
       },
       "general": {
@@ -229,7 +230,7 @@
       },
       "summary": {
         "title": "Synthèse des paramètres",
-        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
+        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Lecture directe\\n- **Activée :** {playback_enabled}\\n\\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
       },
       "default_decade": {
         "title": "Décennie par défaut",
@@ -262,6 +263,13 @@
           "local_series_folders": "Noms de dossiers reconnus comme Séries, séparés par des virgules.",
           "local_animation_folders": "Noms de dossiers reconnus comme Animation, séparés par des virgules.",
           "local_documentaries_folders": "Noms de dossiers reconnus comme Documentaires, séparés par des virgules."
+        }
+      },
+      "playback": {
+        "title": "Lecture directe",
+        "description": "Active ou désactive les actions de lecture directe. Les destinations enregistrées sont conservées lorsque la lecture est désactivée.",
+        "data": {
+          "playback_enabled": "Activer la lecture directe"
         }
       }
     },
