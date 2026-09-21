@@ -93,6 +93,13 @@ async def main():
     assert registry.state_for_item(local_with_imdb)["watched"] is False
     assert registry.state_for_item(streaming_without_imdb)["watched"] is False
 
+    # The reverse observation order must also preserve the IMDb bridge.
+    reverse = Registry(object())
+    await reverse.async_set_work(local_with_imdb, True, source="local")
+    await reverse.async_observe_items([streaming_without_imdb])
+    assert reverse.same_work(local_with_imdb, streaming_without_imdb)
+    assert reverse.state_for_item(streaming_without_imdb)["watched"] is True
+
     series = {
         "media_key": "jw:series",
         "media_type": "tv",
