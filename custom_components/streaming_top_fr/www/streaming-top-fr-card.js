@@ -505,13 +505,12 @@ StreamingTopFrCard.prototype._detail=async function(item){
           year:item.year??null,
         },
       });
-      if(local?.match?.local_id){
-        resolved={
-          ...item,
-          _local_copy:local.match,
-          _local_playback:local.local_playback||null,
-        };
-      }
+      resolved={
+        ...item,
+        _local_copy:local?.match||null,
+        _local_playback:local?.local_playback||null,
+        _local_diagnostic:local?.diagnostic||null,
+      };
     }catch(e){
       // Local availability is optional. Never block the Streaming popup.
     }
@@ -519,6 +518,22 @@ StreamingTopFrCard.prototype._detail=async function(item){
 
   const result=_stfrDetailBeforeLocalCopy.call(this,resolved);
   const modal=this.shadowRoot?.querySelector(".modalbg");
+  const diagnostic=resolved?._local_diagnostic;
+  if(modal&&diagnostic){
+    const panel=document.createElement("details");
+    panel.className="stream-local-diagnostic";
+    panel.style.cssText="margin:14px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color);padding:8px 0";
+    const summary=document.createElement("summary");
+    summary.textContent="Détails techniques — correspondance Local";
+    summary.style.cssText="cursor:pointer;font-weight:800;color:var(--secondary-text-color)";
+    const pre=document.createElement("pre");
+    pre.textContent=JSON.stringify(diagnostic,null,2);
+    pre.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.72rem;line-height:1.35;max-height:260px;overflow:auto;background:var(--secondary-background-color);padding:10px;border-radius:10px";
+    panel.append(summary,pre);
+    const buttons=modal.querySelector(".buttons");
+    const target=buttons?.parentElement||modal.querySelector(".modal")||modal;
+    if(buttons)target.insertBefore(panel,buttons);else target.appendChild(panel);
+  }
   modal?.querySelectorAll("[data-stream-local-id][data-stream-local-player]").forEach(button=>{
     button.addEventListener("click",async event=>{
       event.stopPropagation();
