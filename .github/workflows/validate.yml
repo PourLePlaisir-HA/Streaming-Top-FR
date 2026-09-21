@@ -40,6 +40,9 @@ jobs:
       - name: Check Streaming Local episodic parser
         run: python scripts/check_local_episodic_parser.py
 
+      - name: Check canonical watched identities
+        run: python scripts/check_watch_identity.py
+
       - name: Validate JSON
         run: |
           python -m json.tool custom_components/streaming_top_fr/manifest.json >/dev/null
