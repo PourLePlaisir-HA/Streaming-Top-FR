@@ -120,8 +120,7 @@
           "classification": "Age ratings",
           "players": "Playback destinations",
           "default_decade": "Default decade",
-          "local_library": "Streaming Local",
-          "playback": "Direct playback"
+          "local_library": "Streaming Local"
         }
       },
       "general": {
@@ -201,9 +200,10 @@
       },
       "players": {
         "title": "Playback destinations",
-        "description": "Add a destination or select an existing destination to edit it.",
+        "description": "Enable or disable direct playback, then manage playback destinations. Saved destinations are kept when direct playback is disabled.",
         "data": {
-          "player_select": "Destination"
+          "player_select": "Destination",
+          "playback_enabled": "Enable direct playback"
         }
       },
       "player_edit": {
