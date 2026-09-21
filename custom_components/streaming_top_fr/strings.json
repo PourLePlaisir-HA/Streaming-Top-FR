@@ -272,11 +272,11 @@
     },
     "init": {
       "menu_options": {
-        "duration_filter": "Duration filter"
+        "duration_filter": "Filter by maximum movie runtime"
       }
     },
     "duration_filter": {
-      "title": "Duration filter",
+      "title": "Filter by maximum movie runtime",
       "description": "Shows an optional filter in the Movie views of Streaming, Top Streaming and Streaming Local. The button stays inactive until the user enables it in the card.",
       "data": {
         "duration_filter_enabled": "Show duration filter",
