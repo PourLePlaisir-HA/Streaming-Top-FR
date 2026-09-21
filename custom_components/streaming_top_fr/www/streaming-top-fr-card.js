@@ -528,7 +528,20 @@ StreamingTopFrCard.prototype._detail=async function(item){
         _local_diagnostic:localDiagnostic,
       };
     }catch(e){
-      localDiagnostic.websocket_error=String(e);
+      localDiagnostic.websocket_error={
+        string:String(e),
+        name:e?.name??null,
+        message:e?.message??null,
+        code:e?.code??null,
+        details:e?.details??null,
+        body:e?.body??null,
+        raw:(e&&typeof e==="object")
+          ?Object.fromEntries(Object.entries(e).map(([k,v])=>[
+              k,
+              (v&&typeof v==="object")?JSON.parse(JSON.stringify(v)):v
+            ]))
+          :e,
+      };
       resolved={
         ...item,
         _local_copy:null,
