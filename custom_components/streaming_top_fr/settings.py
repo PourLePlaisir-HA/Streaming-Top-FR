@@ -66,7 +66,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "enabled": False,
         "root_path": "",
         "smb_base_uri": "",
-        "smb_auth_mode": "vlc_saved",
+        "smb_auth_mode": "configured",
         "smb_username": "",
         "smb_password": "",
         "extensions": ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],
@@ -291,9 +291,9 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         extensions = local_library.get("extensions", defaults["extensions"])
         if not isinstance(extensions, list):
             extensions = defaults["extensions"]
-        auth_mode = (_clean_string(local_library.get("smb_auth_mode")) or "vlc_saved").casefold()
+        auth_mode = (_clean_string(local_library.get("smb_auth_mode")) or "configured").casefold()
         if auth_mode not in {"vlc_saved", "configured"}:
-            auth_mode = "vlc_saved"
+            auth_mode = "configured"
         raw_folders = local_library.get("category_folders") or {}
         normalized_folders = {}
         for category, folder_defaults in defaults["category_folders"].items():
