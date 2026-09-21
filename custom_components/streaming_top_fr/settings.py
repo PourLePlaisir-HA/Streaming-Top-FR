@@ -90,6 +90,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "enabled": True,
         "max_minutes": 120,
     },
+    "debug": {
+        "enabled": False,
+    },
     "discovery": {
         "visible_count": 10,
         "prefetch_count": 20,
@@ -188,6 +191,9 @@ classification:
 duration_filter:
   enabled: true          # Afficher le filtre de durée dans les vues Films
   max_minutes: 120       # Seuil du bouton : films strictement inférieurs à 120 min
+
+debug:
+  enabled: false         # Active les traces détaillées de diagnostic
 
 discovery:
   visible_count: 10      # Nombre de tuiles visibles dans « À découvrir » (pas de 1)
@@ -408,6 +414,15 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
                 defaults["max_minutes"],
                 30,
                 360,
+            ),
+        }
+
+    debug = raw.get("debug") or {}
+    if isinstance(debug, dict):
+        settings["debug"] = {
+            "enabled": _as_bool(
+                debug.get("enabled"),
+                DEFAULT_SETTINGS["debug"]["enabled"],
             ),
         }
 
