@@ -15,6 +15,7 @@ from .local_library import LocalLibraryScanner
 from .settings import async_load_legacy_settings, normalize_settings
 from .watch_registry import CanonicalWatchRegistry
 from .local_views import annotate_local_items, sync_historical_work
+from .local_playback import async_launch_vlc_local, log_local_launch_failure
 
 
 async def async_setup(hass, config):
@@ -105,6 +106,31 @@ def _entry_data(hass, entry_id=None):
         if not key.startswith("_") and isinstance(value, dict)
     }
     return data.get(entry_id) if entry_id else next(iter(data.values()), None)
+
+
+def _local_playback_payload(settings):
+    players = settings.get("players") or {}
+    playback = settings.get("playback") or {}
+    enabled = bool(playback.get("enabled", bool(players)))
+    destinations = []
+    for player_id, player in players.items():
+        if not isinstance(player, dict):
+            continue
+        if str(player.get("type") or "android_tv").casefold() != "android_tv":
+            continue
+        if not player.get("remote") or not player.get("adb_player"):
+            continue
+        destinations.append(
+            {
+                "id": str(player_id),
+                "name": str(player.get("name") or player_id),
+            }
+        )
+    return {
+        "enabled": enabled,
+        "mode": "vlc_smb",
+        "players": destinations,
+    }
 
 
 def _register_ws(hass):
@@ -347,6 +373,7 @@ def _register_ws(hass):
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
                 "family": dict(settings.get("family") or {}),
+                "local_playback": _local_playback_payload(settings),
                 "items": items,
                 "errors": list(result.errors),
             },
@@ -428,8 +455,117 @@ def _register_ws(hass):
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
                 "family": dict(settings.get("family") or {}),
+                "local_playback": _local_playback_payload(settings),
                 "items": items,
                 "errors": list(result.errors),
+            },
+        )
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/play_local",
+            vol.Optional("entry_id"): str,
+            vol.Required("local_id"): str,
+            vol.Required("player"): str,
+        }
+    )
+    @websocket_api.async_response
+    async def play_local(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        settings = (
+            data["coordinator"].settings
+            or (data["coordinator"].data or {}).get("settings")
+            or {}
+        )
+        players = settings.get("players") or {}
+        playback = settings.get("playback") or {}
+        if not bool(playback.get("enabled", bool(players))):
+            connection.send_error(
+                msg["id"],
+                "playback_disabled",
+                "Lecture directe désactivée dans la configuration.",
+            )
+            return
+
+        player_id = str(msg.get("player") or "").strip()
+        player = players.get(player_id)
+        if not isinstance(player, dict):
+            connection.send_error(
+                msg["id"], "unknown_player", f"Destination inconnue : {player_id}"
+            )
+            return
+        if str(player.get("type") or "android_tv").casefold() != "android_tv":
+            connection.send_error(
+                msg["id"],
+                "unsupported_player_type",
+                f"Type de destination non pris en charge : {player.get('type')}",
+            )
+            return
+        if not player.get("remote") or not player.get("adb_player"):
+            connection.send_error(
+                msg["id"],
+                "incomplete_player",
+                "La destination doit définir remote et adb_player pour VLC.",
+            )
+            return
+
+        local_settings = settings.get("local_library") or {}
+        if not local_settings.get("enabled", False):
+            connection.send_error(
+                msg["id"], "local_disabled", "Streaming Local est désactivé"
+            )
+            return
+
+        local_id = str(msg.get("local_id") or "").strip()
+        scanner = data["local_library"]
+        result = scanner.last_result
+        if not result.items and not result.errors:
+            result = await scanner.async_scan(local_settings)
+
+        item = next(
+            (
+                candidate
+                for candidate in result.items
+                if str(candidate.get("local_id") or "") == local_id
+            ),
+            None,
+        )
+        if not isinstance(item, dict):
+            connection.send_error(
+                msg["id"], "unknown_local_item", "Fichier Local introuvable."
+            )
+            return
+
+        smb_uri = str(item.get("smb_uri") or "").strip()
+        smb_base = str(local_settings.get("smb_base_uri") or "").strip().rstrip("/")
+        if (
+            not smb_base.lower().startswith("smb://")
+            or not smb_uri.lower().startswith("smb://")
+            or not smb_uri.startswith(smb_base + "/")
+        ):
+            connection.send_error(
+                msg["id"],
+                "invalid_local_uri",
+                "URI SMB du fichier invalide ou hors de la vidéothèque configurée.",
+            )
+            return
+
+        task = hass.async_create_task(
+            async_launch_vlc_local(hass, player, smb_uri),
+            f"{DOMAIN}_vlc_{player_id}_{local_id[-8:]}",
+        )
+        task.add_done_callback(log_local_launch_failure)
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "player": player_id,
+                "local_id": local_id,
+                "app": "vlc",
             },
         )
 
@@ -651,6 +787,7 @@ def _register_ws(hass):
     websocket_api.async_register_command(hass, get_family_catalog)
     websocket_api.async_register_command(hass, get_local_library)
     websocket_api.async_register_command(hass, enrich_local_library)
+    websocket_api.async_register_command(hass, play_local)
     websocket_api.async_register_command(hass, set_local_watch_status)
     websocket_api.async_register_command(hass, refresh_local_library)
     websocket_api.async_register_command(hass, refresh)
