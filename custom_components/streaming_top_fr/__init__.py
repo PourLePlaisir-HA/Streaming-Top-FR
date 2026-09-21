@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import voluptuous as vol
@@ -17,6 +18,15 @@ from .watch_registry import CanonicalWatchRegistry
 from .local_views import annotate_local_items, sync_historical_work
 from .local_playback import async_launch_vlc_local, log_local_launch_failure
 from .runtime_filter import RuntimeMetadataClient
+
+
+_PACKAGE_LOGGER = logging.getLogger(__package__)
+
+
+def _apply_debug_logging(settings):
+    debug_enabled = bool((settings.get("debug") or {}).get("enabled", False))
+    _PACKAGE_LOGGER.setLevel(logging.DEBUG if debug_enabled else logging.NOTSET)
+    return debug_enabled
 
 
 async def async_setup(hass, config):
@@ -71,6 +81,12 @@ async def async_setup_entry(hass, entry):
     local_metadata = LocalMetadataClient(session, store)
     runtime_metadata = RuntimeMetadataClient(session, store)
     await coordinator.async_config_entry_first_refresh()
+    active_settings = (
+        coordinator.settings
+        or (coordinator.data or {}).get("settings")
+        or {}
+    )
+    _apply_debug_logging(active_settings)
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
         "store": store,
@@ -100,6 +116,7 @@ async def async_unload_entry(hass, entry):
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        _PACKAGE_LOGGER.setLevel(logging.NOTSET)
     return ok
 
 
@@ -262,7 +279,16 @@ async def _async_refresh_local_canonical_index(data):
     try:
         coordinator = data["coordinator"]
         settings = coordinator.settings or (coordinator.data or {}).get("settings") or {}
+        debug_enabled = bool((settings.get("debug") or {}).get("enabled", False))
         local_settings = settings.get("local_library") or {}
+        if debug_enabled:
+            _PACKAGE_LOGGER.debug(
+                "find_local_copy request: media_key=%s imdb_id=%s title=%s year=%s",
+                (msg.get("item") or {}).get("media_key"),
+                (msg.get("item") or {}).get("imdb_id"),
+                (msg.get("item") or {}).get("title"),
+                (msg.get("item") or {}).get("year"),
+            )
         if not local_settings.get("enabled", False):
             await _persist_local_canonical_index(data["store"], [])
             return
@@ -725,11 +751,15 @@ def _register_ws(hass):
                 {
                     "match": None,
                     "local_playback": _local_playback_payload(settings),
-                    "diagnostic": {
-                        "local_enabled": False,
-                        "streaming": dict(msg.get("item") or {}),
-                        "index": {"available": False, "reason": "local_disabled"},
-                    },
+                    "diagnostic": (
+                        {
+                            "local_enabled": False,
+                            "streaming": dict(msg.get("item") or {}),
+                            "index": {"available": False, "reason": "local_disabled"},
+                        }
+                        if debug_enabled
+                        else None
+                    ),
                 },
             )
             return
@@ -823,12 +853,19 @@ def _register_ws(hass):
             "resolved_match": public_match,
         }
 
+        if debug_enabled:
+            _PACKAGE_LOGGER.debug(
+                "find_local_copy result: media_key=%s match=%s",
+                target_item.get("media_key"),
+                public_match,
+            )
+
         connection.send_result(
             msg["id"],
             {
                 "match": public_match,
                 "local_playback": _local_playback_payload(settings),
-                "diagnostic": diagnostic,
+                "diagnostic": diagnostic if debug_enabled else None,
             },
         )
 
