@@ -69,8 +69,11 @@ settings_source = (ROOT / "custom_components/streaming_top_fr/settings.py").read
 assert "_vlcControls" in card
 assert "data-local-play-player" in card
 assert 'type:"streaming_top_fr/play_local"' in card
-assert 'const STFR_VERSION = "1.0.0";' in card
-assert '"version": "1.0.0"' in manifest
+assert 'streaming_top_fr/find_local_copy' in card
+assert 'Voir sur VLC' in card
+assert 'data-stream-local-id' in card
+assert 'const STFR_VERSION = "1.0.1-beta.1";' in card
+assert '"version": "1.0.1-beta.1"' in manifest
 assert 'public_local.pop("smb_username", None)' in init_source
 assert 'public_local.pop("smb_password", None)' in init_source
 assert '"smb_username": _clean_string(local_library.get("smb_username")) or ""' in settings_source
