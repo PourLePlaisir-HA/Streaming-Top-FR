@@ -859,6 +859,26 @@ class StreamingLocalCard extends HTMLElement {
 // v0.9 Local family + watched views.
 // This layer only changes StreamingLocalCard presentation/actions. Scanner,
 // LocalMetadataClient and the historical Streaming/Top cards stay untouched.
+StreamingLocalCard.prototype.connectedCallback=function(){
+  if(this._statusSyncHandler)return;
+  this._statusSyncHandler=e=>{
+    if(e?.detail?.source===this)return;
+    if(this._hass&&!this._loading)void this._load(false);
+  };
+  window.addEventListener("streaming-top-fr-status-changed",this._statusSyncHandler);
+};
+StreamingLocalCard.prototype.disconnectedCallback=function(){
+  if(this._statusSyncHandler){
+    window.removeEventListener("streaming-top-fr-status-changed",this._statusSyncHandler);
+  }
+  this._statusSyncHandler=null;
+};
+StreamingLocalCard.prototype._broadcastStatusChange=function(){
+  window.dispatchEvent(new CustomEvent(
+    "streaming-top-fr-status-changed",
+    {detail:{source:this}}
+  ));
+};
 StreamingLocalCard.prototype.setConfig=function(c){
   this._config={title:"Streaming Local",default_category:"movies",...c};
   if(!this.shadowRoot)this.attachShadow({mode:"open"});
@@ -1054,6 +1074,7 @@ StreamingLocalCard.prototype._setWatch=async function(items,enabled){
       enabled:Boolean(enabled),
     });
     await this._load(false);
+    this._broadcastStatusChange();
   }catch(e){
     this._error=String(e);
     this._render();
