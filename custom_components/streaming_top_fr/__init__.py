@@ -1127,6 +1127,7 @@ def _register_ws(hass):
     websocket_api.async_register_command(hass, get_family_catalog)
     websocket_api.async_register_command(hass, get_local_library)
     websocket_api.async_register_command(hass, enrich_local_library)
+    websocket_api.async_register_command(hass, find_local_copy)
     websocket_api.async_register_command(hass, play_local)
     websocket_api.async_register_command(hass, set_local_watch_status)
     websocket_api.async_register_command(hass, refresh_local_library)
