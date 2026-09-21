@@ -32,7 +32,7 @@ assert "Mode Debug" in fr
 assert "Activer les logs Debug" in fr
 assert "{debug_enabled}" in fr
 
-assert 'const STFR_VERSION = "1.0.2-beta.3";' in card
-assert '"version": "1.0.2-beta.3"' in manifest
+assert 'const STFR_VERSION = "1.0.2";' in card
+assert '"version": "1.0.2"' in manifest
 
 print("Optional Debug mode checks passed.")
