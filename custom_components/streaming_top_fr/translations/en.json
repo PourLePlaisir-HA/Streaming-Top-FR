@@ -230,7 +230,7 @@
       },
       "local_library": {
         "title": "Streaming Local",
-        "description": "Configure the media library mounted in Home Assistant and the SMB URI used by VLC. SMB credentials are never embedded in the URI or exposed to the card.",
+        "description": "Configure the media library mounted in Home Assistant and the SMB URI used by VLC. Configured credentials remain on the Home Assistant side and are never exposed to the card.",
         "data": {
           "local_enabled": "Enable Streaming Local",
           "local_root_path": "Home Assistant path",
@@ -241,17 +241,21 @@
           "local_series_folders": "TV show folders",
           "local_animation_folders": "Animation folders",
           "local_documentaries_folders": "Documentary folders",
-          "local_scan_hidden": "Scan hidden folders"
+          "local_scan_hidden": "Scan hidden folders",
+          "local_smb_username": "SMB username",
+          "local_smb_password": "SMB password"
         },
         "data_description": {
           "local_root_path": "Example: /medias/videos",
           "local_smb_base_uri": "Example: smb://192.168.0.200/videos — without username or password.",
-          "local_smb_auth_mode": "For now, VLC reuses the SMB credentials already saved in VLC.",
+          "local_smb_auth_mode": "Choose VLC-saved credentials or credentials configured here. Configured credentials are recommended for direct ADB launch.",
           "local_extensions": "Comma-separated list, for example: mkv, avi, mp4, m4v",
           "local_movies_folders": "Folder names recognized as Movies, comma-separated.",
           "local_series_folders": "Folder names recognized as TV shows, comma-separated.",
           "local_animation_folders": "Folder names recognized as Animation, comma-separated.",
-          "local_documentaries_folders": "Folder names recognized as Documentaries, comma-separated."
+          "local_documentaries_folders": "Folder names recognized as Documentaries, comma-separated.",
+          "local_smb_username": "Used only with “Streaming Top FR — configured credentials”.",
+          "local_smb_password": "Used only with “Streaming Top FR — configured credentials”. The password is not sent to the Lovelace card."
         }
       },
       "playback": {
