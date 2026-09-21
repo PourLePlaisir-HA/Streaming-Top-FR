@@ -70,6 +70,7 @@ assert "_vlcControls" in card
 assert "data-local-play-player" in card
 assert 'type:"streaming_top_fr/play_local"' in card
 assert 'streaming_top_fr/find_local_copy' in card
+assert 'async_register_command(hass, find_local_copy)' in init_source
 assert 'LOCAL_INDEX_METADATA_KEY = "local-canonical-index-v1"' in init_source
 assert '_build_local_canonical_index' in init_source
 assert '_find_local_index_match' in init_source
@@ -86,8 +87,8 @@ assert 'e?.message??null' in card
 assert 'response_received' in card
 assert 'frontend_version:STFR_VERSION' in card
 assert '"diagnostic": diagnostic' in init_source
-assert 'const STFR_VERSION = "1.0.1-beta.7";' in card
-assert '"version": "1.0.1-beta.7"' in manifest
+assert 'const STFR_VERSION = "1.0.1-beta.8";' in card
+assert '"version": "1.0.1-beta.8"' in manifest
 assert 'public_local.pop("smb_username", None)' in init_source
 assert 'public_local.pop("smb_password", None)' in init_source
 assert '"smb_username": _clean_string(local_library.get("smb_username")) or ""' in settings_source
