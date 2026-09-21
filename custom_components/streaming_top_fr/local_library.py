@@ -132,6 +132,22 @@ class LocalLibraryScanner:
                 ):
                     continue
 
+                # Structural media identity always comes from the fresh
+                # filename/path parser. If a parser fix changes that identity,
+                # never carry metadata from the previous interpretation.
+                structural_fields = (
+                    "bucket",
+                    "media_type",
+                    "episodic",
+                    "season",
+                    "episode",
+                )
+                if any(
+                    old_item.get(field) != item.get(field)
+                    for field in structural_fields
+                ):
+                    continue
+
                 # Keep only genuinely useful previous enrichment.
                 # Old unmatched rows or rows without a poster must be retried;
                 # otherwise a transient 403 can freeze a broken state forever.
