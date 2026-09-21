@@ -831,7 +831,7 @@ class StreamingLocalCard extends HTMLElement {
       .modal-close{position:absolute;right:10px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:var(--secondary-background-color);font-size:25px;cursor:pointer}
       .modal-head{display:flex;gap:14px;padding-right:42px;align-items:flex-start}
       .modal-head img{width:88px;aspect-ratio:2/3;object-fit:cover;border-radius:9px}
-      .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
+      .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}.local-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.local-title-row h2{margin-right:0}.age-badge{display:inline-grid;place-items:center;flex:0 0 auto;box-sizing:border-box;font-weight:900;line-height:1;vertical-align:middle}.age-badge.fr{width:29px;height:29px;border-radius:50%;background:#d9d9d9!important;color:#111!important;border:0!important;font-size:.66rem;box-shadow:none!important}.age-badge.us{min-width:42px;height:26px;padding:0 7px;border-radius:6px;background:#242424!important;color:#fff!important;border:0!important;font-size:.64rem;letter-spacing:.01em;box-shadow:none!important}
       .modal p{line-height:1.45;color:var(--secondary-text-color)}
       .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
       .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
@@ -850,7 +850,7 @@ class StreamingLocalCard extends HTMLElement {
     </style>
     <ha-card><div class="wrap">
       <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-      ${cats.length?`<div class="tabs category-tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+      ${cats.length?`<div class="tabs category-tabs adaptive-tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
       ${body}
     </div></ha-card>`;
     this._bind();
@@ -1080,6 +1080,24 @@ StreamingLocalCard.prototype._setWatch=async function(items,enabled){
     this._render();
   }
 };
+StreamingLocalCard.prototype._localAge=function(item){
+  const fr=item?.age_fr||(String(item?.age_country||"").toUpperCase()==="FR"?item?.age_certification:null);
+  const us=item?.age_us||(String(item?.age_country||"").toUpperCase()==="US"?item?.age_certification:null);
+  if(fr)return{value:fr,country:"FR"};
+  if(us)return{value:us,country:"US"};
+  const value=item?.age_certification||null;
+  const country=String(item?.age_country||"").toUpperCase()||null;
+  return{value,country};
+};
+StreamingLocalCard.prototype._localAgeBadge=function(item){
+  const age=this._localAge(item);
+  const v=String(age.value||"").trim().toUpperCase();
+  const country=String(age.country||"").trim().toUpperCase();
+  if(!v)return"";
+  if(country==="FR")return `<span class="age-badge fr" title="Classification France ${this._esc(v)}">${this._esc(v)}</span>`;
+  if(country==="US")return `<span class="age-badge us" title="Classification US ${this._esc(v)}">${this._esc(v)}</span>`;
+  return `<span class="age-badge us">${this._esc(v)}</span>`;
+};
 StreamingLocalCard.prototype._localPlayback=function(){
   return this._data?.local_playback||{enabled:false,players:[]};
 };
@@ -1144,7 +1162,11 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
   const m=document.createElement("div");m.className="modalbg";
   const franchise=item.franchise_title||item.title||item.parsed_title||"Sans titre";
   const storyTitle=item.season_title||"";
-  const meta=this._metadata(item);
+  const metaParts=[];
+  if(item.year)metaParts.push(String(item.year));
+  if(item.rating!=null){const n=Number(item.rating);metaParts.push(`★ ${Number.isFinite(n)?n.toFixed(1):this._esc(item.rating)}`)}
+  const meta=metaParts.join(" · ");
+  const ageBadge=this._localAgeBadge(item);
   const match=item.metadata_status==="matched"
     ?"JustWatch + IMDb"
     :item.metadata_status==="imdb_only"
@@ -1225,7 +1247,11 @@ StreamingLocalCard.prototype._detail=function(item){
   const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
   const m=document.createElement("div");m.className="modalbg";
   const title=item.title||item.parsed_title||item.filename||"Sans titre";
-  const meta=this._metadata(item);
+  const metaParts=[];
+  if(item.year)metaParts.push(String(item.year));
+  if(item.rating!=null){const n=Number(item.rating);metaParts.push(`★ ${Number.isFinite(n)?n.toFixed(1):this._esc(item.rating)}`)}
+  const meta=metaParts.join(" · ");
+  const ageBadge=this._localAgeBadge(item);
   const parsed=item.parsed_title&&item.parsed_title!==item.title
     ?`<div class="detail-row"><strong>Nom détecté</strong><span>${this._esc(item.parsed_title)}</span></div>`:"";
   const path=item.relative_path
@@ -1241,7 +1267,7 @@ StreamingLocalCard.prototype._detail=function(item){
     <button class="modal-close" aria-label="Fermer">×</button>
     <div class="modal-head">
       ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
-      <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div></div>
+      <div class="modal-head-copy"><div class="local-title-row"><h2>${this._esc(title)}</h2>${ageBadge}</div><div class="modal-meta">${this._esc(meta)}</div></div>
     </div>
     <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
     <details class="technical-details">
@@ -1314,10 +1340,10 @@ StreamingLocalCard.prototype._render=function(){
     :"";
 
   const familyRow=this._category==="family"
-    ?`<div class="subtabs family-tabs">${familyCats.map(cat=>`<button class="subtab ${cat===this._familyCategory?"active":""}" data-family-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._displayItems("family",cat).length})</span></button>`).join("")}</div>`
+    ?`<div class="subtabs family-tabs adaptive-tabs">${familyCats.map(cat=>`<button class="subtab ${cat===this._familyCategory?"active":""}" data-family-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._displayItems("family",cat).length})</span></button>`).join("")}</div>`
     :'<div class="subtabs family-tabs reserved" aria-hidden="true"></div>';
 
-  const watchRow=`<div class="subtabs watch-tabs">
+  const watchRow=`<div class="subtabs watch-tabs adaptive-tabs">
     <button class="subtab ${this._watchFilter==="all"?"active":""}" data-watch-filter="all">Tous (${watchCounts.all})</button>
     <button class="subtab ${this._watchFilter==="unwatched"?"active":""}" data-watch-filter="unwatched">Pas encore vus (${watchCounts.unwatched})</button>
     <button class="subtab ${this._watchFilter==="watched"?"active":""}" data-watch-filter="watched">Vus (${watchCounts.watched})</button>
@@ -1335,7 +1361,7 @@ StreamingLocalCard.prototype._render=function(){
     .refresh{width:36px;height:36px;border:0;border-radius:50%;background:var(--secondary-background-color);cursor:pointer;font-size:20px}
     .tabs,.subtabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
     .tabs{margin-bottom:8px}
-    .category-tabs{display:grid;grid-template-columns:repeat(2,max-content);justify-content:center;gap:10px 14px;overflow:visible;padding-bottom:6px;margin-bottom:8px}
+    .adaptive-tabs{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 14px;overflow:visible;margin-left:auto;margin-right:auto}.category-tabs{max-width:760px;padding-bottom:6px;margin-bottom:8px}.family-tabs,.watch-tabs{justify-content:center}
     .subtabs{min-height:36px;margin-bottom:8px}
     .subtabs.reserved{visibility:hidden}
     .tab,.subtab{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap}
@@ -1380,7 +1406,7 @@ StreamingLocalCard.prototype._render=function(){
     .episode-select ha-icon{flex:0 0 auto;color:var(--primary-color)}
     .episode-watch{flex:0 0 44px;border:0;border-left:1px solid var(--divider-color);background:none;cursor:pointer}.episode-watch ha-icon{--mdc-icon-size:22px;color:var(--secondary-text-color)}.episode-watch.on ha-icon{color:var(--primary-color)}
     .episode-help{margin-top:12px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.35}
-    @media(max-width:600px){.wrap{padding:14px 11px}.category-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.category-tabs .tab{width:100%;justify-content:center}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
+    @media(max-width:600px){.wrap{padding:14px 11px}.adaptive-tabs{gap:8px}.category-tabs .tab{justify-content:center}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
   </style>
   <ha-card><div class="wrap">
     <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
