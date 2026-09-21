@@ -1080,6 +1080,50 @@ StreamingLocalCard.prototype._setWatch=async function(items,enabled){
     this._render();
   }
 };
+StreamingLocalCard.prototype._localPlayback=function(){
+  return this._data?.local_playback||{enabled:false,players:[]};
+};
+StreamingLocalCard.prototype._vlcControls=function(item,label=""){
+  const cfg=this._localPlayback();
+  const players=Array.isArray(cfg.players)?cfg.players:[];
+  if(cfg.enabled!==true||!item?.local_id||!players.length)return"";
+  const heading=label
+    ?`Lire avec VLC · ${this._esc(label)}`
+    :"Lire avec VLC";
+  const buttons=players.map(player=>`<button class="vlc-destination" data-local-play-player="${this._esc(player.id)}"><ha-icon icon="mdi:vlc"></ha-icon><span>${this._esc(player.name||player.id)}</span></button>`).join("");
+  return `<div class="vlc-block"><div class="vlc-title">${heading}</div><div class="vlc-row">${buttons}</div></div>`;
+};
+StreamingLocalCard.prototype._playLocal=async function(item,playerId,button){
+  if(!this._hass||!item?.local_id||!playerId)return;
+  const oldHtml=button?.innerHTML;
+  if(button){
+    button.disabled=true;
+    button.innerHTML='<ha-icon icon="mdi:loading"></ha-icon><span>Lancement…</span>';
+  }
+  try{
+    await this._hass.callWS({
+      type:"streaming_top_fr/play_local",
+      local_id:item.local_id,
+      player:playerId,
+    });
+    if(button){
+      button.innerHTML='<ha-icon icon="mdi:check"></ha-icon><span>Lancé</span>';
+      setTimeout(()=>{
+        if(button?.isConnected){
+          button.disabled=false;
+          button.innerHTML=oldHtml;
+        }
+      },1800);
+    }
+  }catch(e){
+    if(button){
+      button.disabled=false;
+      button.innerHTML=oldHtml;
+    }
+    this._error=`VLC : ${String(e)}`;
+    this._render();
+  }
+};
 StreamingLocalCard.prototype._seasonDetail=function(item){
   const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
   const episodes=[...(item.episodes||[])].sort((a,b)=>
@@ -1087,7 +1131,13 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
     String(a.relative_path||"").localeCompare(String(b.relative_path||""),"fr")
   );
   const selectionKey=item.season_key||`${item.series_key||"series"}:season:${item.season??0}`;
-  const selectedId=this._seriesSelection?.[selectionKey]||null;
+  const defaultEpisode=episodes.find(ep=>ep.watch_state!==true)||episodes[0]||null;
+  const selectedId=this._seriesSelection?.[selectionKey]||defaultEpisode?.local_id||null;
+  const selectedEpisode=episodes.find(ep=>ep.local_id===selectedId)||defaultEpisode;
+  if(selectedEpisode){
+    this._seriesSelection=this._seriesSelection||{};
+    this._seriesSelection[selectionKey]=selectedEpisode.local_id;
+  }
   const m=document.createElement("div");m.className="modalbg";
   const franchise=item.franchise_title||item.title||item.parsed_title||"Sans titre";
   const storyTitle=item.season_title||"";
@@ -1116,6 +1166,10 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
     </div>`;
   }).join("");
   const allSeen=episodes.length>0&&episodes.every(ep=>ep.watch_state===true);
+  const selectedCode=selectedEpisode&&selectedEpisode.season!=null&&selectedEpisode.episode!=null
+    ?`S${String(selectedEpisode.season).padStart(2,"0")}E${String(selectedEpisode.episode).padStart(2,"0")}`
+    :"";
+  const vlcControls=this._vlcControls(selectedEpisode,selectedCode);
   m.innerHTML=`<div class="modal series-modal">
     <button class="modal-close" aria-label="Fermer">×</button>
     <div class="modal-head">
@@ -1131,12 +1185,17 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
     <div class="details">
       <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
     </div>
+    ${vlcControls}
     <div class="watch-actions"><button class="watch-main" data-season-watch="${allSeen?"false":"true"}"><ha-icon icon="${allSeen?"mdi:eye-off-outline":"mdi:check-all"}"></ha-icon>${allSeen?"Remettre la saison dans Pas encore vus":"Marquer toute la saison vue"}</button></div>
     <div class="episode-list">${episodeRows||'<div class="state">Aucun épisode détecté pour cette saison.</div>'}</div>
     <div class="episode-help">Le statut Vu est partagé avec les services de streaming au niveau de l’œuvre. Un épisode peut toutefois être remis explicitement en non vu.</div>
   </div>`;
   m.onclick=e=>{if(e.target===m)m.remove()};
   m.querySelector(".modal-close").onclick=()=>m.remove();
+  m.querySelectorAll("[data-local-play-player]").forEach(b=>b.addEventListener("click",async e=>{
+    e.stopPropagation();
+    if(selectedEpisode)await this._playLocal(selectedEpisode,b.dataset.localPlayPlayer,b);
+  }));
   m.querySelector("[data-season-watch]")?.addEventListener("click",async e=>{
     const enabled=e.currentTarget.dataset.seasonWatch==="true";
     m.remove();
@@ -1174,6 +1233,7 @@ StreamingLocalCard.prototype._detail=function(item){
     ?"IMDb uniquement"
     :"Non identifié";
   const seen=item.watch_state===true;
+  const vlcControls=this._vlcControls(item);
   m.innerHTML=`<div class="modal">
     <button class="modal-close" aria-label="Fermer">×</button>
     <div class="modal-head">
@@ -1185,10 +1245,15 @@ StreamingLocalCard.prototype._detail=function(item){
       <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
       ${parsed}${path}
     </div>
+    ${vlcControls}
     <div class="watch-actions"><button class="watch-main" data-item-watch="${seen?"false":"true"}"><ha-icon icon="${seen?"mdi:eye-off-outline":"mdi:check-circle-outline"}"></ha-icon>${seen?"Remettre dans Pas encore vus":"Marquer vu"}</button></div>
   </div>`;
   m.onclick=e=>{if(e.target===m)m.remove()};
   m.querySelector(".modal-close").onclick=()=>m.remove();
+  m.querySelectorAll("[data-local-play-player]").forEach(b=>b.addEventListener("click",async e=>{
+    e.stopPropagation();
+    await this._playLocal(item,b.dataset.localPlayPlayer,b);
+  }));
   m.querySelector("[data-item-watch]")?.addEventListener("click",async e=>{
     const enabled=e.currentTarget.dataset.itemWatch==="true";
     m.remove();
@@ -1296,6 +1361,7 @@ StreamingLocalCard.prototype._render=function(){
     .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
     .series-summary{margin-top:6px;color:var(--secondary-text-color);font-size:.86rem}
     .watch-actions{display:flex;margin:16px 0 12px}.watch-main{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--primary-color);color:var(--text-primary-color,#fff);cursor:pointer;font-weight:800}.watch-main ha-icon{--mdc-icon-size:18px}
+    .vlc-block{margin:16px 0 10px;padding:12px;border-radius:14px;background:var(--secondary-background-color)}.vlc-title{margin-bottom:9px;font-weight:800}.vlc-row{display:flex;gap:8px;flex-wrap:wrap}.vlc-destination{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--primary-color);color:var(--text-primary-color,#fff);cursor:pointer;font-weight:800}.vlc-destination:disabled{opacity:.65;cursor:wait}.vlc-destination ha-icon{--mdc-icon-size:19px}
     .episode-list{display:grid;gap:7px}
     .episode-row{width:100%;display:flex;align-items:stretch;gap:6px;border-radius:12px;background:var(--secondary-background-color)}
     .episode-row.selected{outline:2px solid var(--primary-color)}
