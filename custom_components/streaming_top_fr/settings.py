@@ -59,6 +59,20 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "adn": False,
     },
     "players": deepcopy(DEFAULT_PLAYERS),
+    "local_library": {
+        "enabled": False,
+        "root_path": "",
+        "smb_base_uri": "",
+        "smb_auth_mode": "vlc_saved",
+        "extensions": ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],
+        "category_folders": {
+            "movies": ["Films"],
+            "series": ["Series", "Séries"],
+            "animation": ["Animation", "Animations", "Dessins Animés"],
+            "documentaries": ["Documentaires", "Documentaries"],
+        },
+        "scan_hidden": False,
+    },
     "top_catalog": deepcopy(DEFAULT_TOP_CATALOG),
     "family": deepcopy(DEFAULT_FAMILY),
     "classification": {
@@ -249,6 +263,48 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         settings["services"] = normalized
 
     settings["players"] = _normalize_players(raw.get("players"))
+
+    local_library = raw.get("local_library") or {}
+    if isinstance(local_library, dict):
+        defaults = DEFAULT_SETTINGS["local_library"]
+        extensions = local_library.get("extensions", defaults["extensions"])
+        if not isinstance(extensions, list):
+            extensions = defaults["extensions"]
+        auth_mode = (_clean_string(local_library.get("smb_auth_mode")) or "vlc_saved").casefold()
+        if auth_mode not in {"vlc_saved"}:
+            auth_mode = "vlc_saved"
+        raw_folders = local_library.get("category_folders") or {}
+        normalized_folders = {}
+        for category, folder_defaults in defaults["category_folders"].items():
+            value = (
+                raw_folders.get(category, folder_defaults)
+                if isinstance(raw_folders, dict)
+                else folder_defaults
+            )
+            if isinstance(value, str):
+                value = [part.strip() for part in value.split(",") if part.strip()]
+            if not isinstance(value, list):
+                value = folder_defaults
+            normalized_folders[category] = [
+                str(item).strip() for item in value if str(item).strip()
+            ] or list(folder_defaults)
+
+        settings["local_library"] = {
+            "enabled": _as_bool(local_library.get("enabled"), defaults["enabled"]),
+            "root_path": _clean_string(local_library.get("root_path")) or "",
+            "smb_base_uri": _clean_string(local_library.get("smb_base_uri")) or "",
+            "smb_auth_mode": auth_mode,
+            "extensions": [
+                str(value).strip().lstrip(".").lower()
+                for value in extensions
+                if str(value).strip()
+            ],
+            "category_folders": normalized_folders,
+            "scan_hidden": _as_bool(
+                local_library.get("scan_hidden"), defaults["scan_hidden"]
+            ),
+        }
+
 
     top_catalog = raw.get("top_catalog") or {}
     if isinstance(top_catalog, dict):

@@ -36,6 +36,135 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value).strip("-")
 
 
+def _matching_slug(value: str, media_type: str | None = None) -> str:
+    """Normalize harmless catalogue/title variants for matching only."""
+    normalized = str(value or "")
+    # Treat common conjunction spellings as equivalent for catalogue matching:
+    # "Lilo and Stitch", "Lilo & Stitch" and "Lilo et Stitch".
+    normalized = normalized.replace("&", " and ")
+    normalized = re.sub(r"(?i)\b(?:and|et)\b", " and ", normalized)
+    slug = _slug(normalized)
+    if media_type in {"tv", "show"}:
+        for suffix in (
+            "-la-serie",
+            "-la-series",
+            "-the-series",
+            "-tv-series",
+            "-serie",
+            "-series",
+        ):
+            if slug.endswith(suffix) and len(slug) > len(suffix):
+                slug = slug[: -len(suffix)].rstrip("-")
+                break
+    return slug
+
+
+def _bare_sequel_number(slug: str) -> int | None:
+    """Return a terminal sequel number, excluding explicit part/volume labels."""
+    parts = [part for part in str(slug or "").split("-") if part]
+    if not parts or not parts[-1].isdigit():
+        return None
+    if len(parts) >= 2 and parts[-2] in {
+        "part", "partie", "chapter", "chapitre", "volume", "vol", "tome",
+    }:
+        return None
+    value = int(parts[-1])
+    return value if 1 <= value <= 99 else None
+
+
+def _localized_title_alias(wanted_slug: str, candidate_slug: str) -> bool:
+    """Recognize strong original/localized title variants.
+
+    The caller must require an exact release year. This helper only accepts
+    either a catalogue title of at least three tokens embedded in the local
+    title, or a distinctive shared franchise prefix of at least two tokens.
+    """
+    wanted = [part for part in str(wanted_slug or "").split("-") if part]
+    candidate = [part for part in str(candidate_slug or "").split("-") if part]
+    if not wanted or not candidate:
+        return False
+
+    # Example:
+    # "Indiana Jones and the Raiders of the Lost Ark"
+    # -> "Raiders of the Lost Ark".
+    if len(candidate) >= 3:
+        needle = "-" + "-".join(candidate) + "-"
+        haystack = "-" + "-".join(wanted) + "-"
+        if needle in haystack:
+            return True
+    if len(wanted) >= 3:
+        needle = "-" + "-".join(wanted) + "-"
+        haystack = "-" + "-".join(candidate) + "-"
+        if needle in haystack:
+            return True
+
+    # Example: original English franchise title vs localized French title
+    # where only "Indiana Jones" remains identical.
+    if len(wanted) >= 4 and len(candidate) >= 4:
+        common = 0
+        for left, right in zip(wanted, candidate):
+            if left != right:
+                break
+            common += 1
+        if common >= 2:
+            prefix_chars = sum(len(part) for part in wanted[:common])
+            if prefix_chars >= 8:
+                return True
+
+    return False
+
+
+def _first_installment_base_slug(slug: str) -> str:
+    """Return a base title when a filename only adds a first-part label."""
+    value = str(slug or "").strip("-")
+    for suffix in (
+        "-partie-1",
+        "-part-1",
+        "-part-one",
+        "-part-i",
+        "-chapitre-1",
+        "-chapter-1",
+        "-chapter-one",
+    ):
+        if value.endswith(suffix) and len(value) > len(suffix) + 2:
+            return value[: -len(suffix)].rstrip("-")
+    return value
+
+
+def _franchise_prefix_alias(wanted_slug: str, candidate_slug: str) -> bool:
+    """Match localized franchise numbering against a descriptive local title.
+
+    Examples:
+      "largo-winch-le-prix-de-l-argent" <-> "largo-winch-3"
+      "mission-impossible-dead-reckoning" <-> "mission-impossible-7"
+
+    The caller must additionally require an exact release year. We require at
+    least two meaningful leading tokens and a numeric sequel marker on one
+    side, so this never acts as a generic same-franchise fuzzy match.
+    """
+    wanted = [p for p in str(wanted_slug or "").split("-") if p]
+    candidate = [p for p in str(candidate_slug or "").split("-") if p]
+    if len(wanted) < 2 or len(candidate) < 2:
+        return False
+
+    common = 0
+    for left, right in zip(wanted, candidate):
+        if left != right:
+            break
+        common += 1
+    if common < 2:
+        return False
+
+    wanted_tail = wanted[common:]
+    candidate_tail = candidate[common:]
+    has_number = any(part.isdigit() for part in wanted_tail + candidate_tail)
+    if not has_number:
+        return False
+
+    # One side must be substantially more descriptive than the numbered alias.
+    return abs(len(wanted) - len(candidate)) >= 2
+
+
 def fallback_key(media_type: str, title: str) -> str:
     return f"{media_type}:{_slug(title)}"
 
@@ -152,6 +281,8 @@ def _find_imdb_id(value: Any) -> str | None:
 
 DISNEY_RESOLUTION_CACHE_HOURS = 24
 TOP_CATALOG_CACHE_HOURS = 12
+PROVIDER_CACHE_HOURS = 2
+JUSTWATCH_BLOCK_MINUTES = 30
 IMDB_POSTER_CACHE_DAYS = 90
 IMDB_POSTER_BATCH_SIZE = 20
 
@@ -995,6 +1126,78 @@ class JustWatchClient:
     def _normalize_imdb_id(imdb_id):
         value = str(imdb_id or "").strip().lower()
         return value if re.fullmatch(r"tt\d{7,10}", value) else None
+
+    async def _async_imdb_local_detail(self, imdb_id):
+        """Fetch poster + basic metadata for a verified local IMDb id."""
+        imdb_id = self._normalize_imdb_id(imdb_id)
+        if not imdb_id:
+            return None
+
+        cache_key = f"imdb-local-detail-v1:{imdb_id}"
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh_hours(cached, IMDB_POSTER_CACHE_DAYS * 24):
+                return cached
+
+        query = f"""
+        query LocalTitleDetail {{
+          title(id: "{imdb_id}") {{
+            titleText {{ text }}
+            releaseYear {{ year }}
+            primaryImage {{ url width height }}
+            ratingsSummary {{ aggregateRating voteCount }}
+            plot {{ plotText {{ plainText }} }}
+          }}
+        }}
+        """
+        try:
+            async with self._sem:
+                async with self.session.post(
+                    "https://caching.graphql.imdb.com/",
+                    json={"query": query},
+                    headers={
+                        "User-Agent": UA,
+                        "Accept": "application/graphql+json, application/json",
+                        "Content-Type": "application/json",
+                        "Origin": "https://www.imdb.com",
+                        "Referer": "https://www.imdb.com/",
+                        "x-imdb-client-name": "imdb-web-next",
+                        "x-imdb-user-language": "fr-FR",
+                        "x-imdb-user-country": "FR",
+                    },
+                    timeout=25,
+                ) as resp:
+                    if resp.status >= 400:
+                        _LOGGER.debug(
+                            "IMDb local detail HTTP %s for %s", resp.status, imdb_id
+                        )
+                        return None
+                    payload = await resp.json()
+        except Exception as err:
+            _LOGGER.debug("IMDb local detail failed for %s: %s", imdb_id, err)
+            return None
+
+        title_data = ((payload.get("data") or {}).get("title") or {})
+        image = title_data.get("primaryImage") or {}
+        ratings = title_data.get("ratingsSummary") or {}
+        plot = ((title_data.get("plot") or {}).get("plotText") or {})
+        result = {
+            "imdb_id": imdb_id,
+            "title": ((title_data.get("titleText") or {}).get("text") or None),
+            "year": ((title_data.get("releaseYear") or {}).get("year") or None),
+            "poster": image.get("url"),
+            "rating": ratings.get("aggregateRating"),
+            "imdb_votes": ratings.get("voteCount"),
+            "description": plot.get("plainText"),
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "cache_schema": METADATA_CACHE_SCHEMA,
+        }
+        if result["poster"] and not str(result["poster"]).startswith(("http://", "https://")):
+            result["poster"] = None
+
+        if self.store:
+            self.store.set_metadata(cache_key, result)
+        return result
 
     async def _async_imdb_posters(self, imdb_ids):
         """Return IMDb primary poster URLs keyed by canonical IMDb id.
@@ -2409,6 +2612,448 @@ class JustWatchClient:
             "packages": self.package_names(provider),
         }
 
+    async def async_search_local_title(
+        self, title, media_type, year=None, classification=None
+    ):
+        """Resolve a local-library filename to localized JustWatch/IMDb metadata.
+
+        Matching is deliberately conservative. IMDb autocomplete supplies a
+        canonical id when possible; JustWatch candidates are then scored by
+        title, release year, media type and that IMDb id. When a reliable
+        JustWatch match cannot be established, the local item is kept and an
+        IMDb-only poster fallback is returned instead of forcing a wrong title.
+        """
+        title = str(title or "").strip()
+        if not title:
+            return None
+
+        media_type = "tv" if str(media_type).lower() in {"tv", "show"} else "movie"
+        object_type = "SHOW" if media_type == "tv" else "MOVIE"
+        classification = classification or {}
+        include_age = bool(classification.get("enabled", True)) and (
+            classification.get("france", True)
+            or classification.get("us_fallback", True)
+        )
+
+        try:
+            wanted_year = int(year) if year not in (None, "") else None
+        except (TypeError, ValueError):
+            wanted_year = None
+
+        cache_key = (
+            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
+        )
+        wanted_slug_for_cache = _matching_slug(title, media_type)
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh(cached) and cached.get("metadata_status"):
+                cached_slug = _matching_slug(
+                    str(cached.get("title") or ""), media_type
+                )
+                wanted_sequel = _bare_sequel_number(wanted_slug_for_cache)
+                cached_sequel = _bare_sequel_number(cached_slug)
+                sequel_cache_valid = (
+                    wanted_sequel == cached_sequel
+                    or (wanted_sequel is None and cached_sequel is None)
+                )
+                cache_quality_valid = (
+                    cached.get("metadata_status") in {"matched", "imdb_only"}
+                    and bool(cached.get("poster"))
+                )
+                if sequel_cache_valid and cache_quality_valid:
+                    if cached.get("age_resolved"):
+                        age = {
+                            "fr": cached.get("age_fr"),
+                            "us": cached.get("age_us"),
+                            "imdb_id": cached.get("imdb_id"),
+                        }
+                        value, country = self.select_age(age, classification)
+                        cached["age_certification"] = value
+                        cached["age_country"] = country
+                    return cached
+
+        expected_imdb = await self._async_imdb_id(
+            title, wanted_year, media_type, strict=True
+        )
+
+        payload = {
+            "operationName": "SearchStreamingTitle",
+            "variables": {
+                "country": "FR",
+                "language": "fr",
+                "first": 10,
+                "filter": {
+                    "searchQuery": title,
+                    "objectTypes": [object_type],
+                },
+            },
+            "query": self.SEARCH_QUERY,
+        }
+
+        edges = []
+        search_error = None
+        try:
+            async with self._sem:
+                data = await self._post(payload)
+            edges = ((data.get("popularTitles") or {}).get("edges") or [])
+        except Exception as err:
+            search_error = err
+            _LOGGER.warning("JustWatch local search failed for %s: %s", title, err)
+
+        wanted_slug = _matching_slug(title, media_type)
+
+        def candidate_score(node):
+            if not isinstance(node, dict) or node.get("objectType") != object_type:
+                return -999
+            content = node.get("content") or {}
+            candidate_title = str(content.get("title") or "").strip()
+            candidate_slug = _matching_slug(candidate_title, media_type)
+
+            candidate_year = content.get("originalReleaseYear")
+            try:
+                candidate_year = int(candidate_year) if candidate_year else None
+            except (TypeError, ValueError):
+                candidate_year = None
+
+            if wanted_year and candidate_year:
+                delta = abs(candidate_year - wanted_year)
+                if delta > 1:
+                    return -999
+
+            ext = content.get("externalIds") or {}
+            candidate_imdb = self._normalize_imdb_id(ext.get("imdbId"))
+            imdb_bridge = bool(
+                expected_imdb and candidate_imdb == expected_imdb
+            )
+
+            # A strictly resolved IMDb id is stronger than localized-title text.
+            # This is essential when a local filename uses the original English
+            # title while JustWatch FR returns a completely different French
+            # title (e.g. Indiana Jones / Raiders of the Lost Ark).
+            if imdb_bridge:
+                points = 20
+            else:
+                if not wanted_slug or not candidate_slug:
+                    return -999
+
+                wanted_sequel = _bare_sequel_number(wanted_slug)
+                candidate_sequel = _bare_sequel_number(candidate_slug)
+                if (
+                    wanted_sequel != candidate_sequel
+                    and (wanted_sequel is not None or candidate_sequel is not None)
+                ):
+                    return -999
+
+                similarity = SequenceMatcher(None, wanted_slug, candidate_slug).ratio()
+                contains = wanted_slug in candidate_slug or candidate_slug in wanted_slug
+
+                exact_year = bool(
+                    wanted_year and candidate_year and candidate_year == wanted_year
+                )
+                expanded_title = bool(
+                    exact_year
+                    and len(wanted_slug) >= 7
+                    and candidate_slug.startswith(wanted_slug + "-")
+                )
+                local_subtitle_alias = bool(
+                    exact_year
+                    and len(candidate_slug) >= 5
+                    and wanted_slug.startswith(candidate_slug + "-")
+                )
+                first_installment_alias = bool(
+                    exact_year
+                    and wanted_slug != candidate_slug
+                    and _first_installment_base_slug(wanted_slug)
+                    == _first_installment_base_slug(candidate_slug)
+                )
+                franchise_number_alias = bool(
+                    exact_year
+                    and wanted_slug != candidate_slug
+                    and _franchise_prefix_alias(wanted_slug, candidate_slug)
+                )
+                localized_title_alias = bool(
+                    exact_year
+                    and wanted_slug != candidate_slug
+                    and _localized_title_alias(wanted_slug, candidate_slug)
+                )
+
+                if candidate_slug == wanted_slug:
+                    points = 12
+                elif similarity >= 0.94:
+                    points = 10
+                elif similarity >= 0.88:
+                    points = 8
+                elif contains and similarity >= 0.72:
+                    points = 6
+                elif expanded_title:
+                    points = 9
+                elif local_subtitle_alias:
+                    points = 10
+                elif first_installment_alias:
+                    points = 10
+                elif franchise_number_alias:
+                    points = 10
+                elif localized_title_alias:
+                    points = 10
+                else:
+                    return -999
+
+                if expected_imdb and candidate_imdb and candidate_imdb != expected_imdb:
+                    points -= 2
+
+            if wanted_year and candidate_year:
+                points += 8 if candidate_year == wanted_year else 3
+
+            return points
+
+        candidates = [
+            (candidate_score((edge or {}).get("node") or {}), (edge or {}).get("node") or {})
+            for edge in edges
+        ]
+        candidates = [entry for entry in candidates if entry[0] > -999]
+        candidates.sort(key=lambda entry: entry[0], reverse=True)
+
+        selected = candidates[0][1] if candidates else None
+        selected_score = candidates[0][0] if candidates else None
+        minimum_score = 16 if wanted_year else 10
+
+        # If two different works are effectively tied, fail closed instead of
+        # selecting whichever JustWatch happened to return first.
+        if (
+            selected is not None
+            and len(candidates) > 1
+            and candidates[1][0] >= minimum_score
+            and selected_score is not None
+            and selected_score - candidates[1][0] <= 1
+        ):
+            first_id = selected.get("objectId") or selected.get("id")
+            second = candidates[1][1]
+            second_id = second.get("objectId") or second.get("id")
+            if first_id != second_id:
+                selected = None
+
+        if selected is None or selected_score is None or selected_score < minimum_score:
+            imdb_detail = (
+                await self._async_imdb_local_detail(expected_imdb)
+                if expected_imdb
+                else None
+            ) or {}
+            result = {
+                "title": imdb_detail.get("title") or title,
+                "year": imdb_detail.get("year") or wanted_year,
+                "poster": imdb_detail.get("poster"),
+                "poster_source": "imdb" if imdb_detail.get("poster") else None,
+                "description": imdb_detail.get("description"),
+                "rating": imdb_detail.get("rating"),
+                "rating_source": "IMDb" if imdb_detail.get("rating") is not None else None,
+                "imdb_votes": imdb_detail.get("imdb_votes"),
+                "age_certification": None,
+                "age_country": None,
+                "age_fr": None,
+                "age_us": None,
+                "age_resolved": False,
+                "imdb_id": expected_imdb,
+                "details_url": (
+                    f"https://www.imdb.com/title/{expected_imdb}/"
+                    if expected_imdb else None
+                ),
+                "providers": {},
+                "canonical_media_key": (
+                    f"imdb:{expected_imdb}" if expected_imdb else None
+                ),
+                "metadata_status": "imdb_only" if expected_imdb else "unmatched",
+                "match_score": selected_score,
+                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "cache_schema": METADATA_CACHE_SCHEMA,
+            }
+            useful_imdb_fallback = bool(
+                expected_imdb
+                and (
+                    result.get("poster")
+                    or result.get("rating") is not None
+                    or result.get("description")
+                )
+            )
+            if search_error and not useful_imdb_fallback:
+                raise RuntimeError(str(search_error))
+            if self.store:
+                self.store.set_metadata(cache_key, result)
+            return result
+
+        content = selected.get("content") or {}
+        scoring = content.get("scoring") or {}
+        if (
+            not content.get("shortDescription")
+            or not any(
+                scoring.get(key) is not None
+                for key in ("imdbScore", "jwRating", "tmdbScore")
+            )
+        ) and selected.get("id"):
+            try:
+                detail = await self._async_title_detail(selected.get("id"))
+            except Exception as err:
+                _LOGGER.debug("Local title detail failed for %s: %s", title, err)
+                detail = None
+            if detail:
+                merged = dict(content)
+                for key, value in detail.items():
+                    if value is not None and value != "":
+                        merged[key] = value
+                content = merged
+
+        object_id = selected.get("objectId")
+        localized_title = str(content.get("title") or title).strip() or title
+        release_year = content.get("originalReleaseYear") or wanted_year
+        full_path = content.get("fullPath")
+        details_url = "https://www.justwatch.com" + full_path if full_path else None
+        rating, rating_source = self._rating(content)
+
+        ext = content.get("externalIds") or {}
+        justwatch_imdb = self._normalize_imdb_id(ext.get("imdbId"))
+
+        age_info = None
+        if include_age:
+            age_info = await self._async_age_certification(
+                object_id,
+                media_type,
+                details_url,
+                localized_title,
+                release_year,
+                preferred_imdb_id=justwatch_imdb,
+            )
+        age_info = age_info or {"fr": None, "us": None, "imdb_id": None}
+        age_value, age_country = self.select_age(age_info, classification)
+
+        # Canonical poster source remains IMDb. The crucial point is that for
+        # a JustWatch-confirmed work, its explicit externalIds.imdbId is the
+        # strongest binding to the correct IMDb title. Age-resolution and
+        # autocomplete ids are only fallbacks.
+        imdb_id = self._normalize_imdb_id(
+            justwatch_imdb or age_info.get("imdb_id") or expected_imdb
+        )
+        poster_lookup = await self._async_imdb_posters([imdb_id]) if imdb_id else {}
+        jw_poster = poster_url(content.get("fullPosterUrl"))
+        imdb_poster = poster_lookup.get(imdb_id) if imdb_id else None
+
+        result = {
+            "title": localized_title,
+            "year": release_year,
+            "poster": imdb_poster or jw_poster,
+            "poster_source": "imdb" if imdb_poster else ("justwatch" if jw_poster else None),
+            "description": content.get("shortDescription"),
+            "rating": rating,
+            "rating_source": rating_source,
+            "age_certification": age_value,
+            "age_country": age_country,
+            "age_fr": age_info.get("fr"),
+            "age_us": age_info.get("us"),
+            "age_resolved": include_age,
+            "imdb_id": imdb_id,
+            "details_url": details_url,
+            "providers": self._provider_offers(selected),
+            "canonical_media_key": (
+                f"jw:{object_id}" if object_id is not None
+                else (f"imdb:{imdb_id}" if imdb_id else None)
+            ),
+            "metadata_status": "matched",
+            "match_score": selected_score,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "cache_schema": METADATA_CACHE_SCHEMA,
+        }
+        if self.store:
+            self.store.set_metadata(cache_key, result)
+        return result
+
+    async def async_enrich_local_items(self, items, classification=None):
+        """Enrich local-library items in place while preserving path identity."""
+        works = [item for item in (items or []) if isinstance(item, dict)]
+        if not works:
+            return works
+
+        unique = {}
+        for item in works:
+            lookup_title = str(
+                item.get("lookup_title") or item.get("title") or ""
+            ).strip()
+            key = (
+                "tv" if item.get("media_type") == "tv" else "movie",
+                lookup_title,
+                item.get("year"),
+            )
+            if key[1]:
+                unique.setdefault(key, []).append(item)
+
+        keys = list(unique)
+        for start in range(0, len(keys), 4):
+            if start:
+                await asyncio.sleep(0.15)
+            chunk = keys[start : start + 4]
+            results = await asyncio.gather(
+                *(
+                    self.async_search_local_title(
+                        title, media_type, year, classification
+                    )
+                    for media_type, title, year in chunk
+                ),
+                return_exceptions=True,
+            )
+            for key, metadata in zip(chunk, results):
+                if isinstance(metadata, Exception) or not metadata:
+                    continue
+
+                media_type, title, year = key
+
+                # Explicit collection-volume labels (#1, Vol. 1, Tome 1...)
+                # can represent physical files/discs of a TV programme rather
+                # than movie sequels. The scanner cannot infer that from the
+                # filename alone because there is no SxxExx marker. If the
+                # strict movie lookup fails, retry the same canonical lookup
+                # title as a TV show. This keeps normal movies strict while
+                # restoring TV compilations such as "La Télé des Inconnus #1".
+                has_volume_lookup_alias = any(
+                    str(item.get("lookup_title") or "").strip()
+                    and str(item.get("lookup_title") or "").strip()
+                    != str(item.get("title") or "").strip()
+                    for item in unique[key]
+                )
+                if (
+                    media_type == "movie"
+                    and metadata.get("metadata_status") == "unmatched"
+                    and has_volume_lookup_alias
+                ):
+                    try:
+                        tv_metadata = await self.async_search_local_title(
+                            title, "tv", year, classification
+                        )
+                    except Exception as err:
+                        _LOGGER.debug(
+                            "Local TV fallback failed for %s: %s", title, err
+                        )
+                        tv_metadata = None
+                    if (
+                        tv_metadata
+                        and tv_metadata.get("metadata_status") != "unmatched"
+                    ):
+                        metadata = dict(tv_metadata)
+                        metadata["resolved_media_type"] = "tv"
+
+                for item in unique[key]:
+                    local_id = item.get("local_id")
+                    local_media_key = item.get("media_key") or local_id
+                    parsed_title = item.get("title")
+                    lookup_title = item.get("lookup_title") or parsed_title
+                    for field, value in metadata.items():
+                        if value is not None:
+                            item[field] = value
+                    item["parsed_title"] = parsed_title
+                    item["lookup_title"] = lookup_title
+                    item["local_id"] = local_id
+                    item["media_key"] = local_media_key
+
+        if self.store:
+            await self.store.async_save()
+        return works
+
     async def async_search_localized_netflix(
         self, original_title, media_type, classification=None
     ):
@@ -2606,4 +3251,603 @@ class JustWatchClient:
 
         if self.store:
             await self.store.async_save()
+
+class LocalMetadataClient(JustWatchClient):
+    """Metadata client dedicated to Streaming Local.
+
+    It deliberately owns its concurrency, cooldown and cache namespace so a
+    NAS scan can never throttle or alter the historical Streaming/Top engine.
+    """
+
+    def __init__(self, session, store=None):
+        super().__init__(session, store)
+        # IMDb and JustWatch are deliberately isolated inside Streaming Local.
+        # IMDb can safely run four lookups in parallel; JustWatch remains
+        # serialized so Local scans cannot recreate the previous HTTP 403 burst.
+        self._sem = asyncio.Semaphore(4)
+        self._jw_sem = asyncio.Semaphore(1)
+        self._local_jw_blocked_until: datetime | None = None
+        self._local_last_jw_request = 0.0
+
+    async def _post(self, payload):
+        # Local-only GraphQL path: strictly serialized and rate-limited.
+        async with self._jw_sem:
+            now = datetime.now(timezone.utc)
+            if self._local_jw_blocked_until and now < self._local_jw_blocked_until:
+                remaining = max(
+                    1,
+                    int(
+                        (self._local_jw_blocked_until - now).total_seconds() // 60
+                    )
+                    + 1,
+                )
+                raise RuntimeError(
+                    f"JustWatch temporairement en pause après HTTP 403 ({remaining} min)"
+                )
+
+            loop = asyncio.get_running_loop()
+            elapsed = loop.time() - self._local_last_jw_request
+            if elapsed < 1.0:
+                await asyncio.sleep(1.0 - elapsed)
+            self._local_last_jw_request = loop.time()
+
+            async with self.session.post(
+                JUSTWATCH_GRAPHQL,
+                json=payload,
+                headers={
+                    "User-Agent": UA,
+                    "Origin": "https://www.justwatch.com",
+                    "Referer": "https://www.justwatch.com/fr/",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            ) as resp:
+                text = await resp.text()
+                if resp.status == 403:
+                    self._local_jw_blocked_until = datetime.now(
+                        timezone.utc
+                    ) + timedelta(minutes=JUSTWATCH_BLOCK_MINUTES)
+                    raise RuntimeError(
+                        "JustWatch HTTP 403 — mise en pause temporaire"
+                    )
+                if resp.status >= 400:
+                    raise RuntimeError(f"JustWatch HTTP {resp.status}")
+                data = await resp.json()
+
+            self._local_jw_blocked_until = None
+            if data.get("errors"):
+                raise RuntimeError(
+                    data["errors"][0].get("message", "Erreur GraphQL")
+                )
+            return data.get("data") or {}
+
+
+    async def _async_imdb_id(self, title, year=None, media_type=None, strict=False):
+        """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
+        if not title:
+            return None
+        cache_prefix = (
+            "local-imdb-id-strict-v1" if strict else "local-imdb-id-v1"
+        )
+        cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
+        wanted_title_for_cache = _matching_slug(str(title), media_type)
+        try:
+            wanted_year_for_cache = int(year) if year else None
+        except (TypeError, ValueError):
+            wanted_year_for_cache = None
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh(cached) and cached.get("imdb_id"):
+                if not strict:
+                    return cached.get("imdb_id")
+                cached_title = _matching_slug(
+                    str(cached.get("resolved_title") or ""), media_type
+                )
+                wanted_sequel = _bare_sequel_number(wanted_title_for_cache)
+                cached_sequel = _bare_sequel_number(cached_title)
+                try:
+                    cached_year = (
+                        int(cached.get("resolved_year"))
+                        if cached.get("resolved_year") else None
+                    )
+                except (TypeError, ValueError):
+                    cached_year = None
+                franchise_cache_alias = bool(
+                    wanted_year_for_cache
+                    and cached_year == wanted_year_for_cache
+                    and _franchise_prefix_alias(
+                        wanted_title_for_cache, cached_title
+                    )
+                )
+                if (
+                    cached_title
+                    and (
+                        wanted_sequel == cached_sequel
+                        or franchise_cache_alias
+                    )
+                ):
+                    return cached.get("imdb_id")
+
+        imdb_id = None
+        resolved_title = None
+        resolved_year = None
+        try:
+            url = (
+                "https://v3.sg.media-imdb.com/suggestion/titles/x/"
+                + quote(str(title).strip().lower(), safe="")
+                + ".json"
+            )
+            async with self._sem:
+                async with self.session.get(
+                    url,
+                    headers={"User-Agent": UA, "Accept": "application/json"},
+                    timeout=20,
+                ) as resp:
+                    if resp.status < 400:
+                        data = await resp.json()
+                        hits = [
+                            h for h in (data.get("d") or [])
+                            if str(h.get("id") or "").startswith("tt")
+                        ]
+
+                        want_year = None
+                        try:
+                            want_year = int(year) if year else None
+                        except (TypeError, ValueError):
+                            pass
+                        want_title = _matching_slug(str(title), media_type)
+                        want_tv = media_type in ("tv", "show")
+
+                        if strict:
+                            def strict_score(hit):
+                                hit_title = _matching_slug(
+                                    str(hit.get("l") or ""), media_type
+                                )
+                                if not want_title or not hit_title:
+                                    return -1000
+
+                                hit_year = hit.get("y")
+                                try:
+                                    hit_year = int(hit_year) if hit_year else None
+                                except (TypeError, ValueError):
+                                    hit_year = None
+
+                                exact_year = bool(
+                                    want_year and hit_year and hit_year == want_year
+                                )
+                                franchise_number_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _franchise_prefix_alias(
+                                        want_title, hit_title
+                                    )
+                                )
+
+                                want_sequel = _bare_sequel_number(want_title)
+                                hit_sequel = _bare_sequel_number(hit_title)
+                                if (
+                                    want_sequel != hit_sequel
+                                    and (want_sequel is not None or hit_sequel is not None)
+                                    and not franchise_number_alias
+                                ):
+                                    return -1000
+
+                                similarity = SequenceMatcher(
+                                    None, want_title, hit_title
+                                ).ratio()
+                                contains = (
+                                    want_title in hit_title
+                                    or hit_title in want_title
+                                )
+                                expanded_title = bool(
+                                    exact_year
+                                    and len(want_title) >= 7
+                                    and hit_title.startswith(want_title + "-")
+                                )
+                                local_subtitle_alias = bool(
+                                    exact_year
+                                    and len(hit_title) >= 5
+                                    and want_title.startswith(hit_title + "-")
+                                )
+                                first_installment_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _first_installment_base_slug(want_title)
+                                    == _first_installment_base_slug(hit_title)
+                                )
+                                localized_title_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _localized_title_alias(want_title, hit_title)
+                                )
+
+                                # Title similarity is mandatory. Year/type alone
+                                # must never be enough to identify local media.
+                                if hit_title == want_title:
+                                    points = 14
+                                elif similarity >= 0.94:
+                                    points = 12
+                                elif similarity >= 0.88:
+                                    points = 9
+                                elif contains and similarity >= 0.72:
+                                    points = 8
+                                elif expanded_title:
+                                    points = 9
+                                elif local_subtitle_alias:
+                                    points = 10
+                                elif first_installment_alias:
+                                    points = 10
+                                elif franchise_number_alias:
+                                    points = 10
+                                elif localized_title_alias:
+                                    points = 10
+                                else:
+                                    return -1000
+
+                                # A known conflicting year is a hard rejection.
+                                if want_year and hit_year:
+                                    delta = abs(hit_year - want_year)
+                                    if delta > 1:
+                                        return -1000
+                                    points += 8 if delta == 0 else 3
+
+                                qid = str(hit.get("qid") or "").casefold()
+                                tv_show_types = {
+                                    "tvseries", "tvminiseries", "tvshort"
+                                }
+                                rejected_non_movie_types = {
+                                    "tvepisode", "videogame", "podcastseries",
+                                    "podcastepisode", "musicvideo",
+                                }
+                                if want_tv:
+                                    if qid and qid not in tv_show_types:
+                                        return -1000
+                                else:
+                                    if qid in tv_show_types or qid in rejected_non_movie_types:
+                                        return -1000
+                                points += 2
+                                return points
+
+                            ranked = sorted(
+                                (
+                                    (strict_score(hit), hit)
+                                    for hit in hits
+                                ),
+                                key=lambda entry: entry[0],
+                                reverse=True,
+                            )
+                            ranked = [entry for entry in ranked if entry[0] > -1000]
+                            minimum = 16 if want_year else 11
+                            if ranked and ranked[0][0] >= minimum:
+                                # If two different IMDb titles are essentially
+                                # tied, fail closed instead of choosing a random
+                                # poster. A future manual mapping can resolve it.
+                                ambiguous = (
+                                    len(ranked) > 1
+                                    and ranked[1][0] >= minimum
+                                    and ranked[0][0] - ranked[1][0] <= 1
+                                    and ranked[0][1].get("id") != ranked[1][1].get("id")
+                                )
+                                if not ambiguous:
+                                    best_hit = ranked[0][1]
+                                    imdb_id = best_hit.get("id")
+                                    resolved_title = best_hit.get("l")
+                                    resolved_year = best_hit.get("y")
+                        else:
+                            def score(hit):
+                                points = 0
+                                hit_title = _slug(str(hit.get("l") or ""))
+                                hit_year = hit.get("y")
+                                qid = str(hit.get("qid") or "").lower()
+                                if hit_title == want_title:
+                                    points += 8
+                                elif want_title and (
+                                    want_title in hit_title
+                                    or hit_title in want_title
+                                ):
+                                    points += 3
+                                if want_year and hit_year == want_year:
+                                    points += 6
+                                elif (
+                                    want_year
+                                    and isinstance(hit_year, int)
+                                    and abs(hit_year - want_year) <= 1
+                                ):
+                                    points += 2
+                                is_tv = qid in {
+                                    "tvseries", "tvminiseries", "tvepisode", "tvmovie"
+                                }
+                                if want_tv == is_tv:
+                                    points += 3
+                                return points
+
+                            if hits:
+                                best = max(hits, key=score)
+                                if score(best) >= 3:
+                                    imdb_id = best.get("id")
+                                    resolved_title = best.get("l")
+                                    resolved_year = best.get("y")
+                    else:
+                        _LOGGER.debug("IMDb suggestion HTTP %s for %s", resp.status, title)
+        except Exception as err:
+            _LOGGER.debug("IMDb suggestion failed for %s: %s", title, err)
+
+        if self.store:
+            self.store.set_metadata(
+                cache_key,
+                {
+                    "imdb_id": imdb_id,
+                    "resolved_title": resolved_title,
+                    "resolved_year": resolved_year,
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "cache_schema": METADATA_CACHE_SCHEMA,
+                },
+            )
+        return imdb_id
+
+    async def async_search_local_title(
+        self, title, media_type, year=None, classification=None
+    ):
+        """Resolve Local media IMDb-first; use JustWatch only as a fallback.
+
+        A verified IMDb id with a useful IMDb detail row is sufficient for
+        Streaming Local because playback uses the local SMB file, not a
+        provider offer. JustWatch is therefore consulted only when IMDb cannot
+        identify the work well enough, or when the inherited fallback needs
+        JustWatch-specific metadata.
+        """
+        title = str(title or "").strip()
+        if not title:
+            return None
+
+        media_type = (
+            "tv" if str(media_type).lower() in {"tv", "show"} else "movie"
+        )
+        classification = classification or {}
+        include_age = bool(classification.get("enabled", True)) and (
+            classification.get("france", True)
+            or classification.get("us_fallback", True)
+        )
+        try:
+            wanted_year = int(year) if year not in (None, "") else None
+        except (TypeError, ValueError):
+            wanted_year = None
+
+        cache_key = (
+            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
+        )
+        wanted_slug = _matching_slug(title, media_type)
+
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh(cached) and cached.get("metadata_status"):
+                cached_slug = _matching_slug(
+                    str(cached.get("title") or ""), media_type
+                )
+                wanted_sequel = _bare_sequel_number(wanted_slug)
+                cached_sequel = _bare_sequel_number(cached_slug)
+                cache_quality_valid = (
+                    cached.get("metadata_status") in {"matched", "imdb_only"}
+                    and bool(cached.get("poster"))
+                )
+                if (
+                    cache_quality_valid
+                    and wanted_sequel == cached_sequel
+                ):
+                    if cached.get("age_resolved"):
+                        age = {
+                            "fr": cached.get("age_fr"),
+                            "us": cached.get("age_us"),
+                            "imdb_id": cached.get("imdb_id"),
+                        }
+                        value, country = self.select_age(
+                            age, classification
+                        )
+                        cached["age_certification"] = value
+                        cached["age_country"] = country
+                    return cached
+
+        expected_imdb = await self._async_imdb_id(
+            title, wanted_year, media_type, strict=True
+        )
+
+        if expected_imdb:
+            imdb_detail = (
+                await self._async_imdb_local_detail(expected_imdb)
+            ) or {}
+
+            # Poster is the critical Local asset. Rating or synopsis makes the
+            # IMDb result rich enough to avoid a JustWatch round-trip.
+            imdb_sufficient = bool(imdb_detail.get("poster")) and bool(
+                imdb_detail.get("rating") is not None
+                or imdb_detail.get("description")
+                or imdb_detail.get("title")
+            )
+
+            if imdb_sufficient:
+                age_fr = None
+                age_us = None
+                age_value = None
+                age_country = None
+                if include_age:
+                    certs = await self._async_imdb_certificates(expected_imdb)
+                    if certs:
+                        age_fr = normalize_fr_age_certification(
+                            certs.get("FR")
+                        )
+                        age_us = normalize_us_age_certification(
+                            certs.get("US")
+                        )
+                    age_value, age_country = self.select_age(
+                        {"fr": age_fr, "us": age_us},
+                        classification,
+                    )
+
+                result = {
+                    "title": imdb_detail.get("title") or title,
+                    "year": imdb_detail.get("year") or wanted_year,
+                    "poster": imdb_detail.get("poster"),
+                    "poster_source": "imdb",
+                    "description": imdb_detail.get("description"),
+                    "rating": imdb_detail.get("rating"),
+                    "rating_source": (
+                        "IMDb"
+                        if imdb_detail.get("rating") is not None
+                        else None
+                    ),
+                    "imdb_votes": imdb_detail.get("imdb_votes"),
+                    "age_certification": age_value,
+                    "age_country": age_country,
+                    "age_fr": age_fr,
+                    "age_us": age_us,
+                    "age_resolved": include_age,
+                    "imdb_id": expected_imdb,
+                    "details_url": (
+                        f"https://www.imdb.com/title/{expected_imdb}/"
+                    ),
+                    "providers": {},
+                    "canonical_media_key": f"imdb:{expected_imdb}",
+                    "metadata_status": "imdb_only",
+                    "match_score": None,
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "cache_schema": METADATA_CACHE_SCHEMA,
+                }
+                if self.store:
+                    self.store.set_metadata(cache_key, result)
+                return result
+
+        # IMDb could not fully identify/enrich the work. Fall back to the
+        # conservative JustWatch matcher inherited from the historical code.
+        # Local _post() keeps those requests serialized and paced.
+        return await super().async_search_local_title(
+            title, media_type, wanted_year, classification
+        )
+
+    async def _async_age_certification(
+        self,
+        object_id,
+        media_type,
+        details_url=None,
+        title=None,
+        year=None,
+        preferred_imdb_id=None,
+    ):
+        """Resolve both FR and US age classifications without conversion."""
+        kind = "movie" if media_type == "movie" else "show"
+        cache_id = object_id if object_id is not None else details_url or title or "unknown"
+        cache_key = f"local-age-v1:{kind}:{cache_id}"
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh(cached):
+                return {
+                    "fr": cached.get("age_fr"),
+                    "us": cached.get("age_us"),
+                    "imdb_id": cached.get("imdb_id"),
+                }
+
+        jw_fr_age = None
+        imdb_id = self._normalize_imdb_id(preferred_imdb_id)
+
+        # JustWatch can expose a French age rating and sometimes the canonical IMDb id.
+        if object_id is not None:
+            url = (
+                f"https://apis.justwatch.com/content/titles/{kind}/{object_id}"
+                "/locale/fr_FR"
+            )
+            try:
+                async with self._jw_sem:
+                    async with self.session.get(
+                        url,
+                        headers={
+                            "User-Agent": UA,
+                            "Accept": "application/json",
+                            "Referer": "https://www.justwatch.com/fr/",
+                        },
+                        timeout=20,
+                    ) as resp:
+                        if resp.status < 400:
+                            data = await resp.json()
+                            if not imdb_id:
+                                imdb_id = _find_imdb_id(data)
+                            jw_fr_age = normalize_fr_age_certification(
+                                data.get("age_certification")
+                                or data.get("ageCertification")
+                            )
+                        else:
+                            _LOGGER.debug(
+                                "JustWatch detail HTTP %s for %s/%s",
+                                resp.status, kind, object_id,
+                            )
+            except Exception as err:
+                _LOGGER.debug(
+                    "JustWatch detail failed for %s/%s: %s", kind, object_id, err
+                )
+
+        # French JustWatch public-page fallback.
+        if not jw_fr_age and details_url:
+            try:
+                async with self._jw_sem:
+                    async with self.session.get(
+                        details_url,
+                        headers={
+                            "User-Agent": UA,
+                            "Accept": "text/html,application/xhtml+xml",
+                            "Accept-Language": "fr-FR,fr;q=0.9",
+                            "Referer": "https://www.justwatch.com/fr/",
+                        },
+                        timeout=20,
+                    ) as resp:
+                        if resp.status < 400:
+                            page = await resp.text()
+                            match = re.search(
+                                r'"(?:ageCertification|age_certification)"\s*:\s*"([^"]+)"',
+                                page, re.I,
+                            )
+                            if match:
+                                jw_fr_age = normalize_fr_age_certification(match.group(1))
+                            if not jw_fr_age:
+                                cleaned = re.sub(
+                                    r"(?is)<(?:script|style)\b.*?</(?:script|style)>",
+                                    " ", page,
+                                )
+                                cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+                                cleaned = html.unescape(cleaned)
+                                cleaned = re.sub(r"\s+", " ", cleaned)
+                                match = re.search(
+                                    r"\b(TP|10|12|16|18)\s+Âge\b", cleaned, re.I
+                                )
+                                if match:
+                                    jw_fr_age = normalize_fr_age_certification(match.group(1))
+            except Exception as err:
+                _LOGGER.debug(
+                    "JustWatch French age fallback failed for %s: %s", details_url, err
+                )
+
+        if not imdb_id:
+            imdb_id = await self._async_imdb_id(title, year, media_type)
+
+        imdb_certs = await self._async_imdb_certificates(imdb_id) if imdb_id else {}
+        imdb_fr = normalize_fr_age_certification(imdb_certs.get("FR")) if imdb_certs else None
+        imdb_us = normalize_us_age_certification(imdb_certs.get("US")) if imdb_certs else None
+
+        # IMDb France has priority, with JustWatch France as fallback.
+        fr_age = imdb_fr or jw_fr_age
+        us_age = imdb_us
+
+        result = {"fr": fr_age, "us": us_age, "imdb_id": imdb_id}
+        if self.store:
+            self.store.set_metadata(
+                cache_key,
+                {
+                    "age_fr": fr_age,
+                    "age_us": us_age,
+                    "imdb_id": imdb_id,
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "cache_schema": METADATA_CACHE_SCHEMA,
+                },
+            )
+        return result
+
+
 

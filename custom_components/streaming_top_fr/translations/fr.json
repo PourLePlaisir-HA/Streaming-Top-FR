@@ -130,7 +130,8 @@
           "family": "Famille",
           "classification": "Classification d'âge",
           "players": "Destinations de lecture",
-          "default_decade": "Décennie par défaut"
+          "default_decade": "Décennie par défaut",
+          "local_library": "Streaming Local"
         }
       },
       "general": {
@@ -235,6 +236,32 @@
         "description": "Choisissez la décennie affichée automatiquement à l’ouverture de la carte Top Streaming. Elle restera activée.",
         "data": {
           "default_decade": "Décennie par défaut"
+        }
+      },
+      "local_library": {
+        "title": "Streaming Local",
+        "description": "Configure l’accès à la vidéothèque montée dans Home Assistant et l’URI SMB utilisée par VLC. Les identifiants SMB ne sont jamais ajoutés à l’URI ni exposés à la carte.",
+        "data": {
+          "local_enabled": "Activer Streaming Local",
+          "local_root_path": "Chemin dans Home Assistant",
+          "local_smb_base_uri": "URI SMB de base pour VLC",
+          "local_smb_auth_mode": "Authentification SMB VLC",
+          "local_extensions": "Extensions vidéo",
+          "local_movies_folders": "Dossiers Films",
+          "local_series_folders": "Dossiers Séries",
+          "local_animation_folders": "Dossiers Animation",
+          "local_documentaries_folders": "Dossiers Documentaires",
+          "local_scan_hidden": "Scanner les dossiers cachés"
+        },
+        "data_description": {
+          "local_root_path": "Exemple : /medias/videos",
+          "local_smb_base_uri": "Exemple : smb://192.168.0.200/videos — sans login ni mot de passe.",
+          "local_smb_auth_mode": "Pour le moment, VLC réutilise les identifiants SMB déjà mémorisés dans VLC.",
+          "local_extensions": "Liste séparée par des virgules, par exemple : mkv, avi, mp4, m4v",
+          "local_movies_folders": "Noms de dossiers reconnus comme Films, séparés par des virgules.",
+          "local_series_folders": "Noms de dossiers reconnus comme Séries, séparés par des virgules.",
+          "local_animation_folders": "Noms de dossiers reconnus comme Animation, séparés par des virgules.",
+          "local_documentaries_folders": "Noms de dossiers reconnus comme Documentaires, séparés par des virgules."
         }
       }
     },

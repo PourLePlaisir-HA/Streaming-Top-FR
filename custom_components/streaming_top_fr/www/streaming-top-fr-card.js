@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.7.1";
+const STFR_VERSION = "0.8.0";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -425,7 +425,424 @@ class StreamingTopFrCatalogCard extends StreamingTopFrCard {
 }
 customElements.define('streaming-top-fr-catalog-card',StreamingTopFrCatalogCard);
 
+
+class StreamingLocalCard extends HTMLElement {
+  setConfig(c){
+    this._config={title:"Streaming Local",default_category:"movies",...c};
+    if(!this.shadowRoot)this.attachShadow({mode:"open"});
+    this._category=String(this._config.default_category||"movies");
+    this._data=null;this._loading=false;this._enriching=false;this._error=null;
+    this._render();
+  }
+  set hass(h){
+    this._hass=h;
+    if(!this._data&&!this._loading)this._load(false);
+  }
+  getCardSize(){return 6}
+  _esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
+  _categories(){
+    // Keep all library sections visible, even when a category currently has
+    // zero items. This makes scan/classification problems immediately visible
+    // instead of silently hiding the missing category.
+    return ["movies","series","animation","documentaries"];
+  }
+  _label(cat){return{movies:"Films",series:"Séries",animation:"Animation",documentaries:"Documentaires"}[cat]||cat}
+  _icon(cat){return{movies:"mdi:filmstrip",series:"mdi:television-play",animation:"mdi:creation",documentaries:"mdi:earth"}[cat]||"mdi:movie-open"}
+  _collectionKey(item){
+    const parts=String(item?.relative_path||"").split("/").filter(Boolean);
+    if(parts.length<3)return null;
+    return parts.slice(0,2).join("/").toLocaleLowerCase("fr");
+  }
+  _sortMovieCollections(items){
+    const source=[...(items||[])];
+    const groups=new Map();
+    for(const item of source){
+      const key=this._collectionKey(item);
+      if(!key)continue;
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(item);
+    }
+    const sorted=new Map();
+    for(const [key,group] of groups.entries()){
+      if(group.length<2)continue;
+      sorted.set(key,[...group].sort((a,b)=>{
+        const ay=Number(a?.year),by=Number(b?.year);
+        const aYear=Number.isFinite(ay)&&ay>0?ay:Number.MAX_SAFE_INTEGER;
+        const bYear=Number.isFinite(by)&&by>0?by:Number.MAX_SAFE_INTEGER;
+        return aYear-bYear||
+          String(a?.title||a?.parsed_title||a?.filename||"").localeCompare(
+            String(b?.title||b?.parsed_title||b?.filename||""),"fr"
+          );
+      }));
+    }
+    if(!sorted.size)return source;
+    const cursor=new Map();
+    return source.map(item=>{
+      const key=this._collectionKey(item),group=key?sorted.get(key):null;
+      if(!group)return item;
+      const index=cursor.get(key)||0;
+      cursor.set(key,index+1);
+      return group[index]||item;
+    });
+  }
+  _rawItems(category=this._category){
+    const items=(this._data?.items||[]).filter(i=>i.bucket===category);
+    return category==="movies"?this._sortMovieCollections(items):items;
+  }
+  _episodicSeasonGroups(category){
+    const raw=this._rawItems(category);
+    const standalone=[];
+    const groups=new Map();
+
+    for(const item of raw){
+      const episodic=item?.episodic===true||
+        (item?.season!==null&&item?.season!==undefined&&
+         item?.episode!==null&&item?.episode!==undefined);
+      if(!episodic){
+        standalone.push(item);
+        continue;
+      }
+
+      const fallbackTitle=String(
+        item.parsed_title||item.title||item.filename||""
+      ).trim().toLocaleLowerCase("fr");
+      const seriesKey=String(
+        item.imdb_id||item.canonical_media_key||
+        `series:${category}:${fallbackTitle}`
+      ).trim();
+      const season=Number(item.season??0);
+      const seasonKey=`${seriesKey}:season:${season}`;
+      if(!groups.has(seasonKey)){
+        groups.set(seasonKey,{seriesKey,season,episodes:[]});
+      }
+      groups.get(seasonKey).episodes.push(item);
+    }
+
+    const seasons=[];
+    for(const [seasonKey,group] of groups.entries()){
+      const episodes=group.episodes;
+      episodes.sort((a,b)=>
+        Number(a.episode??0)-Number(b.episode??0)||
+        String(a.relative_path||"").localeCompare(
+          String(b.relative_path||""),"fr"
+        )
+      );
+
+      // The representative is deliberately chosen inside this season.
+      // If a season-specific poster becomes available, it is therefore
+      // naturally used instead of a poster taken from another season.
+      const representative=
+        episodes.find(i=>i.poster&&i.rating!=null)||
+        episodes.find(i=>i.poster)||
+        episodes.find(i=>i.metadata_status==="matched")||
+        episodes[0];
+
+      const franchiseTitle=String(
+        representative.title||
+        representative.franchise_title||
+        representative.parsed_title||
+        ""
+      ).trim();
+      const episodeTitles=[...new Set(
+        episodes
+          .map(ep=>String(ep.episode_title||"").trim())
+          .filter(Boolean)
+      )];
+      const seasonTitle=episodeTitles.length===1?episodeTitles[0]:null;
+
+      seasons.push({
+        ...representative,
+        is_season_group:true,
+        series_key:group.seriesKey,
+        season_key:seasonKey,
+        franchise_title:franchiseTitle,
+        season_title:seasonTitle,
+        episodes,
+        episode_count:episodes.length,
+        season:group.season,
+        episode:null,
+        filename:null,
+        relative_path:null,
+        smb_uri:null,
+      });
+    }
+
+    const combined=[...standalone,...seasons];
+    return combined.sort((a,b)=>{
+      const at=String(a.title||a.parsed_title||a.filename||"");
+      const bt=String(b.title||b.parsed_title||b.filename||"");
+      return at.localeCompare(bt,"fr")||
+        Number(a.season??-1)-Number(b.season??-1);
+    });
+  }
+  _displayItems(category=this._category){
+    return ["series","animation","documentaries"].includes(category)
+      ?this._episodicSeasonGroups(category)
+      :this._rawItems(category);
+  }
+  _items(){return this._displayItems()}
+  _categoryCount(cat){return this._displayItems(cat).length}
+  _normalizeCategory(){
+    const cats=this._categories();
+    if(cats.length&&!cats.includes(this._category))this._category=cats[0];
+  }
+  async _load(refresh=false){
+    if(!this._hass||this._loading)return;
+    this._loading=true;this._error=null;this._render();
+    try{
+      this._data=await this._hass.callWS({type:"streaming_top_fr/get_local_library",refresh:Boolean(refresh)});
+      this._normalizeCategory();
+    }catch(e){this._error=String(e)}
+    finally{this._loading=false;this._render()}
+    if(this._data?.enabled&&this._data?.count>0&&!this._data?.metadata_complete&&!this._enriching){
+      void this._enrich();
+    }
+  }
+  async _enrich(){
+    if(!this._hass||this._enriching)return;
+    this._enriching=true;this._render();
+    let retry=false;
+    try{
+      const result=await this._hass.callWS({type:"streaming_top_fr/enrich_local_library"});
+      const currentRevision=Number(this._data?.scan_revision||0);
+      const resultRevision=Number(result?.scan_revision||0);
+
+      // Never let an enrichment started from an older filesystem snapshot
+      // restore files that a later rescan has already removed or moved.
+      if(resultRevision&&currentRevision&&resultRevision<currentRevision){
+        retry=Boolean(this._data?.enabled&&this._data?.count>0&&!this._data?.metadata_complete);
+      }else{
+        this._data={...(this._data||{}),...(result||{})};
+        this._normalizeCategory();
+        this._error=null;
+        retry=Boolean(result?.stale&&this._data?.enabled&&this._data?.count>0&&!this._data?.metadata_complete);
+      }
+    }catch(e){this._error=String(e)}
+    finally{
+      this._enriching=false;this._render();
+      if(retry)void this._enrich();
+    }
+  }
+  async _refresh(){await this._load(true)}
+  _metadata(item){
+    const parts=[];
+    if(item.is_season_group){
+      if(item.year)parts.push(String(item.year));
+    }else if(item.media_type==="tv"&&item.season!=null&&item.episode!=null){
+      parts.push(`S${String(item.season).padStart(2,"0")}E${String(item.episode).padStart(2,"0")}`);
+    }else if(item.year){parts.push(String(item.year))}
+    if(item.rating!=null){
+      const n=Number(item.rating);
+      parts.push(`★ ${Number.isFinite(n)?n.toFixed(1):this._esc(item.rating)}`);
+    }
+    if(item.age_certification)parts.push(String(item.age_certification));
+    return parts.join(" · ");
+  }
+  _status(item){
+    if(item.metadata_status==="matched")return "";
+    if(item.metadata_status==="imdb_only")return '<span class="match imdb">IMDb</span>';
+    if(item.metadata_status==="unmatched")return '<span class="match unmatched">À identifier</span>';
+    return this._enriching?'<span class="match pending">Analyse…</span>':'';
+  }
+  _tile(item,index){
+    const poster=item.poster
+      ?`<img src="${this._esc(item.poster)}" alt="${this._esc(item.title||item.filename||"")}" loading="lazy">`
+      :'<div class="poster-fallback"><ha-icon icon="mdi:movie-open-outline"></ha-icon></div>';
+    const meta=this._metadata(item);
+    const title=item.title||item.parsed_title||item.filename||"Sans titre";
+    const seriesExtra=item.is_season_group
+      ?`Saison ${item.season??"?"} · ${item.episode_count} épisode${item.episode_count>1?"s":""}`
+      :"";
+    return `<button class="media" data-index="${index}" title="${this._esc(item.filename||title)}">
+      <div class="poster">${poster}${this._status(item)}</div>
+      <div class="media-title">${this._esc(title)}</div>
+      <div class="media-meta">${this._esc(meta)}</div>
+      ${seriesExtra?`<div class="series-extra">${this._esc(seriesExtra)}</div>`:""}
+    </button>`;
+  }
+  _seasonDetail(item){
+    const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
+    const episodes=[...(item.episodes||[])].sort((a,b)=>
+      Number(a.episode??0)-Number(b.episode??0)||
+      String(a.relative_path||"").localeCompare(String(b.relative_path||""),"fr")
+    );
+    const selectionKey=item.season_key||`${item.series_key||"series"}:season:${item.season??0}`;
+    const selectedId=this._seriesSelection?.[selectionKey]||null;
+    const m=document.createElement("div");m.className="modalbg";
+    const franchise=item.franchise_title||item.title||item.parsed_title||"Sans titre";
+    const storyTitle=item.season_title||"";
+    const meta=this._metadata(item);
+    const match=item.metadata_status==="matched"
+      ?"JustWatch + IMDb"
+      :item.metadata_status==="imdb_only"
+      ?"IMDb uniquement"
+      :"Non identifié";
+    const episodeRows=episodes.map((ep,index)=>{
+      const epNo=ep.episode!=null?Number(ep.episode):index+1;
+      const code=ep.season!=null&&ep.episode!=null
+        ?`S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}`
+        :`Épisode ${epNo}`;
+      const selected=selectedId&&selectedId===ep.local_id;
+      const displayTitle=ep.episode_title||storyTitle||`Épisode ${epNo}`;
+      return `<button class="episode-row ${selected?"selected":""}" data-episode-index="${index}">
+        <span class="episode-main"><strong>${this._esc(code)}</strong><small>${this._esc(displayTitle)}</small></span>
+        <ha-icon icon="${selected?"mdi:check-circle":"mdi:play-circle-outline"}"></ha-icon>
+      </button>`;
+    }).join("");
+    m.innerHTML=`<div class="modal series-modal">
+      <button class="modal-close" aria-label="Fermer">×</button>
+      <div class="modal-head">
+        ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
+        <div>
+          <h2>${this._esc(franchise)}</h2>
+          ${storyTitle?`<div class="season-story-title">${this._esc(storyTitle)}</div>`:""}
+          <div class="modal-meta">${this._esc(meta)}</div>
+          <div class="series-summary">Saison ${this._esc(item.season??"?")} · ${item.episode_count} épisode${item.episode_count>1?"s":""}</div>
+        </div>
+      </div>
+      <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
+      <div class="details">
+        <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
+      </div>
+      <div class="episode-list">${episodeRows||'<div class="state">Aucun épisode détecté pour cette saison.</div>'}</div>
+      <div class="episode-help">Sélectionnez l’épisode à lire. Seuls les épisodes réellement présents dans la vidéothèque sont affichés.</div>
+    </div>`;
+    m.onclick=e=>{if(e.target===m)m.remove()};
+    m.querySelector(".modal-close").onclick=()=>m.remove();
+    m.querySelectorAll("[data-episode-index]").forEach(b=>b.addEventListener("click",()=>{
+      const ep=episodes[Number(b.dataset.episodeIndex)];
+      if(!ep)return;
+      this._seriesSelection=this._seriesSelection||{};
+      this._seriesSelection[selectionKey]=ep.local_id;
+      this._seasonDetail(item);
+    }));
+    this.shadowRoot.appendChild(m);
+  }
+
+  _detail(item){
+    if(item?.is_season_group){this._seasonDetail(item);return}
+    const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
+    const m=document.createElement("div");m.className="modalbg";
+    const title=item.title||item.parsed_title||item.filename||"Sans titre";
+    const meta=this._metadata(item);
+    const parsed=item.parsed_title&&item.parsed_title!==item.title
+      ?`<div class="detail-row"><strong>Nom détecté</strong><span>${this._esc(item.parsed_title)}</span></div>`:"";
+    const path=item.relative_path
+      ?`<div class="detail-row"><strong>Fichier</strong><span>${this._esc(item.relative_path)}</span></div>`:"";
+    const match=item.metadata_status==="matched"
+      ?"JustWatch + IMDb"
+      :item.metadata_status==="imdb_only"
+      ?"IMDb uniquement"
+      :"Non identifié";
+    m.innerHTML=`<div class="modal">
+      <button class="modal-close" aria-label="Fermer">×</button>
+      <div class="modal-head">
+        ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
+        <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div></div>
+      </div>
+      <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
+      <div class="details">
+        <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
+        ${parsed}${path}
+      </div>
+    </div>`;
+    m.onclick=e=>{if(e.target===m)m.remove()};
+    m.querySelector(".modal-close").onclick=()=>m.remove();
+    this.shadowRoot.appendChild(m);
+  }
+  _bind(){
+    this.shadowRoot.querySelector(".refresh")?.addEventListener("click",()=>this._refresh());
+    this.shadowRoot.querySelectorAll("[data-category]").forEach(b=>b.addEventListener("click",()=>{
+      this._category=b.dataset.category;this._render();
+    }));
+    const items=this._items();
+    this.shadowRoot.querySelectorAll("[data-index]").forEach(b=>b.addEventListener("click",()=>{
+      const i=items[Number(b.dataset.index)];if(i)this._detail(i);
+    }));
+  }
+  _render(){
+    if(!this.shadowRoot)return;
+    const d=this._data;
+    const cats=this._categories();
+    const items=this._items();
+    const total=d?.count||0;
+    const enriched=d?.enriched_count||0;
+    const progress=total?Math.round((enriched/total)*100):0;
+    let body="";
+    if(this._error)body=`<div class="state error">${this._esc(this._error)}</div>`;
+    else if(!d&&this._loading)body='<div class="state">Lecture de la vidéothèque…</div>';
+    else if(d&&!d.enabled)body='<div class="state">Streaming Local est désactivé dans la configuration de l’intégration.</div>';
+    else if(d?.errors?.length&&!total)body=`<div class="state error">${d.errors.map(x=>this._esc(x)).join("<br>")}</div>`;
+    else if(d&&total===0)body='<div class="state">Aucun fichier vidéo détecté.</div>';
+    else body=`<div class="rail">${items.map((i,n)=>this._tile(i,n)).join("")}</div>`;
+
+    const status=this._enriching
+      ?`Identification des films… ${enriched}/${total}`
+      :total
+      ?`${total} fichier${total>1?"s":""} · métadonnées ${progress}%`
+      :"";
+
+    this.shadowRoot.innerHTML=`<style>
+      :host{display:block}
+      ha-card{overflow:hidden}
+      .wrap{padding:16px}
+      .top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+      .title{font-size:1.25rem;font-weight:800}
+      .status{font-size:.82rem;color:var(--secondary-text-color)}
+      .spacer{flex:1}
+      button{font:inherit;color:var(--primary-text-color)}
+      .refresh{width:36px;height:36px;border:0;border-radius:50%;background:var(--secondary-background-color);cursor:pointer;font-size:20px}
+      .tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+      .tab{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap}
+      .tab.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
+      .tab ha-icon{--mdc-icon-size:18px}
+      .rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(145px,170px);gap:12px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}
+      .media{display:block;min-width:0;padding:0;border:0;background:none;text-align:left;cursor:pointer;scroll-snap-align:start}
+      .poster{position:relative;aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:var(--secondary-background-color);box-shadow:0 2px 8px rgba(0,0,0,.18)}
+      .poster img{width:100%;height:100%;display:block;object-fit:cover}
+      .poster-fallback{width:100%;height:100%;display:grid;place-items:center;color:var(--secondary-text-color)}
+      .poster-fallback ha-icon{--mdc-icon-size:48px}
+      .media-title{margin-top:8px;font-weight:800;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+      .media-meta{margin-top:4px;min-height:17px;color:var(--secondary-text-color);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .series-extra{margin-top:3px;color:var(--secondary-text-color);font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .match{position:absolute;top:7px;left:7px;border-radius:999px;padding:4px 7px;background:rgba(0,0,0,.72);color:#fff;font-size:.68rem;font-weight:800}
+      .match.imdb{background:rgba(155,110,0,.88)}.match.unmatched{background:rgba(130,35,35,.88)}.match.pending{background:rgba(30,30,30,.72)}
+      .state{padding:28px 12px;text-align:center;color:var(--secondary-text-color)}
+      .error{color:var(--error-color)}
+      .modalbg{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+      .modal{position:relative;width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;padding:20px;border-radius:20px;background:var(--card-background-color)}
+      .modal-close{position:absolute;right:10px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:var(--secondary-background-color);font-size:25px;cursor:pointer}
+      .modal-head{display:flex;gap:14px;padding-right:42px;align-items:flex-start}
+      .modal-head img{width:88px;aspect-ratio:2/3;object-fit:cover;border-radius:9px}
+      .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
+      .modal p{line-height:1.45;color:var(--secondary-text-color)}
+      .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
+      .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
+      .series-summary{margin-top:6px;color:var(--secondary-text-color);font-size:.86rem}
+      .season-tabs{display:flex;gap:8px;overflow-x:auto;margin:18px 0 12px;padding-bottom:2px}
+      .season-tab{border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap;font-weight:800}
+      .season-tab.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
+      .episode-list{display:grid;gap:7px}
+      .episode-row{width:100%;display:flex;align-items:center;gap:10px;border:0;border-radius:12px;padding:10px 12px;background:var(--secondary-background-color);cursor:pointer;text-align:left}
+      .episode-row.selected{outline:2px solid var(--primary-color)}
+      .episode-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+      .episode-main small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .episode-row ha-icon{flex:0 0 auto;color:var(--primary-color)}
+      .episode-help{margin-top:12px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.35}
+      @media(max-width:600px){.wrap{padding:14px 11px}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}}
+    </style>
+    <ha-card><div class="wrap">
+      <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
+      ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+      ${body}
+    </div></ha-card>`;
+    this._bind();
+  }
+}
+customElements.define("streaming-local-card",StreamingLocalCard);
+
 window.customCards=window.customCards||[];
 window.customCards.push({type:'streaming-top-fr-card',name:'Streaming Top FR',description:'Streaming multi-services France via Netflix officiel + JustWatch'});
 window.customCards.push({type:'streaming-top-fr-catalog-card',name:'Top Streaming FR',description:'Classements par décennie Films / Animation / Séries / Famille disponibles sur vos services'});
+window.customCards.push({type:'streaming-local-card',name:'Streaming Local',description:'Vidéothèque locale Films / Séries / Animation / Documentaires avec métadonnées IMDb / JustWatch'});
 console.info(`STREAMING TOP FR ${STFR_VERSION}`);

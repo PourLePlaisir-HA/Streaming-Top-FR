@@ -8,9 +8,10 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS, CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS
 from .storage import StreamingTopStore
-from .sources import NetflixOfficialClient, JustWatchClient
+from .sources import NetflixOfficialClient, JustWatchClient, LocalMetadataClient
 from .coordinator import StreamingTopCoordinator
 from .playback import SUPPORTED_PLAYBACK_PROVIDERS, async_launch, log_launch_failure
+from .local_library import LocalLibraryScanner
 from .settings import async_load_legacy_settings, normalize_settings
 
 
@@ -60,8 +61,14 @@ async def async_setup_entry(hass, entry):
         store,
         entry,
     )
+    local_metadata = LocalMetadataClient(session, store)
     await coordinator.async_config_entry_first_refresh()
-    hass.data[DOMAIN][entry.entry_id] = {"coordinator": coordinator, "store": store}
+    hass.data[DOMAIN][entry.entry_id] = {
+        "coordinator": coordinator,
+        "store": store,
+        "local_library": LocalLibraryScanner(hass),
+        "local_metadata": local_metadata,
+    }
     await _register_frontend(hass)
     _register_ws(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -274,6 +281,173 @@ def _register_ws(hass):
         connection.send_result(msg["id"], result)
 
     @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/get_local_library",
+            vol.Optional("entry_id"): str,
+            vol.Optional("refresh", default=False): bool,
+        }
+    )
+    @websocket_api.async_response
+    async def get_local_library(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        settings = (
+            data["coordinator"].settings
+            or (data["coordinator"].data or {}).get("settings")
+            or {}
+        )
+        local_settings = settings.get("local_library") or {}
+        scanner = data["local_library"]
+
+        if msg.get("refresh") or (
+            local_settings.get("enabled", False)
+            and not scanner.last_result.items
+            and not scanner.last_result.errors
+        ):
+            result = await scanner.async_scan(local_settings)
+        else:
+            result = scanner.last_result
+
+        items = [dict(item) for item in result.items]
+        for item in items:
+            if not item.get("media_key"):
+                item["media_key"] = item.get("local_id")
+            # The Home Assistant mount path is backend-only. The frontend only
+            # needs the relative path and future VLC SMB URI.
+            item.pop("local_path", None)
+
+        enriched_count = sum(
+            1 for item in items if item.get("metadata_status")
+        )
+        connection.send_result(
+            msg["id"],
+            {
+                "enabled": bool(local_settings.get("enabled", False)),
+                "root_path": local_settings.get("root_path") or "",
+                "smb_base_uri": local_settings.get("smb_base_uri") or "",
+                "count": len(items),
+                "scan_revision": result.revision,
+                "enriched_count": enriched_count,
+                "metadata_complete": bool(items) and enriched_count == len(items),
+                "items": items,
+                "errors": list(result.errors),
+            },
+        )
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/enrich_local_library",
+            vol.Optional("entry_id"): str,
+        }
+    )
+    @websocket_api.async_response
+    async def enrich_local_library(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        coordinator = data["coordinator"]
+        settings = coordinator.settings or (coordinator.data or {}).get("settings") or {}
+        local_settings = settings.get("local_library") or {}
+        scanner = data["local_library"]
+
+        if not local_settings.get("enabled", False):
+            connection.send_error(
+                msg["id"], "local_disabled", "Streaming Local est désactivé"
+            )
+            return
+
+        result = scanner.last_result
+        if not result.items and not result.errors:
+            result = await scanner.async_scan(local_settings)
+
+        if result.errors and not result.items:
+            connection.send_result(
+                msg["id"],
+                {
+                    "ok": False,
+                    "count": 0,
+                    "enriched_count": 0,
+                    "metadata_complete": False,
+                    "items": [],
+                    "errors": list(result.errors),
+                },
+            )
+            return
+
+        source_revision = result.revision
+        await data["local_metadata"].async_enrich_local_items(
+            result.items,
+            settings.get("classification") or {},
+        )
+
+        # A refresh may have completed while metadata enrichment was running.
+        # Never send the old inventory back to the card in that case.
+        current = scanner.last_result
+        stale = current.revision != source_revision
+        if stale:
+            result = current
+
+        items = [dict(item) for item in result.items]
+        for item in items:
+            if not item.get("media_key"):
+                item["media_key"] = item.get("local_id")
+            item.pop("local_path", None)
+
+        enriched_count = sum(
+            1 for item in items if item.get("metadata_status")
+        )
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "enabled": True,
+                "stale": stale,
+                "count": len(items),
+                "scan_revision": result.revision,
+                "enriched_count": enriched_count,
+                "metadata_complete": bool(items) and enriched_count == len(items),
+                "items": items,
+                "errors": list(result.errors),
+            },
+        )
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/refresh_local_library",
+            vol.Optional("entry_id"): str,
+        }
+    )
+    @websocket_api.async_response
+    async def refresh_local_library(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        settings = (
+            data["coordinator"].settings
+            or (data["coordinator"].data or {}).get("settings")
+            or {}
+        )
+        result = await data["local_library"].async_scan(
+            settings.get("local_library") or {}
+        )
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": not result.errors,
+                "count": len(result.items),
+                "scan_revision": result.revision,
+                "errors": list(result.errors),
+            },
+        )
+
+    @websocket_api.websocket_command(
         {vol.Required("type"): f"{DOMAIN}/refresh", vol.Optional("entry_id"): str}
     )
     @websocket_api.async_response
@@ -384,6 +558,9 @@ def _register_ws(hass):
     websocket_api.async_register_command(hass, set_status)
     websocket_api.async_register_command(hass, enrich_item)
     websocket_api.async_register_command(hass, get_family_catalog)
+    websocket_api.async_register_command(hass, get_local_library)
+    websocket_api.async_register_command(hass, enrich_local_library)
+    websocket_api.async_register_command(hass, refresh_local_library)
     websocket_api.async_register_command(hass, refresh)
     websocket_api.async_register_command(hass, play)
     hass.data[DOMAIN]["_ws_registered"] = True

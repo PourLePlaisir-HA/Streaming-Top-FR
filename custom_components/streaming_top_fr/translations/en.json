@@ -9,7 +9,7 @@
           "update_hours": "Automatic refresh (hours)"
         },
         "data_description": {
-          "update_hours": "Interval between automatic updates, from 2 to 24 hours."
+          "update_hours": "Interval between automatic updates, from 2 to 168 hours (7 days)."
         }
       },
       "services": {
@@ -119,7 +119,8 @@
           "family": "Family",
           "classification": "Age ratings",
           "players": "Playback destinations",
-          "default_decade": "Default decade"
+          "default_decade": "Default decade",
+          "local_library": "Streaming Local"
         }
       },
       "general": {
@@ -224,6 +225,32 @@
         "description": "Choose the decade shown automatically when the Top Streaming card opens. It will remain enabled.",
         "data": {
           "default_decade": "Default decade"
+        }
+      },
+      "local_library": {
+        "title": "Streaming Local",
+        "description": "Configure the media library mounted in Home Assistant and the SMB URI used by VLC. SMB credentials are never embedded in the URI or exposed to the card.",
+        "data": {
+          "local_enabled": "Enable Streaming Local",
+          "local_root_path": "Home Assistant path",
+          "local_smb_base_uri": "Base SMB URI for VLC",
+          "local_smb_auth_mode": "VLC SMB authentication",
+          "local_extensions": "Video extensions",
+          "local_movies_folders": "Movie folders",
+          "local_series_folders": "TV show folders",
+          "local_animation_folders": "Animation folders",
+          "local_documentaries_folders": "Documentary folders",
+          "local_scan_hidden": "Scan hidden folders"
+        },
+        "data_description": {
+          "local_root_path": "Example: /medias/videos",
+          "local_smb_base_uri": "Example: smb://192.168.0.200/videos — without username or password.",
+          "local_smb_auth_mode": "For now, VLC reuses the SMB credentials already saved in VLC.",
+          "local_extensions": "Comma-separated list, for example: mkv, avi, mp4, m4v",
+          "local_movies_folders": "Folder names recognized as Movies, comma-separated.",
+          "local_series_folders": "Folder names recognized as TV shows, comma-separated.",
+          "local_animation_folders": "Folder names recognized as Animation, comma-separated.",
+          "local_documentaries_folders": "Folder names recognized as Documentaries, comma-separated."
         }
       }
     },
