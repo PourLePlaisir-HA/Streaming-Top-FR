@@ -154,7 +154,7 @@ def _local_library_schema(settings: dict[str, Any]) -> vol.Schema:
             ): selector.TextSelector(),
             vol.Required(
                 FIELD_LOCAL_AUTH_MODE,
-                default=str(local.get("smb_auth_mode") or "vlc_saved"),
+                default=str(local.get("smb_auth_mode") or "configured"),
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
@@ -222,7 +222,7 @@ def _apply_local_library(
         "enabled": bool(user_input.get(FIELD_LOCAL_ENABLED, False)),
         "root_path": str(user_input.get(FIELD_LOCAL_ROOT) or "").strip(),
         "smb_base_uri": str(user_input.get(FIELD_LOCAL_SMB) or "").strip().rstrip("/"),
-        "smb_auth_mode": str(user_input.get(FIELD_LOCAL_AUTH_MODE) or "vlc_saved"),
+        "smb_auth_mode": str(user_input.get(FIELD_LOCAL_AUTH_MODE) or "configured"),
         "smb_username": str(user_input.get(FIELD_LOCAL_USERNAME) or "").strip(),
         "smb_password": str(user_input.get(FIELD_LOCAL_PASSWORD) or ""),
         "extensions": extensions
