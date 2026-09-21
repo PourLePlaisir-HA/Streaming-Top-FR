@@ -443,6 +443,95 @@ StreamingTopFrCard.prototype._playSections=function(item){
 };
 
 
+// v1.0.1-beta.1: bridge Streaming/Top popups to an already indexed Local copy.
+// The historical cards remain untouched; lookup and playback are added as a
+// prototype layer so the stable Streaming engine stays byte-for-byte protected.
+StreamingTopFrCard.prototype._localCopyPlayers=function(item){
+  const cfg=item?._local_playback||{};
+  const players=Array.isArray(cfg.players)?cfg.players:[];
+  return cfg.enabled===true?players:[];
+};
+StreamingTopFrCard.prototype._localCopyPlaySection=function(item){
+  const match=item?._local_copy;
+  const players=this._localCopyPlayers(item);
+  if(!match?.local_id||!players.length)return"";
+  const buttons=players.map(player=>`<button class="vlc" data-stream-local-id="${this._esc(match.local_id)}" data-stream-local-player="${this._esc(player.id)}" style="background:linear-gradient(rgba(196,72,31,.32),rgba(91,34,22,.42)),rgba(20,16,14,.82)!important;border-color:rgba(222,86,44,.58)!important"><span class="play-brand"><ha-icon icon="mdi:vlc"></ha-icon></span><span class="playcopy"><strong>Voir sur VLC</strong><small>${this._esc(player.name||player.id)}</small></span></button>`).join("");
+  return `<div class="service-play local-vlc"><div class="playrow">${buttons}</div></div>`;
+};
+StreamingTopFrCard.prototype._playLocalCopy=async function(localId,playerId,button){
+  if(!this._hass||!localId||!playerId)return;
+  const old=button?.innerHTML;
+  if(button){
+    button.disabled=true;
+    button.innerHTML='<span class="play-brand"><ha-icon icon="mdi:loading"></ha-icon></span><span class="playcopy"><strong>Lancement…</strong></span>';
+  }
+  try{
+    await this._hass.callWS({
+      type:"streaming_top_fr/play_local",
+      local_id:localId,
+      player:playerId,
+    });
+    if(button){
+      button.innerHTML='<span class="play-brand"><ha-icon icon="mdi:check"></ha-icon></span><span class="playcopy"><strong>Lancé</strong></span>';
+    }
+  }catch(e){
+    if(button){
+      button.disabled=false;
+      button.innerHTML=old||"Voir sur VLC";
+    }
+    this._error=`VLC : ${String(e)}`;
+  }
+};
+
+const _stfrPlaySectionsBeforeLocalCopy=StreamingTopFrCard.prototype._playSections;
+StreamingTopFrCard.prototype._playSections=function(item){
+  return _stfrPlaySectionsBeforeLocalCopy.call(this,item)+this._localCopyPlaySection(item);
+};
+
+const _stfrDetailBeforeLocalCopy=StreamingTopFrCard.prototype._detail;
+StreamingTopFrCard.prototype._detail=async function(item){
+  let resolved=item;
+  if(this._hass&&String(item?.media_type||"").toLowerCase()==="movie"){
+    try{
+      const local=await this._hass.callWS({
+        type:"streaming_top_fr/find_local_copy",
+        item:{
+          media_type:item.media_type,
+          media_key:item.media_key,
+          imdb_id:item.imdb_id||null,
+          title:item.title||null,
+          original_title:item.original_title||null,
+          subtitle:item.subtitle||null,
+          year:item.year??null,
+        },
+      });
+      if(local?.match?.local_id){
+        resolved={
+          ...item,
+          _local_copy:local.match,
+          _local_playback:local.local_playback||null,
+        };
+      }
+    }catch(e){
+      // Local availability is optional. Never block the Streaming popup.
+    }
+  }
+
+  const result=_stfrDetailBeforeLocalCopy.call(this,resolved);
+  const modal=this.shadowRoot?.querySelector(".modalbg");
+  modal?.querySelectorAll("[data-stream-local-id][data-stream-local-player]").forEach(button=>{
+    button.addEventListener("click",async event=>{
+      event.stopPropagation();
+      await this._playLocalCopy(
+        button.dataset.streamLocalId,
+        button.dataset.streamLocalPlayer,
+        button
+      );
+    });
+  });
+  return result;
+};
+
 class StreamingLocalCard extends HTMLElement {
   setConfig(c){
     this._config={title:"Streaming Local",default_category:"movies",...c};
