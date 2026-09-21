@@ -3261,52 +3261,67 @@ class LocalMetadataClient(JustWatchClient):
 
     def __init__(self, session, store=None):
         super().__init__(session, store)
-        self._sem = asyncio.Semaphore(1)
+        # IMDb and JustWatch are deliberately isolated inside Streaming Local.
+        # IMDb can safely run four lookups in parallel; JustWatch remains
+        # serialized so Local scans cannot recreate the previous HTTP 403 burst.
+        self._sem = asyncio.Semaphore(4)
+        self._jw_sem = asyncio.Semaphore(1)
         self._local_jw_blocked_until: datetime | None = None
         self._local_last_jw_request = 0.0
 
     async def _post(self, payload):
         # Local-only GraphQL path: strictly serialized and rate-limited.
-        now = datetime.now(timezone.utc)
-        loop = asyncio.get_running_loop()
-        elapsed = loop.time() - self._local_last_jw_request
-        if elapsed < 1.0:
-            await asyncio.sleep(1.0 - elapsed)
-        self._local_last_jw_request = loop.time()
-        if self._local_jw_blocked_until and now < self._local_jw_blocked_until:
-            remaining = max(
-                1, int((self._local_jw_blocked_until - now).total_seconds() // 60) + 1
-            )
-            raise RuntimeError(
-                f"JustWatch temporairement en pause après HTTP 403 ({remaining} min)"
-            )
-
-        async with self.session.post(
-            JUSTWATCH_GRAPHQL,
-            json=payload,
-            headers={
-                "User-Agent": UA,
-                "Origin": "https://www.justwatch.com",
-                "Referer": "https://www.justwatch.com/fr/",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            timeout=30,
-        ) as resp:
-            text = await resp.text()
-            if resp.status == 403:
-                self._local_jw_blocked_until = now + timedelta(
-                    minutes=JUSTWATCH_BLOCK_MINUTES
+        async with self._jw_sem:
+            now = datetime.now(timezone.utc)
+            if self._local_jw_blocked_until and now < self._local_jw_blocked_until:
+                remaining = max(
+                    1,
+                    int(
+                        (self._local_jw_blocked_until - now).total_seconds() // 60
+                    )
+                    + 1,
                 )
-                raise RuntimeError("JustWatch HTTP 403 — mise en pause temporaire")
-            if resp.status >= 400:
-                raise RuntimeError(f"JustWatch HTTP {resp.status}")
-            data = await resp.json()
+                raise RuntimeError(
+                    f"JustWatch temporairement en pause après HTTP 403 ({remaining} min)"
+                )
 
-        self._local_jw_blocked_until = None
-        if data.get("errors"):
-            raise RuntimeError(data["errors"][0].get("message", "Erreur GraphQL"))
-        return data.get("data") or {}
+            loop = asyncio.get_running_loop()
+            elapsed = loop.time() - self._local_last_jw_request
+            if elapsed < 1.0:
+                await asyncio.sleep(1.0 - elapsed)
+            self._local_last_jw_request = loop.time()
+
+            async with self.session.post(
+                JUSTWATCH_GRAPHQL,
+                json=payload,
+                headers={
+                    "User-Agent": UA,
+                    "Origin": "https://www.justwatch.com",
+                    "Referer": "https://www.justwatch.com/fr/",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            ) as resp:
+                text = await resp.text()
+                if resp.status == 403:
+                    self._local_jw_blocked_until = datetime.now(
+                        timezone.utc
+                    ) + timedelta(minutes=JUSTWATCH_BLOCK_MINUTES)
+                    raise RuntimeError(
+                        "JustWatch HTTP 403 — mise en pause temporaire"
+                    )
+                if resp.status >= 400:
+                    raise RuntimeError(f"JustWatch HTTP {resp.status}")
+                data = await resp.json()
+
+            self._local_jw_blocked_until = None
+            if data.get("errors"):
+                raise RuntimeError(
+                    data["errors"][0].get("message", "Erreur GraphQL")
+                )
+            return data.get("data") or {}
+
 
     async def _async_imdb_id(self, title, year=None, media_type=None, strict=False):
         """Resolve a title to a canonical IMDb id using IMDb autocomplete."""
@@ -3571,6 +3586,144 @@ class LocalMetadataClient(JustWatchClient):
             )
         return imdb_id
 
+    async def async_search_local_title(
+        self, title, media_type, year=None, classification=None
+    ):
+        """Resolve Local media IMDb-first; use JustWatch only as a fallback.
+
+        A verified IMDb id with a useful IMDb detail row is sufficient for
+        Streaming Local because playback uses the local SMB file, not a
+        provider offer. JustWatch is therefore consulted only when IMDb cannot
+        identify the work well enough, or when the inherited fallback needs
+        JustWatch-specific metadata.
+        """
+        title = str(title or "").strip()
+        if not title:
+            return None
+
+        media_type = (
+            "tv" if str(media_type).lower() in {"tv", "show"} else "movie"
+        )
+        classification = classification or {}
+        include_age = bool(classification.get("enabled", True)) and (
+            classification.get("france", True)
+            or classification.get("us_fallback", True)
+        )
+        try:
+            wanted_year = int(year) if year not in (None, "") else None
+        except (TypeError, ValueError):
+            wanted_year = None
+
+        cache_key = (
+            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
+        )
+        wanted_slug = _matching_slug(title, media_type)
+
+        if self.store:
+            cached = self.store.get_metadata(cache_key)
+            if _cache_fresh(cached) and cached.get("metadata_status"):
+                cached_slug = _matching_slug(
+                    str(cached.get("title") or ""), media_type
+                )
+                wanted_sequel = _bare_sequel_number(wanted_slug)
+                cached_sequel = _bare_sequel_number(cached_slug)
+                cache_quality_valid = (
+                    cached.get("metadata_status") in {"matched", "imdb_only"}
+                    and bool(cached.get("poster"))
+                )
+                if (
+                    cache_quality_valid
+                    and wanted_sequel == cached_sequel
+                ):
+                    if cached.get("age_resolved"):
+                        age = {
+                            "fr": cached.get("age_fr"),
+                            "us": cached.get("age_us"),
+                            "imdb_id": cached.get("imdb_id"),
+                        }
+                        value, country = self.select_age(
+                            age, classification
+                        )
+                        cached["age_certification"] = value
+                        cached["age_country"] = country
+                    return cached
+
+        expected_imdb = await self._async_imdb_id(
+            title, wanted_year, media_type, strict=True
+        )
+
+        if expected_imdb:
+            imdb_detail = (
+                await self._async_imdb_local_detail(expected_imdb)
+            ) or {}
+
+            # Poster is the critical Local asset. Rating or synopsis makes the
+            # IMDb result rich enough to avoid a JustWatch round-trip.
+            imdb_sufficient = bool(imdb_detail.get("poster")) and bool(
+                imdb_detail.get("rating") is not None
+                or imdb_detail.get("description")
+                or imdb_detail.get("title")
+            )
+
+            if imdb_sufficient:
+                age_fr = None
+                age_us = None
+                age_value = None
+                age_country = None
+                if include_age:
+                    certs = await self._async_imdb_certificates(expected_imdb)
+                    if certs:
+                        age_fr = normalize_fr_age_certification(
+                            certs.get("FR")
+                        )
+                        age_us = normalize_us_age_certification(
+                            certs.get("US")
+                        )
+                    age_value, age_country = self.select_age(
+                        {"fr": age_fr, "us": age_us},
+                        classification,
+                    )
+
+                result = {
+                    "title": imdb_detail.get("title") or title,
+                    "year": imdb_detail.get("year") or wanted_year,
+                    "poster": imdb_detail.get("poster"),
+                    "poster_source": "imdb",
+                    "description": imdb_detail.get("description"),
+                    "rating": imdb_detail.get("rating"),
+                    "rating_source": (
+                        "IMDb"
+                        if imdb_detail.get("rating") is not None
+                        else None
+                    ),
+                    "imdb_votes": imdb_detail.get("imdb_votes"),
+                    "age_certification": age_value,
+                    "age_country": age_country,
+                    "age_fr": age_fr,
+                    "age_us": age_us,
+                    "age_resolved": include_age,
+                    "imdb_id": expected_imdb,
+                    "details_url": (
+                        f"https://www.imdb.com/title/{expected_imdb}/"
+                    ),
+                    "providers": {},
+                    "canonical_media_key": f"imdb:{expected_imdb}",
+                    "metadata_status": "imdb_only",
+                    "match_score": None,
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "cache_schema": METADATA_CACHE_SCHEMA,
+                }
+                if self.store:
+                    self.store.set_metadata(cache_key, result)
+                return result
+
+        # IMDb could not fully identify/enrich the work. Fall back to the
+        # conservative JustWatch matcher inherited from the historical code.
+        # Local _post() keeps those requests serialized and paced.
+        return await super().async_search_local_title(
+            title, media_type, wanted_year, classification
+        )
+
     async def _async_age_certification(
         self,
         object_id,
@@ -3603,7 +3756,7 @@ class LocalMetadataClient(JustWatchClient):
                 "/locale/fr_FR"
             )
             try:
-                async with self._sem:
+                async with self._jw_sem:
                     async with self.session.get(
                         url,
                         headers={
@@ -3634,7 +3787,7 @@ class LocalMetadataClient(JustWatchClient):
         # French JustWatch public-page fallback.
         if not jw_fr_age and details_url:
             try:
-                async with self._sem:
+                async with self._jw_sem:
                     async with self.session.get(
                         details_url,
                         headers={
