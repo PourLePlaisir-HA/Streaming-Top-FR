@@ -55,19 +55,9 @@ async def async_launch_vlc_local(
     await _call(hass, "remote", "turn_on", {"entity_id": remote})
     await asyncio.sleep(2)
 
-    # Start each requested file from a clean VLC task so an old playback
-    # session cannot swallow the new ACTION_VIEW intent.
-    await _call(
-        hass,
-        "androidtv",
-        "adb_command",
-        {
-            "entity_id": adb_player,
-            "command": f"am force-stop {VLC_ANDROID_PACKAGE}",
-        },
-    )
-    await asyncio.sleep(1)
-
+    # Do not force-stop VLC here. The Local playback mode relies on VLC's
+    # remembered SMB authentication context/keystore. Killing the app before
+    # every ACTION_VIEW can force a fresh SMB authentication prompt.
     await _call(
         hass,
         "androidtv",
