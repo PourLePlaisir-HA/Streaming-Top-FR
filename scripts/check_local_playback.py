@@ -39,3 +39,17 @@ else:
     raise AssertionError("Non-SMB URI must be rejected")
 
 print("Local VLC playback command checks passed.")
+
+
+# Frontend regression guard: a VLC backend without visible Local controls must
+# never be released again.
+card = (ROOT / "custom_components/streaming_top_fr/www/streaming-top-fr-card.js").read_text(encoding="utf-8")
+manifest = (ROOT / "custom_components/streaming_top_fr/manifest.json").read_text(encoding="utf-8")
+assert "_vlcControls" in card
+assert "data-local-play-player" in card
+assert 'type:"streaming_top_fr/play_local"' in card
+assert "vlc-unavailable" in card
+assert 'const STFR_VERSION = "0.9.1-beta.2";' in card
+assert '"version": "0.9.1-beta.2"' in manifest
+
+print("Local VLC frontend checks passed.")
