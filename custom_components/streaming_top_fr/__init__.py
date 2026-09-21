@@ -115,6 +115,43 @@ def _local_match_token(value):
     )
 
 
+def _local_movie_title_candidates(item, candidates):
+    """Return raw Local movie candidates sharing an exact normalized title."""
+    target_titles = {
+        _local_match_token(value)
+        for value in (
+            item.get("title"),
+            item.get("original_title"),
+            item.get("subtitle"),
+        )
+        if _local_match_token(value)
+    }
+    if not target_titles:
+        return []
+
+    matches = []
+    for candidate in candidates or []:
+        if (
+            not isinstance(candidate, dict)
+            or str(candidate.get("media_type") or "").casefold() != "movie"
+            or candidate.get("episodic")
+            or not candidate.get("local_id")
+        ):
+            continue
+        candidate_titles = {
+            _local_match_token(value)
+            for value in (
+                candidate.get("title"),
+                candidate.get("parsed_title"),
+                candidate.get("lookup_title"),
+            )
+            if _local_match_token(value)
+        }
+        if target_titles & candidate_titles:
+            matches.append(candidate)
+    return matches
+
+
 def _find_local_movie_match(item, candidates):
     """Find a conservative Local copy of a streaming movie."""
     if str(item.get("media_type") or "").casefold() not in {"movie", "film"}:
@@ -577,10 +614,23 @@ def _register_ws(hass):
         if not result.items and not result.errors:
             result = await scanner.async_scan(local_settings)
 
-        match = _find_local_movie_match(
-            dict(msg.get("item") or {}),
-            result.items,
-        )
+        target_item = dict(msg.get("item") or {})
+        match = _find_local_movie_match(target_item, result.items)
+
+        # After a Home Assistant restart, the scanner inventory is rebuilt
+        # before Local metadata is necessarily reattached to each item. If the
+        # canonical match is missing, hydrate only exact-title movie candidates
+        # through the existing Local metadata cache/client, then retry. This
+        # keeps the validated scanner and LocalMetadataClient engines untouched
+        # and avoids enriching the whole NAS merely to open one Streaming popup.
+        if match is None:
+            candidates = _local_movie_title_candidates(target_item, result.items)
+            if candidates:
+                await data["local_metadata"].async_enrich_local_items(
+                    candidates,
+                    settings.get("classification") or {},
+                )
+                match = _find_local_movie_match(target_item, result.items)
         public_match = None
         if isinstance(match, dict):
             public_match = {
