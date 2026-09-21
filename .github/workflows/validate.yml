@@ -60,6 +60,9 @@ jobs:
       - name: Check optional Debug mode
         run: python scripts/check_debug_mode.py
 
+      - name: Check local copy Debug hotfix
+        run: python scripts/check_local_copy_debug_hotfix.py
+
       - name: Check brand assets
         run: python scripts/check_brand_assets.py
 
