@@ -108,6 +108,80 @@ def _entry_data(hass, entry_id=None):
     return data.get(entry_id) if entry_id else next(iter(data.values()), None)
 
 
+def _local_match_token(value):
+    return "".join(
+        char for char in str(value or "").casefold()
+        if char.isalnum()
+    )
+
+
+def _find_local_movie_match(item, candidates):
+    """Find a conservative Local copy of a streaming movie."""
+    if str(item.get("media_type") or "").casefold() not in {"movie", "film"}:
+        return None
+
+    target_imdb = str(item.get("imdb_id") or "").strip().casefold()
+    target_media_key = str(item.get("media_key") or "").strip()
+    target_year = item.get("year")
+    try:
+        target_year = int(target_year) if target_year not in (None, "") else None
+    except (TypeError, ValueError):
+        target_year = None
+
+    target_titles = {
+        _local_match_token(value)
+        for value in (
+            item.get("title"),
+            item.get("original_title"),
+            item.get("subtitle"),
+        )
+        if _local_match_token(value)
+    }
+
+    eligible = [
+        candidate
+        for candidate in (candidates or [])
+        if isinstance(candidate, dict)
+        and str(candidate.get("media_type") or "").casefold() == "movie"
+        and not candidate.get("episodic")
+        and candidate.get("local_id")
+    ]
+
+    if target_imdb:
+        for candidate in eligible:
+            if str(candidate.get("imdb_id") or "").strip().casefold() == target_imdb:
+                return candidate
+
+    if target_media_key:
+        for candidate in eligible:
+            if str(candidate.get("canonical_media_key") or "").strip() == target_media_key:
+                return candidate
+
+    if not target_titles or target_year is None:
+        return None
+
+    for candidate in eligible:
+        try:
+            candidate_year = int(candidate.get("year"))
+        except (TypeError, ValueError):
+            continue
+        if candidate_year != target_year:
+            continue
+        candidate_titles = {
+            _local_match_token(value)
+            for value in (
+                candidate.get("title"),
+                candidate.get("parsed_title"),
+                candidate.get("lookup_title"),
+            )
+            if _local_match_token(value)
+        }
+        if target_titles & candidate_titles:
+            return candidate
+
+    return None
+
+
 def _local_playback_payload(settings):
     players = settings.get("players") or {}
     playback = settings.get("playback") or {}
@@ -468,6 +542,60 @@ def _register_ws(hass):
                 "local_playback": _local_playback_payload(settings),
                 "items": items,
                 "errors": list(result.errors),
+            },
+        )
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/find_local_copy",
+            vol.Optional("entry_id"): str,
+            vol.Required("item"): dict,
+        }
+    )
+    @websocket_api.async_response
+    async def find_local_copy(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        settings = (
+            data["coordinator"].settings
+            or (data["coordinator"].data or {}).get("settings")
+            or {}
+        )
+        local_settings = settings.get("local_library") or {}
+        if not local_settings.get("enabled", False):
+            connection.send_result(
+                msg["id"],
+                {"match": None, "local_playback": _local_playback_payload(settings)},
+            )
+            return
+
+        scanner = data["local_library"]
+        result = scanner.last_result
+        if not result.items and not result.errors:
+            result = await scanner.async_scan(local_settings)
+
+        match = _find_local_movie_match(
+            dict(msg.get("item") or {}),
+            result.items,
+        )
+        public_match = None
+        if isinstance(match, dict):
+            public_match = {
+                "local_id": match.get("local_id"),
+                "title": match.get("title") or match.get("parsed_title"),
+                "year": match.get("year"),
+                "imdb_id": match.get("imdb_id"),
+                "canonical_media_key": match.get("canonical_media_key"),
+            }
+
+        connection.send_result(
+            msg["id"],
+            {
+                "match": public_match,
+                "local_playback": _local_playback_payload(settings),
             },
         )
 
