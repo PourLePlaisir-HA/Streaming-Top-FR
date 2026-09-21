@@ -64,10 +64,19 @@ print("Local VLC playback command checks passed.")
 # never be released again.
 card = (ROOT / "custom_components/streaming_top_fr/www/streaming-top-fr-card.js").read_text(encoding="utf-8")
 manifest = (ROOT / "custom_components/streaming_top_fr/manifest.json").read_text(encoding="utf-8")
+coordinator = (ROOT / "custom_components/streaming_top_fr/coordinator.py").read_text(encoding="utf-8")
+init_source = (ROOT / "custom_components/streaming_top_fr/__init__.py").read_text(encoding="utf-8")
+settings_source = (ROOT / "custom_components/streaming_top_fr/settings.py").read_text(encoding="utf-8")
 assert "_vlcControls" in card
 assert "data-local-play-player" in card
 assert 'type:"streaming_top_fr/play_local"' in card
 assert 'const STFR_VERSION = "0.9.2-beta.2";' in card
 assert '"version": "0.9.2-beta.2"' in manifest
+assert 'public_local.pop("smb_username", None)' in coordinator
+assert 'public_local.pop("smb_password", None)' in coordinator
+assert '"smb_username": _clean_string(local_library.get("smb_username")) or ""' in settings_source
+assert '"smb_password": str(local_library.get("smb_password") or "")' in settings_source
+assert 'smb_username=smb_username' in init_source
+assert 'smb_password=smb_password' in init_source
 
-print("Local VLC frontend checks passed.")
+print("Local VLC frontend and credential-isolation checks passed.")
