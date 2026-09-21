@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.2";
+const STFR_VERSION = "1.0.2.1";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -1570,7 +1570,7 @@ console.info(`STREAMING TOP FR ${STFR_VERSION}`);
 
 
 // ---------------------------------------------------------------------------
-// Optional movie runtime filter (v1.0.2)
+// Optional movie runtime filter (v1.0.2.1)
 // Added as prototype decorators so the validated Streaming/Top class bodies
 // remain unchanged. Runtime lookups are on-demand and isolated from catalogue
 // construction and Streaming Local scanning.
