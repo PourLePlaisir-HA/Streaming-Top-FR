@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.1-beta.7";
+const STFR_VERSION = "1.0.1-beta.8";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -443,7 +443,7 @@ StreamingTopFrCard.prototype._playSections=function(item){
 };
 
 
-// v1.0.1-beta.7: bridge Streaming/Top popups to an already indexed Local copy.
+// v1.0.1-beta.8: bridge Streaming/Top popups to an already indexed Local copy.
 // The historical cards remain untouched; lookup and playback are added as a
 // prototype layer so the stable Streaming engine stays byte-for-byte protected.
 StreamingTopFrCard.prototype._localCopyPlayers=function(item){
