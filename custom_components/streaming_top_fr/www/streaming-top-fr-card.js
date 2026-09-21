@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.9.1-beta.3";
+const STFR_VERSION = "0.9.1-beta.4";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -850,7 +850,7 @@ class StreamingLocalCard extends HTMLElement {
     </style>
     <ha-card><div class="wrap">
       <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-      ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+      ${cats.length?`<div class="tabs category-tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
       ${body}
     </div></ha-card>`;
     this._bind();
@@ -1334,9 +1334,11 @@ StreamingLocalCard.prototype._render=function(){
     .refresh{width:36px;height:36px;border:0;border-radius:50%;background:var(--secondary-background-color);cursor:pointer;font-size:20px}
     .tabs,.subtabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
     .tabs{margin-bottom:8px}
+    .category-tabs{display:grid;grid-template-columns:repeat(2,max-content);justify-content:center;gap:10px 14px;overflow:visible;padding-bottom:6px;margin-bottom:8px}
     .subtabs{min-height:36px;margin-bottom:8px}
     .subtabs.reserved{visibility:hidden}
     .tab,.subtab{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap}
+    .category-tabs .tab{justify-content:center;font-weight:800}
     .subtab{padding:7px 11px;font-size:.86rem}
     .tab.active,.subtab.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
     .tab ha-icon,.subtab ha-icon{--mdc-icon-size:18px}
@@ -1376,7 +1378,7 @@ StreamingLocalCard.prototype._render=function(){
     .episode-select ha-icon{flex:0 0 auto;color:var(--primary-color)}
     .episode-watch{flex:0 0 44px;border:0;border-left:1px solid var(--divider-color);background:none;cursor:pointer}.episode-watch ha-icon{--mdc-icon-size:22px;color:var(--secondary-text-color)}.episode-watch.on ha-icon{color:var(--primary-color)}
     .episode-help{margin-top:12px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.35}
-    @media(max-width:600px){.wrap{padding:14px 11px}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
+    @media(max-width:600px){.wrap{padding:14px 11px}.category-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.category-tabs .tab{width:100%;justify-content:center}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
   </style>
   <ha-card><div class="wrap">
     <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
