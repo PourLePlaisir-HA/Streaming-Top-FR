@@ -3317,6 +3317,10 @@ class LocalMetadataClient(JustWatchClient):
         )
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         wanted_title_for_cache = _matching_slug(str(title), media_type)
+        try:
+            wanted_year_for_cache = int(year) if year else None
+        except (TypeError, ValueError):
+            wanted_year_for_cache = None
         if self.store:
             cached = self.store.get_metadata(cache_key)
             if _cache_fresh(cached) and cached.get("imdb_id"):
@@ -3327,9 +3331,26 @@ class LocalMetadataClient(JustWatchClient):
                 )
                 wanted_sequel = _bare_sequel_number(wanted_title_for_cache)
                 cached_sequel = _bare_sequel_number(cached_title)
+                try:
+                    cached_year = (
+                        int(cached.get("resolved_year"))
+                        if cached.get("resolved_year") else None
+                    )
+                except (TypeError, ValueError):
+                    cached_year = None
+                franchise_cache_alias = bool(
+                    wanted_year_for_cache
+                    and cached_year == wanted_year_for_cache
+                    and _franchise_prefix_alias(
+                        wanted_title_for_cache, cached_title
+                    )
+                )
                 if (
                     cached_title
-                    and wanted_sequel == cached_sequel
+                    and (
+                        wanted_sequel == cached_sequel
+                        or franchise_cache_alias
+                    )
                 ):
                     return cached.get("imdb_id")
 
@@ -3371,11 +3392,29 @@ class LocalMetadataClient(JustWatchClient):
                                 if not want_title or not hit_title:
                                     return -1000
 
+                                hit_year = hit.get("y")
+                                try:
+                                    hit_year = int(hit_year) if hit_year else None
+                                except (TypeError, ValueError):
+                                    hit_year = None
+
+                                exact_year = bool(
+                                    want_year and hit_year and hit_year == want_year
+                                )
+                                franchise_number_alias = bool(
+                                    exact_year
+                                    and want_title != hit_title
+                                    and _franchise_prefix_alias(
+                                        want_title, hit_title
+                                    )
+                                )
+
                                 want_sequel = _bare_sequel_number(want_title)
                                 hit_sequel = _bare_sequel_number(hit_title)
                                 if (
                                     want_sequel != hit_sequel
                                     and (want_sequel is not None or hit_sequel is not None)
+                                    and not franchise_number_alias
                                 ):
                                     return -1000
 
@@ -3385,16 +3424,6 @@ class LocalMetadataClient(JustWatchClient):
                                 contains = (
                                     want_title in hit_title
                                     or hit_title in want_title
-                                )
-
-                                hit_year = hit.get("y")
-                                try:
-                                    hit_year = int(hit_year) if hit_year else None
-                                except (TypeError, ValueError):
-                                    hit_year = None
-
-                                exact_year = bool(
-                                    want_year and hit_year and hit_year == want_year
                                 )
                                 expanded_title = bool(
                                     exact_year
@@ -3433,6 +3462,8 @@ class LocalMetadataClient(JustWatchClient):
                                 elif local_subtitle_alias:
                                     points = 10
                                 elif first_installment_alias:
+                                    points = 10
+                                elif franchise_number_alias:
                                     points = 10
                                 elif localized_title_alias:
                                     points = 10
@@ -3484,7 +3515,10 @@ class LocalMetadataClient(JustWatchClient):
                                     and ranked[0][1].get("id") != ranked[1][1].get("id")
                                 )
                                 if not ambiguous:
-                                    imdb_id = ranked[0][1].get("id")
+                                    best_hit = ranked[0][1]
+                                    imdb_id = best_hit.get("id")
+                                    resolved_title = best_hit.get("l")
+                                    resolved_year = best_hit.get("y")
                         else:
                             def score(hit):
                                 points = 0
