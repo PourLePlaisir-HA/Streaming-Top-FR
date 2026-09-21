@@ -537,11 +537,26 @@ class StreamingLocalCard extends HTMLElement {
         episodes.find(i=>i.metadata_status==="matched")||
         episodes[0];
 
+      const franchiseTitle=String(
+        representative.title||
+        representative.franchise_title||
+        representative.parsed_title||
+        ""
+      ).trim();
+      const episodeTitles=[...new Set(
+        episodes
+          .map(ep=>String(ep.episode_title||"").trim())
+          .filter(Boolean)
+      )];
+      const seasonTitle=episodeTitles.length===1?episodeTitles[0]:null;
+
       seasons.push({
         ...representative,
         is_season_group:true,
         series_key:group.seriesKey,
         season_key:seasonKey,
+        franchise_title:franchiseTitle,
+        season_title:seasonTitle,
         episodes,
         episode_count:episodes.length,
         season:group.season,
@@ -654,7 +669,8 @@ class StreamingLocalCard extends HTMLElement {
     const selectionKey=item.season_key||`${item.series_key||"series"}:season:${item.season??0}`;
     const selectedId=this._seriesSelection?.[selectionKey]||null;
     const m=document.createElement("div");m.className="modalbg";
-    const title=item.title||item.parsed_title||"Sans titre";
+    const franchise=item.franchise_title||item.title||item.parsed_title||"Sans titre";
+    const storyTitle=item.season_title||"";
     const meta=this._metadata(item);
     const match=item.metadata_status==="matched"
       ?"JustWatch + IMDb"
@@ -667,8 +683,9 @@ class StreamingLocalCard extends HTMLElement {
         ?`S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}`
         :`Épisode ${epNo}`;
       const selected=selectedId&&selectedId===ep.local_id;
+      const displayTitle=ep.episode_title||storyTitle||`Épisode ${epNo}`;
       return `<button class="episode-row ${selected?"selected":""}" data-episode-index="${index}">
-        <span class="episode-main"><strong>${this._esc(code)}</strong><small>${this._esc(ep.filename||ep.relative_path||"")}</small></span>
+        <span class="episode-main"><strong>${this._esc(code)}</strong><small>${this._esc(displayTitle)}</small></span>
         <ha-icon icon="${selected?"mdi:check-circle":"mdi:play-circle-outline"}"></ha-icon>
       </button>`;
     }).join("");
@@ -676,7 +693,12 @@ class StreamingLocalCard extends HTMLElement {
       <button class="modal-close" aria-label="Fermer">×</button>
       <div class="modal-head">
         ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
-        <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div><div class="series-summary">Saison ${this._esc(item.season??"?")} · ${item.episode_count} épisode${item.episode_count>1?"s":""}</div></div>
+        <div>
+          <h2>${this._esc(franchise)}</h2>
+          ${storyTitle?`<div class="season-story-title">${this._esc(storyTitle)}</div>`:""}
+          <div class="modal-meta">${this._esc(meta)}</div>
+          <div class="series-summary">Saison ${this._esc(item.season??"?")} · ${item.episode_count} épisode${item.episode_count>1?"s":""}</div>
+        </div>
       </div>
       <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
       <div class="details">
@@ -795,6 +817,7 @@ class StreamingLocalCard extends HTMLElement {
       .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
       .modal p{line-height:1.45;color:var(--secondary-text-color)}
       .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
+      .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
       .series-summary{margin-top:6px;color:var(--secondary-text-color);font-size:.86rem}
       .season-tabs{display:flex;gap:8px;overflow-x:auto;margin:18px 0 12px;padding-bottom:2px}
       .season-tab{border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap;font-weight:800}
