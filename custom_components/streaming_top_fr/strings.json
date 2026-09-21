@@ -269,6 +269,23 @@
     "error": {
       "invalid_player_id": "The destination ID is invalid.",
       "player_already_exists": "A destination already uses this ID."
+    },
+    "init": {
+      "menu_options": {
+        "duration_filter": "Duration filter"
+      }
+    },
+    "duration_filter": {
+      "title": "Duration filter",
+      "description": "Shows an optional filter in the Movie views of Streaming, Top Streaming and Streaming Local. The button stays inactive until the user enables it in the card.",
+      "data": {
+        "duration_filter_enabled": "Show duration filter",
+        "duration_filter_max_minutes": "Maximum runtime (minutes)"
+      },
+      "data_description": {
+        "duration_filter_enabled": "Disable this option to hide the duration filter entirely from the cards.",
+        "duration_filter_max_minutes": "Only movies with a known runtime strictly below this threshold are shown when the filter is active."
+      }
     }
   }
 }
