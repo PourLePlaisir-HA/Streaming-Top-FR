@@ -786,7 +786,6 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                 "family",
                 "classification",
                 "local_library",
-                "playback",
                 "players",
             ],
         )
@@ -1060,15 +1059,29 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
         self._ensure_loaded()
         assert self._settings is not None
         players = self._settings.get("players") or {}
+        playback = self._settings.setdefault(
+            "playback", {"enabled": bool(players)}
+        )
 
         if user_input is not None:
-            self._selected_player = str(user_input[FIELD_PLAYER_SELECT])
+            playback["enabled"] = bool(
+                user_input.get(FIELD_PLAYBACK_ENABLED, False)
+            )
+            selected = str(
+                user_input.get(FIELD_PLAYER_SELECT) or "__none__"
+            )
+            if selected == "__none__":
+                return self._save()
+            self._selected_player = selected
             return await self.async_step_player_edit()
 
         options = [
             SelectOptionDict(
+                value="__none__", label="— Ne rien modifier —"
+            ),
+            SelectOptionDict(
                 value="__add__", label="➕ Ajouter une destination"
-            )
+            ),
         ]
         options.extend(
             SelectOptionDict(
@@ -1081,15 +1094,21 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
             step_id="players",
             data_schema=vol.Schema(
                 {
+                    vol.Optional(
+                        FIELD_PLAYBACK_ENABLED,
+                        default=bool(
+                            playback.get("enabled", bool(players))
+                        ),
+                    ): selector.BooleanSelector(),
                     vol.Required(
                         FIELD_PLAYER_SELECT,
-                        default="__add__",
+                        default="__none__",
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=options,
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
-                    )
+                    ),
                 }
             ),
         )
