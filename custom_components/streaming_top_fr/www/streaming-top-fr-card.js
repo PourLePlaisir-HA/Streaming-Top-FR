@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.9.1-beta.2";
+const STFR_VERSION = "0.9.1-beta.3";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -1365,8 +1365,8 @@ StreamingLocalCard.prototype._render=function(){
     .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
     .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
     .series-summary{margin-top:6px;color:var(--secondary-text-color);font-size:.86rem}
-    .watch-actions{display:flex;margin:16px 0 12px}.watch-main{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--primary-color);color:var(--text-primary-color,#fff);cursor:pointer;font-weight:800}.watch-main ha-icon{--mdc-icon-size:18px}
-    .vlc-block{margin:16px 0 10px;padding:12px;border-radius:14px;background:var(--secondary-background-color)}.vlc-title{margin-bottom:9px;font-weight:800}.vlc-row{display:flex;gap:8px;flex-wrap:wrap}.vlc-destination{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--primary-color);color:var(--text-primary-color,#fff);cursor:pointer;font-weight:800}.vlc-destination:disabled{opacity:.65;cursor:wait}.vlc-destination ha-icon{--mdc-icon-size:19px}
+    .watch-actions{display:flex;margin:16px 0 12px}.watch-main{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer;font-weight:800}.watch-main ha-icon{--mdc-icon-size:18px}
+    .vlc-block{margin:16px 0 10px;padding:12px;border-radius:14px;background:var(--secondary-background-color)}.vlc-title{margin-bottom:9px;font-weight:800}.vlc-row{display:flex;gap:10px;flex-wrap:wrap}.vlc-destination{min-width:130px;min-height:54px;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid rgba(222,86,44,.58);border-radius:999px;padding:9px 16px;background:linear-gradient(rgba(196,72,31,.32),rgba(91,34,22,.42)),rgba(20,16,14,.82);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(8px);cursor:pointer;font-weight:800}.vlc-destination:hover{filter:brightness(1.08)}.vlc-destination:disabled{opacity:.45;cursor:wait}.vlc-destination ha-icon{--mdc-icon-size:21px;color:#fff}
     .episode-list{display:grid;gap:7px}
     .episode-row{width:100%;display:flex;align-items:stretch;gap:6px;border-radius:12px;background:var(--secondary-background-color)}
     .episode-row.selected{outline:2px solid var(--primary-color)}
