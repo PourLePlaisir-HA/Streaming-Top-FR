@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import logging
 
@@ -231,16 +230,10 @@ class StreamingTopCoordinator(DataUpdateCoordinator):
             if self.justwatch.store:
                 await self.justwatch.store.async_save()
 
-            public_settings = deepcopy(self.settings)
-            public_local = public_settings.get("local_library")
-            if isinstance(public_local, dict):
-                public_local.pop("smb_username", None)
-                public_local.pop("smb_password", None)
-
             return {
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "country": "France",
-                "settings": public_settings,
+                "settings": self.settings,
                 "provider_order": enabled,
                 "providers": providers,
                 "top_catalog": top_catalog,
