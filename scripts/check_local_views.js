@@ -29,6 +29,14 @@ card._category = "movies";
 card._familyCategory = "movies";
 card._watchFilter = "all";
 card._data = {
+  local_playback: {
+    enabled: true,
+    mode: "vlc_smb",
+    players: [
+      { id: "salon", name: "Salon" },
+      { id: "etage", name: "Étage" },
+    ],
+  },
   family: {
     enabled: true,
     target_age: 11,
@@ -149,4 +157,14 @@ if (card._familyCategories().includes("documentaries")) {
   throw new Error("Documentaries must not appear in Family subcategories");
 }
 
-console.log("Streaming Local Family/watched view checks passed.");
+const playable = card._data.items.find(x => x.local_id === "local:m1");
+const vlcControls = card._vlcControls(playable);
+if (!vlcControls.includes("Voir avec VLC") || !vlcControls.includes("sur Salon") || !vlcControls.includes("sur Étage")) {
+  throw new Error("VLC destination controls failed");
+}
+card._data.local_playback.enabled = false;
+if (card._vlcControls(playable) !== "") {
+  throw new Error("VLC controls must be hidden when direct playback is disabled");
+}
+
+console.log("Streaming Local Family/watched/VLC view checks passed.");

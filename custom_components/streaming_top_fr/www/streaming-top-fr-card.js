@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.9.0";
+const STFR_VERSION = "0.9.1";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -831,7 +831,7 @@ class StreamingLocalCard extends HTMLElement {
       .modal-close{position:absolute;right:10px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:var(--secondary-background-color);font-size:25px;cursor:pointer}
       .modal-head{display:flex;gap:14px;padding-right:42px;align-items:flex-start}
       .modal-head img{width:88px;aspect-ratio:2/3;object-fit:cover;border-radius:9px}
-      .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
+      .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}.local-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.local-title-row h2{margin-right:0}.age-badge{display:inline-grid;place-items:center;flex:0 0 auto;box-sizing:border-box;font-weight:900;line-height:1;vertical-align:middle}.age-badge.fr{width:29px;height:29px;border-radius:50%;background:#d9d9d9!important;color:#111!important;border:0!important;font-size:.66rem;box-shadow:none!important}.age-badge.us{min-width:42px;height:26px;padding:0 7px;border-radius:6px;background:#242424!important;color:#fff!important;border:0!important;font-size:.64rem;letter-spacing:.01em;box-shadow:none!important}
       .modal p{line-height:1.45;color:var(--secondary-text-color)}
       .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
       .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
@@ -850,7 +850,7 @@ class StreamingLocalCard extends HTMLElement {
     </style>
     <ha-card><div class="wrap">
       <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-      ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+      ${cats.length?`<div class="tabs category-tabs adaptive-tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
       ${body}
     </div></ha-card>`;
     this._bind();
@@ -1080,6 +1080,71 @@ StreamingLocalCard.prototype._setWatch=async function(items,enabled){
     this._render();
   }
 };
+StreamingLocalCard.prototype._localAge=function(item){
+  const fr=item?.age_fr||(String(item?.age_country||"").toUpperCase()==="FR"?item?.age_certification:null);
+  const us=item?.age_us||(String(item?.age_country||"").toUpperCase()==="US"?item?.age_certification:null);
+  if(fr)return{value:fr,country:"FR"};
+  if(us)return{value:us,country:"US"};
+  const value=item?.age_certification||null;
+  const country=String(item?.age_country||"").toUpperCase()||null;
+  return{value,country};
+};
+StreamingLocalCard.prototype._localAgeBadge=function(item){
+  const age=this._localAge(item);
+  const v=String(age.value||"").trim().toUpperCase();
+  const country=String(age.country||"").trim().toUpperCase();
+  if(!v)return"";
+  if(country==="FR")return `<span class="age-badge fr" title="Classification France ${this._esc(v)}">${this._esc(v)}</span>`;
+  if(country==="US")return `<span class="age-badge us" title="Classification US ${this._esc(v)}">${this._esc(v)}</span>`;
+  return `<span class="age-badge us">${this._esc(v)}</span>`;
+};
+StreamingLocalCard.prototype._localPlayback=function(){
+  return this._data?.local_playback||{enabled:false,players:[]};
+};
+StreamingLocalCard.prototype._vlcControls=function(item,label=""){
+  const cfg=this._localPlayback();
+  const players=Array.isArray(cfg.players)?cfg.players:[];
+  if(cfg.enabled!==true||!item?.local_id||!players.length){
+    if(cfg.enabled===true&&item?.local_id&&!players.length){
+      console.warn("[Streaming Top FR]",STFR_VERSION,"VLC activé mais aucune destination compatible n\'a été reçue.");
+    }
+    return"";
+  }
+  const episodeSuffix=label?` · ${this._esc(label)}`:"";
+  const buttons=players.map(player=>`<button class="vlc-destination" data-local-play-player="${this._esc(player.id)}"><ha-icon icon="mdi:vlc"></ha-icon><span class="vlc-copy"><strong>Voir avec VLC${episodeSuffix}</strong><small>sur ${this._esc(player.name||player.id)}</small></span></button>`).join("");
+  return `<div class="vlc-row">${buttons}</div>`;
+};
+StreamingLocalCard.prototype._playLocal=async function(item,playerId,button){
+  if(!this._hass||!item?.local_id||!playerId)return;
+  const oldHtml=button?.innerHTML;
+  if(button){
+    button.disabled=true;
+    button.innerHTML='<ha-icon icon="mdi:loading"></ha-icon><span>Lancement…</span>';
+  }
+  try{
+    await this._hass.callWS({
+      type:"streaming_top_fr/play_local",
+      local_id:item.local_id,
+      player:playerId,
+    });
+    if(button){
+      button.innerHTML='<ha-icon icon="mdi:check"></ha-icon><span>Lancé</span>';
+      setTimeout(()=>{
+        if(button?.isConnected){
+          button.disabled=false;
+          button.innerHTML=oldHtml;
+        }
+      },1800);
+    }
+  }catch(e){
+    if(button){
+      button.disabled=false;
+      button.innerHTML=oldHtml;
+    }
+    this._error=`VLC : ${String(e)}`;
+    this._render();
+  }
+};
 StreamingLocalCard.prototype._seasonDetail=function(item){
   const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
   const episodes=[...(item.episodes||[])].sort((a,b)=>
@@ -1087,11 +1152,21 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
     String(a.relative_path||"").localeCompare(String(b.relative_path||""),"fr")
   );
   const selectionKey=item.season_key||`${item.series_key||"series"}:season:${item.season??0}`;
-  const selectedId=this._seriesSelection?.[selectionKey]||null;
+  const defaultEpisode=episodes.find(ep=>ep.watch_state!==true)||episodes[0]||null;
+  const selectedId=this._seriesSelection?.[selectionKey]||defaultEpisode?.local_id||null;
+  const selectedEpisode=episodes.find(ep=>ep.local_id===selectedId)||defaultEpisode;
+  if(selectedEpisode){
+    this._seriesSelection=this._seriesSelection||{};
+    this._seriesSelection[selectionKey]=selectedEpisode.local_id;
+  }
   const m=document.createElement("div");m.className="modalbg";
   const franchise=item.franchise_title||item.title||item.parsed_title||"Sans titre";
   const storyTitle=item.season_title||"";
-  const meta=this._metadata(item);
+  const metaParts=[];
+  if(item.year)metaParts.push(String(item.year));
+  if(item.rating!=null){const n=Number(item.rating);metaParts.push(`★ ${Number.isFinite(n)?n.toFixed(1):this._esc(item.rating)}`)}
+  const meta=metaParts.join(" · ");
+  const ageBadge=this._localAgeBadge(item);
   const match=item.metadata_status==="matched"
     ?"JustWatch + IMDb"
     :item.metadata_status==="imdb_only"
@@ -1116,6 +1191,10 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
     </div>`;
   }).join("");
   const allSeen=episodes.length>0&&episodes.every(ep=>ep.watch_state===true);
+  const selectedCode=selectedEpisode&&selectedEpisode.season!=null&&selectedEpisode.episode!=null
+    ?`S${String(selectedEpisode.season).padStart(2,"0")}E${String(selectedEpisode.episode).padStart(2,"0")}`
+    :"";
+  const vlcControls=this._vlcControls(selectedEpisode,selectedCode);
   m.innerHTML=`<div class="modal series-modal">
     <button class="modal-close" aria-label="Fermer">×</button>
     <div class="modal-head">
@@ -1131,12 +1210,17 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
     <div class="details">
       <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
     </div>
+    ${vlcControls}
     <div class="watch-actions"><button class="watch-main" data-season-watch="${allSeen?"false":"true"}"><ha-icon icon="${allSeen?"mdi:eye-off-outline":"mdi:check-all"}"></ha-icon>${allSeen?"Remettre la saison dans Pas encore vus":"Marquer toute la saison vue"}</button></div>
     <div class="episode-list">${episodeRows||'<div class="state">Aucun épisode détecté pour cette saison.</div>'}</div>
     <div class="episode-help">Le statut Vu est partagé avec les services de streaming au niveau de l’œuvre. Un épisode peut toutefois être remis explicitement en non vu.</div>
   </div>`;
   m.onclick=e=>{if(e.target===m)m.remove()};
   m.querySelector(".modal-close").onclick=()=>m.remove();
+  m.querySelectorAll("[data-local-play-player]").forEach(b=>b.addEventListener("click",async e=>{
+    e.stopPropagation();
+    if(selectedEpisode)await this._playLocal(selectedEpisode,b.dataset.localPlayPlayer,b);
+  }));
   m.querySelector("[data-season-watch]")?.addEventListener("click",async e=>{
     const enabled=e.currentTarget.dataset.seasonWatch==="true";
     m.remove();
@@ -1163,7 +1247,11 @@ StreamingLocalCard.prototype._detail=function(item){
   const old=this.shadowRoot.querySelector(".modalbg");if(old)old.remove();
   const m=document.createElement("div");m.className="modalbg";
   const title=item.title||item.parsed_title||item.filename||"Sans titre";
-  const meta=this._metadata(item);
+  const metaParts=[];
+  if(item.year)metaParts.push(String(item.year));
+  if(item.rating!=null){const n=Number(item.rating);metaParts.push(`★ ${Number.isFinite(n)?n.toFixed(1):this._esc(item.rating)}`)}
+  const meta=metaParts.join(" · ");
+  const ageBadge=this._localAgeBadge(item);
   const parsed=item.parsed_title&&item.parsed_title!==item.title
     ?`<div class="detail-row"><strong>Nom détecté</strong><span>${this._esc(item.parsed_title)}</span></div>`:"";
   const path=item.relative_path
@@ -1174,21 +1262,30 @@ StreamingLocalCard.prototype._detail=function(item){
     ?"IMDb uniquement"
     :"Non identifié";
   const seen=item.watch_state===true;
+  const vlcControls=this._vlcControls(item);
   m.innerHTML=`<div class="modal">
     <button class="modal-close" aria-label="Fermer">×</button>
     <div class="modal-head">
       ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
-      <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div></div>
+      <div class="modal-head-copy"><div class="local-title-row"><h2>${this._esc(title)}</h2>${ageBadge}</div><div class="modal-meta">${this._esc(meta)}</div></div>
     </div>
     <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
-    <div class="details">
-      <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
-      ${parsed}${path}
-    </div>
+    <details class="technical-details">
+      <summary>Détails techniques</summary>
+      <div class="details">
+        <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
+        ${parsed}${path}
+      </div>
+    </details>
+    ${vlcControls}
     <div class="watch-actions"><button class="watch-main" data-item-watch="${seen?"false":"true"}"><ha-icon icon="${seen?"mdi:eye-off-outline":"mdi:check-circle-outline"}"></ha-icon>${seen?"Remettre dans Pas encore vus":"Marquer vu"}</button></div>
   </div>`;
   m.onclick=e=>{if(e.target===m)m.remove()};
   m.querySelector(".modal-close").onclick=()=>m.remove();
+  m.querySelectorAll("[data-local-play-player]").forEach(b=>b.addEventListener("click",async e=>{
+    e.stopPropagation();
+    await this._playLocal(item,b.dataset.localPlayPlayer,b);
+  }));
   m.querySelector("[data-item-watch]")?.addEventListener("click",async e=>{
     const enabled=e.currentTarget.dataset.itemWatch==="true";
     m.remove();
@@ -1243,10 +1340,10 @@ StreamingLocalCard.prototype._render=function(){
     :"";
 
   const familyRow=this._category==="family"
-    ?`<div class="subtabs family-tabs">${familyCats.map(cat=>`<button class="subtab ${cat===this._familyCategory?"active":""}" data-family-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._displayItems("family",cat).length})</span></button>`).join("")}</div>`
+    ?`<div class="subtabs family-tabs adaptive-tabs">${familyCats.map(cat=>`<button class="subtab ${cat===this._familyCategory?"active":""}" data-family-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._displayItems("family",cat).length})</span></button>`).join("")}</div>`
     :'<div class="subtabs family-tabs reserved" aria-hidden="true"></div>';
 
-  const watchRow=`<div class="subtabs watch-tabs">
+  const watchRow=`<div class="subtabs watch-tabs adaptive-tabs">
     <button class="subtab ${this._watchFilter==="all"?"active":""}" data-watch-filter="all">Tous (${watchCounts.all})</button>
     <button class="subtab ${this._watchFilter==="unwatched"?"active":""}" data-watch-filter="unwatched">Pas encore vus (${watchCounts.unwatched})</button>
     <button class="subtab ${this._watchFilter==="watched"?"active":""}" data-watch-filter="watched">Vus (${watchCounts.watched})</button>
@@ -1264,9 +1361,11 @@ StreamingLocalCard.prototype._render=function(){
     .refresh{width:36px;height:36px;border:0;border-radius:50%;background:var(--secondary-background-color);cursor:pointer;font-size:20px}
     .tabs,.subtabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
     .tabs{margin-bottom:8px}
+    .adaptive-tabs{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 14px;overflow:visible;margin-left:auto;margin-right:auto}.category-groups{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px}.category-row{display:flex;justify-content:center;align-items:center;gap:14px;overflow:visible;padding:0;margin:0}.family-tabs,.watch-tabs{justify-content:center}
     .subtabs{min-height:36px;margin-bottom:8px}
     .subtabs.reserved{visibility:hidden}
     .tab,.subtab{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap}
+    .category-row .tab{justify-content:center;font-weight:800}
     .subtab{padding:7px 11px;font-size:.86rem}
     .tab.active,.subtab.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
     .tab ha-icon,.subtab ha-icon{--mdc-icon-size:18px}
@@ -1290,12 +1389,14 @@ StreamingLocalCard.prototype._render=function(){
     .modal-close{position:absolute;right:10px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:var(--secondary-background-color);font-size:25px;cursor:pointer}
     .modal-head{display:flex;gap:14px;padding-right:42px;align-items:flex-start}
     .modal-head img{width:88px;aspect-ratio:2/3;object-fit:cover;border-radius:9px}
-    .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
+    .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}.local-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.age-badge{display:inline-grid;place-items:center;flex:0 0 auto;box-sizing:border-box;font-weight:900;line-height:1;vertical-align:middle}.age-badge.fr{width:29px;height:29px;border-radius:50%;background:#d9d9d9!important;color:#111!important;border:0!important;font-size:.66rem;box-shadow:none!important}.age-badge.us{min-width:42px;height:26px;padding:0 7px;border-radius:6px;background:#242424!important;color:#fff!important;border:0!important;font-size:.64rem;letter-spacing:.01em;box-shadow:none!important}
     .modal p{line-height:1.45;color:var(--secondary-text-color)}
+    .technical-details{margin:14px 0 4px;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.technical-details summary{padding:10px 2px;cursor:pointer;font-size:.88rem;font-weight:800;color:var(--secondary-text-color);list-style-position:inside}.technical-details[open] summary{color:var(--primary-text-color)}.technical-details .details{margin:0;padding:2px 2px 12px}
     .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
     .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
     .series-summary{margin-top:6px;color:var(--secondary-text-color);font-size:.86rem}
-    .watch-actions{display:flex;margin:16px 0 12px}.watch-main{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--primary-color);color:var(--text-primary-color,#fff);cursor:pointer;font-weight:800}.watch-main ha-icon{--mdc-icon-size:18px}
+    .watch-actions{display:flex;justify-content:center;margin:16px 0 12px}.watch-main{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer;font-weight:800}.watch-main ha-icon{--mdc-icon-size:18px}
+    .vlc-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:16px 0 10px}.vlc-destination{min-width:180px;min-height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid rgba(222,86,44,.58);border-radius:999px;padding:10px 18px;background:linear-gradient(rgba(196,72,31,.32),rgba(91,34,22,.42)),rgba(20,16,14,.82);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(8px);cursor:pointer;font-weight:800;text-align:center}.vlc-destination:hover{filter:brightness(1.08)}.vlc-destination:disabled{opacity:.45;cursor:wait}.vlc-destination ha-icon{--mdc-icon-size:28px;color:#fff}.vlc-copy{display:flex;flex-direction:column;align-items:center;line-height:1.08}.vlc-copy strong{font-size:.88rem;color:#fff}.vlc-copy small{margin-top:5px;font-size:.92rem;font-weight:900;color:#fff}
     .episode-list{display:grid;gap:7px}
     .episode-row{width:100%;display:flex;align-items:stretch;gap:6px;border-radius:12px;background:var(--secondary-background-color)}
     .episode-row.selected{outline:2px solid var(--primary-color)}
@@ -1305,11 +1406,11 @@ StreamingLocalCard.prototype._render=function(){
     .episode-select ha-icon{flex:0 0 auto;color:var(--primary-color)}
     .episode-watch{flex:0 0 44px;border:0;border-left:1px solid var(--divider-color);background:none;cursor:pointer}.episode-watch ha-icon{--mdc-icon-size:22px;color:var(--secondary-text-color)}.episode-watch.on ha-icon{color:var(--primary-color)}
     .episode-help{margin-top:12px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.35}
-    @media(max-width:600px){.wrap{padding:14px 11px}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
+    @media(max-width:600px){.wrap{padding:14px 11px}.adaptive-tabs{gap:8px}.category-row{gap:8px;flex-wrap:wrap}.category-row .tab{justify-content:center}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
   </style>
   <ha-card><div class="wrap">
     <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-    ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+    ${cats.length?`<div class="category-groups"><div class="tabs category-row">${cats.slice(0,3).map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div><div class="tabs category-row">${cats.slice(3).map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div></div>`:""}
     ${familyRow}
     ${watchRow}
     ${body}
