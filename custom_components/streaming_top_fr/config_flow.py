@@ -58,6 +58,8 @@ FIELD_LOCAL_ENABLED = "local_enabled"
 FIELD_LOCAL_ROOT = "local_root_path"
 FIELD_LOCAL_SMB = "local_smb_base_uri"
 FIELD_LOCAL_AUTH_MODE = "local_smb_auth_mode"
+FIELD_LOCAL_USERNAME = "local_smb_username"
+FIELD_LOCAL_PASSWORD = "local_smb_password"
 FIELD_LOCAL_EXTENSIONS = "local_extensions"
 FIELD_LOCAL_SCAN_HIDDEN = "local_scan_hidden"
 FIELD_LOCAL_MOVIES_FOLDERS = "local_movies_folders"
@@ -152,14 +154,25 @@ def _local_library_schema(settings: dict[str, Any]) -> vol.Schema:
             ): selector.TextSelector(),
             vol.Required(
                 FIELD_LOCAL_AUTH_MODE,
-                default=str(local.get("smb_auth_mode") or "vlc_saved"),
+                default=str(local.get("smb_auth_mode") or "configured"),
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
                         SelectOptionDict(value="vlc_saved", label="VLC — identifiants mémorisés"),
+                        SelectOptionDict(value="configured", label="Streaming Top FR — identifiants configurés"),
                     ],
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
+            ),
+            vol.Optional(
+                FIELD_LOCAL_USERNAME,
+                default=str(local.get("smb_username") or ""),
+            ): selector.TextSelector(),
+            vol.Optional(
+                FIELD_LOCAL_PASSWORD,
+                default=str(local.get("smb_password") or ""),
+            ): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
             ),
             vol.Required(
                 FIELD_LOCAL_EXTENSIONS,
@@ -209,7 +222,9 @@ def _apply_local_library(
         "enabled": bool(user_input.get(FIELD_LOCAL_ENABLED, False)),
         "root_path": str(user_input.get(FIELD_LOCAL_ROOT) or "").strip(),
         "smb_base_uri": str(user_input.get(FIELD_LOCAL_SMB) or "").strip().rstrip("/"),
-        "smb_auth_mode": str(user_input.get(FIELD_LOCAL_AUTH_MODE) or "vlc_saved"),
+        "smb_auth_mode": str(user_input.get(FIELD_LOCAL_AUTH_MODE) or "configured"),
+        "smb_username": str(user_input.get(FIELD_LOCAL_USERNAME) or "").strip(),
+        "smb_password": str(user_input.get(FIELD_LOCAL_PASSWORD) or ""),
         "extensions": extensions
         or ["mkv", "avi", "mp4", "m4v", "ts", "m2ts", "mov", "wmv"],
         "category_folders": {
