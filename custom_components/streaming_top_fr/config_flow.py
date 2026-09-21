@@ -47,6 +47,7 @@ FIELD_PREFETCH_COUNT = "prefetch_count"
 FIELD_MAX_DEPTH = "max_depth"
 FIELD_DURATION_FILTER_ENABLED = "duration_filter_enabled"
 FIELD_DURATION_FILTER_MAX_MINUTES = "duration_filter_max_minutes"
+FIELD_DEBUG_ENABLED = "debug_enabled"
 FIELD_PLAYBACK_ENABLED = "playback_enabled"
 FIELD_PLAYER_SELECT = "player_select"
 FIELD_PLAYER_ID = "player_id"
@@ -157,6 +158,24 @@ def _apply_duration_filter(
     settings["duration_filter"] = {
         "enabled": bool(user_input.get(FIELD_DURATION_FILTER_ENABLED, False)),
         "max_minutes": int(user_input[FIELD_DURATION_FILTER_MAX_MINUTES]),
+    }
+
+
+def _debug_schema(settings: dict[str, Any]) -> vol.Schema:
+    debug = settings.get("debug") or {}
+    return vol.Schema(
+        {
+            vol.Optional(
+                FIELD_DEBUG_ENABLED,
+                default=bool(debug.get("enabled", False)),
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+def _apply_debug(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
+    settings["debug"] = {
+        "enabled": bool(user_input.get(FIELD_DEBUG_ENABLED, False)),
     }
 
 
@@ -535,6 +554,7 @@ def _summary_placeholders(
     family = settings.get("family") or {}
     classification = settings.get("classification") or {}
     duration_filter = settings.get("duration_filter") or {}
+    debug = settings.get("debug") or {}
     local_library = settings.get("local_library") or {}
     local_enabled = bool(local_library.get("enabled", False))
     local_auth_mode = str(local_library.get("smb_auth_mode") or "configured").casefold()
@@ -572,6 +592,7 @@ def _summary_placeholders(
         "us_tv": _status(classification.get("us_tv", True)),
         "duration_filter_enabled": _status(duration_filter.get("enabled", True)),
         "duration_filter_max_minutes": str(int(duration_filter.get("max_minutes", 120))),
+        "debug_enabled": _status(debug.get("enabled", False)),
         "local_enabled": _status(local_enabled),
         "local_auth_mode": local_auth_label if local_enabled else "—",
         "local_root_path": str(local_library.get("root_path") or "—") if local_enabled else "—",
@@ -830,6 +851,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                 "services",
                 "discovery",
                 "duration_filter",
+                "debug",
                 "top_catalog",
                 "decades",
                 "default_decade",
@@ -927,6 +949,19 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
         return self.async_show_form(
             step_id="duration_filter",
             data_schema=_duration_filter_schema(self._settings),
+        )
+
+    async def async_step_debug(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_debug(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="debug",
+            data_schema=_debug_schema(self._settings),
         )
 
     async def async_step_top_catalog(
