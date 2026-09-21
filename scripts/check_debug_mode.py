@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Stable 1.0.2 release guard.
+
 settings = (ROOT / "custom_components/streaming_top_fr/settings.py").read_text(encoding="utf-8")
 config_flow = (ROOT / "custom_components/streaming_top_fr/config_flow.py").read_text(encoding="utf-8")
 init_source = (ROOT / "custom_components/streaming_top_fr/__init__.py").read_text(encoding="utf-8")
