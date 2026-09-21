@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.3";
+const STFR_VERSION = "1.0.4-beta.1";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -1570,7 +1570,7 @@ console.info(`STREAMING TOP FR ${STFR_VERSION}`);
 
 
 // ---------------------------------------------------------------------------
-// Optional movie runtime filter (v1.0.3)
+// Optional movie runtime filter (v1.0.4-beta.1)
 // Added as prototype decorators so the validated Streaming/Top class bodies
 // remain unchanged. Runtime lookups are on-demand and isolated from catalogue
 // construction and Streaming Local scanning.
@@ -1833,7 +1833,7 @@ StreamingLocalCard.prototype._render=function(){
 
 
 // ---------------------------------------------------------------------------
-// Streaming Local alphabetical FR movie ordering (v1.0.3)
+// Streaming Local alphabetical FR movie ordering (v1.0.4-beta.1)
 // Display-only sorting: French localized title for standalone movies, saga
 // folder as the alphabetical anchor, chronological order inside each saga.
 // ---------------------------------------------------------------------------
