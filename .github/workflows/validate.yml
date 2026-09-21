@@ -52,3 +52,6 @@ jobs:
 
       - name: Validate JavaScript syntax
         run: node --check custom_components/streaming_top_fr/www/streaming-top-fr-card.js
+
+      - name: Check Streaming Local Family/watched views
+        run: node scripts/check_local_views.js
