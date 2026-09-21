@@ -256,25 +256,30 @@ def _find_local_index_match(item, index):
 
 async def _async_refresh_local_canonical_index(data):
     """Refresh the persisted Local index without changing the protected engines."""
-    coordinator = data["coordinator"]
-    settings = coordinator.settings or (coordinator.data or {}).get("settings") or {}
-    local_settings = settings.get("local_library") or {}
-    if not local_settings.get("enabled", False):
-        await _persist_local_canonical_index(data["store"], [])
-        return
+    try:
+        coordinator = data["coordinator"]
+        settings = coordinator.settings or (coordinator.data or {}).get("settings") or {}
+        local_settings = settings.get("local_library") or {}
+        if not local_settings.get("enabled", False):
+            await _persist_local_canonical_index(data["store"], [])
+            return
 
-    scanner = data["local_library"]
-    result = scanner.last_result
-    if not result.items and not result.errors:
-        result = await scanner.async_scan(local_settings)
-    if result.errors and not result.items:
-        return
+        scanner = data["local_library"]
+        result = scanner.last_result
+        if not result.items and not result.errors:
+            result = await scanner.async_scan(local_settings)
+        if result.errors and not result.items:
+            return
 
-    await data["local_metadata"].async_enrich_local_items(
-        result.items,
-        settings.get("classification") or {},
-    )
-    await _persist_local_canonical_index(data["store"], result.items)
+        await data["local_metadata"].async_enrich_local_items(
+            result.items,
+            settings.get("classification") or {},
+        )
+        await _persist_local_canonical_index(data["store"], result.items)
+    except Exception:
+        # The previous persisted index remains usable if a background refresh
+        # temporarily fails (network/API unavailable, NAS not mounted, etc.).
+        return
 
 
 def _local_playback_payload(settings):
@@ -541,6 +546,8 @@ def _register_ws(hass):
         enriched_count = sum(
             1 for item in items if item.get("metadata_status")
         )
+        if not items or enriched_count:
+            await _persist_local_canonical_index(data["store"], result.items)
         connection.send_result(
             msg["id"],
             {
