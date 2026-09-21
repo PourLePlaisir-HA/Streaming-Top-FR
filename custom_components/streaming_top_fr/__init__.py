@@ -111,7 +111,12 @@ def _entry_data(hass, entry_id=None):
 def _local_playback_payload(settings):
     players = settings.get("players") or {}
     playback = settings.get("playback") or {}
-    enabled = bool(playback.get("enabled", bool(players)))
+    local_settings = settings.get("local_library") or {}
+    smb_base = str(local_settings.get("smb_base_uri") or "").strip()
+    enabled = bool(
+        playback.get("enabled", bool(players))
+        and smb_base.lower().startswith("smb://")
+    )
     destinations = []
     for player_id, player in players.items():
         if not isinstance(player, dict):
