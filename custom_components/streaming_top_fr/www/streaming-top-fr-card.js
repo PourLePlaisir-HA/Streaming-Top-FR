@@ -491,29 +491,53 @@ StreamingTopFrCard.prototype._playSections=function(item){
 const _stfrDetailBeforeLocalCopy=StreamingTopFrCard.prototype._detail;
 StreamingTopFrCard.prototype._detail=async function(item){
   let resolved=item;
+  const requestItem={
+    media_type:item?.media_type||null,
+    media_key:item?.media_key||null,
+    imdb_id:item?.imdb_id||null,
+    title:item?.title||null,
+    original_title:item?.original_title||null,
+    subtitle:item?.subtitle||null,
+    year:item?.year??null,
+  };
+  let localDiagnostic={
+    frontend_version:STFR_VERSION,
+    request_sent:false,
+    request_item:requestItem,
+    websocket_error:null,
+    response_received:false,
+  };
   if(this._hass&&String(item?.media_type||"").toLowerCase()==="movie"){
     try{
+      localDiagnostic.request_sent=true;
       const local=await this._hass.callWS({
         type:"streaming_top_fr/find_local_copy",
-        item:{
-          media_type:item.media_type,
-          media_key:item.media_key,
-          imdb_id:item.imdb_id||null,
-          title:item.title||null,
-          original_title:item.original_title||null,
-          subtitle:item.subtitle||null,
-          year:item.year??null,
-        },
+        item:requestItem,
       });
+      localDiagnostic={
+        ...localDiagnostic,
+        response_received:true,
+        backend:local?.diagnostic||null,
+        match:local?.match||null,
+        local_playback:local?.local_playback||null,
+      };
       resolved={
         ...item,
         _local_copy:local?.match||null,
         _local_playback:local?.local_playback||null,
-        _local_diagnostic:local?.diagnostic||null,
+        _local_diagnostic:localDiagnostic,
       };
     }catch(e){
-      // Local availability is optional. Never block the Streaming popup.
+      localDiagnostic.websocket_error=String(e);
+      resolved={
+        ...item,
+        _local_copy:null,
+        _local_playback:null,
+        _local_diagnostic:localDiagnostic,
+      };
     }
+  }else{
+    resolved={...item,_local_diagnostic:localDiagnostic};
   }
 
   const result=await _stfrDetailBeforeLocalCopy.call(this,resolved);
