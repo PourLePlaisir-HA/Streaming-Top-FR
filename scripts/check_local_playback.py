@@ -77,8 +77,11 @@ assert '_persist_local_canonical_index' in init_source
 assert 'async_enrich_local_items' in init_source
 assert 'Voir sur VLC' in card
 assert 'data-stream-local-id' in card
-assert 'const STFR_VERSION = "1.0.1-beta.3";' in card
-assert '"version": "1.0.1-beta.3"' in manifest
+assert 'stream-local-diagnostic' in card
+assert 'Détails techniques — correspondance Local' in card
+assert '"diagnostic": diagnostic' in init_source
+assert 'const STFR_VERSION = "1.0.1-beta.4";' in card
+assert '"version": "1.0.1-beta.4"' in manifest
 assert 'public_local.pop("smb_username", None)' in init_source
 assert 'public_local.pop("smb_password", None)' in init_source
 assert '"smb_username": _clean_string(local_library.get("smb_username")) or ""' in settings_source
