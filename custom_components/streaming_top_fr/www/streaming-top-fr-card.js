@@ -912,10 +912,10 @@ StreamingLocalCard.prototype._episodicSeasonGroups=function(category,familyCateg
     ).trim().toLocaleLowerCase("fr");
     const seriesKey=String(
       item.imdb_id||item.canonical_watch_key||item.canonical_media_key||
-      \`series:\${this._effectiveCategory(category,familyCategory)}:\${fallbackTitle}\`
+      `series:${this._effectiveCategory(category,familyCategory)}:${fallbackTitle}`
     ).trim();
     const season=Number(item.season??0);
-    const seasonKey=\`\${seriesKey}:season:\${season}\`;
+    const seasonKey=`${seriesKey}:season:${season}`;
     if(!groups.has(seasonKey)){
       groups.set(seasonKey,{seriesKey,season,episodes:[]});
     }
@@ -1012,24 +1012,24 @@ StreamingLocalCard.prototype._normalizeCategory=function(){
 };
 StreamingLocalCard.prototype._tile=function(item,index){
   const poster=item.poster
-    ?\`<img src="\${this._esc(item.poster)}" alt="\${this._esc(item.title||item.filename||"")}" loading="lazy">\`
+    ?`<img src="${this._esc(item.poster)}" alt="${this._esc(item.title||item.filename||"")}" loading="lazy">`
     :'<div class="poster-fallback"><ha-icon icon="mdi:movie-open-outline"></ha-icon></div>';
   const meta=this._metadata(item);
   const title=item.title||item.parsed_title||item.filename||"Sans titre";
   const watchedBadge=item.watch_state===true
     ?'<span class="watched-badge"><ha-icon icon="mdi:check"></ha-icon> Vu</span>'
     :item.watch_partial
-    ?\`<span class="watched-badge partial">\${item.watched_count}/\${item.episode_count}</span>\`
+    ?`<span class="watched-badge partial">${item.watched_count}/${item.episode_count}</span>`
     :"";
   const seriesExtra=item.is_season_group
-    ?\`Saison \${item.season??"?"} · \${item.episode_count} épisode\${item.episode_count>1?"s":""} · \${item.watched_count||0}/\${item.episode_count} vus\`
+    ?`Saison ${item.season??"?"} · ${item.episode_count} épisode${item.episode_count>1?"s":""} · ${item.watched_count||0}/${item.episode_count} vus`
     :"";
-  return \`<button class="media" data-index="\${index}" title="\${this._esc(item.filename||title)}">
-    <div class="poster">\${poster}\${this._status(item)}\${watchedBadge}</div>
-    <div class="media-title">\${this._esc(title)}</div>
-    <div class="media-meta">\${this._esc(meta)}</div>
-    \${seriesExtra?\`<div class="series-extra">\${this._esc(seriesExtra)}</div>\`:""}
-  </button>\`;
+  return `<button class="media" data-index="${index}" title="${this._esc(item.filename||title)}">
+    <div class="poster">${poster}${this._status(item)}${watchedBadge}</div>
+    <div class="media-title">${this._esc(title)}</div>
+    <div class="media-meta">${this._esc(meta)}</div>
+    ${seriesExtra?`<div class="series-extra">${this._esc(seriesExtra)}</div>`:""}
+  </button>`;
 };
 StreamingLocalCard.prototype._setWatch=async function(items,enabled){
   if(!this._hass||!Array.isArray(items)||!items.length)return;
@@ -1065,7 +1065,7 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
     Number(a.episode??0)-Number(b.episode??0)||
     String(a.relative_path||"").localeCompare(String(b.relative_path||""),"fr")
   );
-  const selectionKey=item.season_key||\`\${item.series_key||"series"}:season:\${item.season??0}\`;
+  const selectionKey=item.season_key||`${item.series_key||"series"}:season:${item.season??0}`;
   const selectedId=this._seriesSelection?.[selectionKey]||null;
   const m=document.createElement("div");m.className="modalbg";
   const franchise=item.franchise_title||item.title||item.parsed_title||"Sans titre";
@@ -1079,41 +1079,41 @@ StreamingLocalCard.prototype._seasonDetail=function(item){
   const episodeRows=episodes.map((ep,index)=>{
     const epNo=ep.episode!=null?Number(ep.episode):index+1;
     const code=ep.season!=null&&ep.episode!=null
-      ?\`S\${String(ep.season).padStart(2,"0")}E\${String(ep.episode).padStart(2,"0")}\`
-      :\`Épisode \${epNo}\`;
+      ?`S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}`
+      :`Épisode ${epNo}`;
     const selected=selectedId&&selectedId===ep.local_id;
-    const displayTitle=ep.episode_title||storyTitle||\`Épisode \${epNo}\`;
+    const displayTitle=ep.episode_title||storyTitle||`Épisode ${epNo}`;
     const seen=ep.watch_state===true;
-    return \`<div class="episode-row \${selected?"selected":""}">
-      <button class="episode-select" data-episode-index="\${index}">
-        <span class="episode-main"><strong>\${this._esc(code)}</strong><small>\${this._esc(displayTitle)}</small></span>
-        <ha-icon icon="\${selected?"mdi:play-circle":"mdi:play-circle-outline"}"></ha-icon>
+    return `<div class="episode-row ${selected?"selected":""}">
+      <button class="episode-select" data-episode-index="${index}">
+        <span class="episode-main"><strong>${this._esc(code)}</strong><small>${this._esc(displayTitle)}</small></span>
+        <ha-icon icon="${selected?"mdi:play-circle":"mdi:play-circle-outline"}"></ha-icon>
       </button>
-      <button class="episode-watch \${seen?"on":""}" data-episode-watch-index="\${index}" title="\${seen?"Remettre dans Pas encore vus":"Marquer vu"}">
-        <ha-icon icon="\${seen?"mdi:check-circle":"mdi:check-circle-outline"}"></ha-icon>
+      <button class="episode-watch ${seen?"on":""}" data-episode-watch-index="${index}" title="${seen?"Remettre dans Pas encore vus":"Marquer vu"}">
+        <ha-icon icon="${seen?"mdi:check-circle":"mdi:check-circle-outline"}"></ha-icon>
       </button>
-    </div>\`;
+    </div>`;
   }).join("");
   const allSeen=episodes.length>0&&episodes.every(ep=>ep.watch_state===true);
-  m.innerHTML=\`<div class="modal series-modal">
+  m.innerHTML=`<div class="modal series-modal">
     <button class="modal-close" aria-label="Fermer">×</button>
     <div class="modal-head">
-      \${item.poster?\`<img src="\${this._esc(item.poster)}" alt="">\`:""}
+      ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
       <div>
-        <h2>\${this._esc(franchise)}</h2>
-        \${storyTitle?\`<div class="season-story-title">\${this._esc(storyTitle)}</div>\`:""}
-        <div class="modal-meta">\${this._esc(meta)}</div>
-        <div class="series-summary">Saison \${this._esc(item.season??"?")} · \${item.episode_count} épisode\${item.episode_count>1?"s":""} · \${item.watched_count||0}/\${item.episode_count} vus</div>
+        <h2>${this._esc(franchise)}</h2>
+        ${storyTitle?`<div class="season-story-title">${this._esc(storyTitle)}</div>`:""}
+        <div class="modal-meta">${this._esc(meta)}</div>
+        <div class="series-summary">Saison ${this._esc(item.season??"?")} · ${item.episode_count} épisode${item.episode_count>1?"s":""} · ${item.watched_count||0}/${item.episode_count} vus</div>
       </div>
     </div>
-    <p>\${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
+    <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
     <div class="details">
-      <div class="detail-row"><strong>Identification</strong><span>\${this._esc(match)}</span></div>
+      <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
     </div>
-    <div class="watch-actions"><button class="watch-main" data-season-watch="\${allSeen?"false":"true"}"><ha-icon icon="\${allSeen?"mdi:eye-off-outline":"mdi:check-all"}"></ha-icon>\${allSeen?"Remettre la saison dans Pas encore vus":"Marquer toute la saison vue"}</button></div>
-    <div class="episode-list">\${episodeRows||'<div class="state">Aucun épisode détecté pour cette saison.</div>'}</div>
+    <div class="watch-actions"><button class="watch-main" data-season-watch="${allSeen?"false":"true"}"><ha-icon icon="${allSeen?"mdi:eye-off-outline":"mdi:check-all"}"></ha-icon>${allSeen?"Remettre la saison dans Pas encore vus":"Marquer toute la saison vue"}</button></div>
+    <div class="episode-list">${episodeRows||'<div class="state">Aucun épisode détecté pour cette saison.</div>'}</div>
     <div class="episode-help">Le statut Vu est partagé avec les services de streaming au niveau de l’œuvre. Un épisode peut toutefois être remis explicitement en non vu.</div>
-  </div>\`;
+  </div>`;
   m.onclick=e=>{if(e.target===m)m.remove()};
   m.querySelector(".modal-close").onclick=()=>m.remove();
   m.querySelector("[data-season-watch]")?.addEventListener("click",async e=>{
@@ -1144,28 +1144,28 @@ StreamingLocalCard.prototype._detail=function(item){
   const title=item.title||item.parsed_title||item.filename||"Sans titre";
   const meta=this._metadata(item);
   const parsed=item.parsed_title&&item.parsed_title!==item.title
-    ?\`<div class="detail-row"><strong>Nom détecté</strong><span>\${this._esc(item.parsed_title)}</span></div>\`:"";
+    ?`<div class="detail-row"><strong>Nom détecté</strong><span>${this._esc(item.parsed_title)}</span></div>`:"";
   const path=item.relative_path
-    ?\`<div class="detail-row"><strong>Fichier</strong><span>\${this._esc(item.relative_path)}</span></div>\`:"";
+    ?`<div class="detail-row"><strong>Fichier</strong><span>${this._esc(item.relative_path)}</span></div>`:"";
   const match=item.metadata_status==="matched"
     ?"JustWatch + IMDb"
     :item.metadata_status==="imdb_only"
     ?"IMDb uniquement"
     :"Non identifié";
   const seen=item.watch_state===true;
-  m.innerHTML=\`<div class="modal">
+  m.innerHTML=`<div class="modal">
     <button class="modal-close" aria-label="Fermer">×</button>
     <div class="modal-head">
-      \${item.poster?\`<img src="\${this._esc(item.poster)}" alt="">\`:""}
-      <div><h2>\${this._esc(title)}</h2><div class="modal-meta">\${this._esc(meta)}</div></div>
+      ${item.poster?`<img src="${this._esc(item.poster)}" alt="">`:""}
+      <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div></div>
     </div>
-    <p>\${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
+    <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
     <div class="details">
-      <div class="detail-row"><strong>Identification</strong><span>\${this._esc(match)}</span></div>
-      \${parsed}\${path}
+      <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
+      ${parsed}${path}
     </div>
-    <div class="watch-actions"><button class="watch-main" data-item-watch="\${seen?"false":"true"}"><ha-icon icon="\${seen?"mdi:eye-off-outline":"mdi:check-circle-outline"}"></ha-icon>\${seen?"Remettre dans Pas encore vus":"Marquer vu"}</button></div>
-  </div>\`;
+    <div class="watch-actions"><button class="watch-main" data-item-watch="${seen?"false":"true"}"><ha-icon icon="${seen?"mdi:eye-off-outline":"mdi:check-circle-outline"}"></ha-icon>${seen?"Remettre dans Pas encore vus":"Marquer vu"}</button></div>
+  </div>`;
   m.onclick=e=>{if(e.target===m)m.remove()};
   m.querySelector(".modal-close").onclick=()=>m.remove();
   m.querySelector("[data-item-watch]")?.addEventListener("click",async e=>{
@@ -1207,31 +1207,31 @@ StreamingLocalCard.prototype._render=function(){
   const watchCounts=this._watchCounts();
   const familyCats=this._familyCategories();
   let body="";
-  if(this._error)body=\`<div class="state error">\${this._esc(this._error)}</div>\`;
+  if(this._error)body=`<div class="state error">${this._esc(this._error)}</div>`;
   else if(!d&&this._loading)body='<div class="state">Lecture de la vidéothèque…</div>';
   else if(d&&!d.enabled)body='<div class="state">Streaming Local est désactivé dans la configuration de l’intégration.</div>';
-  else if(d?.errors?.length&&!total)body=\`<div class="state error">\${d.errors.map(x=>this._esc(x)).join("<br>")}</div>\`;
+  else if(d?.errors?.length&&!total)body=`<div class="state error">${d.errors.map(x=>this._esc(x)).join("<br>")}</div>`;
   else if(d&&total===0)body='<div class="state">Aucun fichier vidéo détecté.</div>';
-  else if(items.length)body=\`<div class="rail">\${items.map((i,n)=>this._tile(i,n)).join("")}</div>\`;
-  else body=\`<div class="state">\${this._watchFilter==="watched"?"Aucun élément vu dans cette rubrique.":this._watchFilter==="unwatched"?"Tout ce qui est présent ici a déjà été vu.":"Aucun élément dans cette rubrique."}</div>\`;
+  else if(items.length)body=`<div class="rail">${items.map((i,n)=>this._tile(i,n)).join("")}</div>`;
+  else body=`<div class="state">${this._watchFilter==="watched"?"Aucun élément vu dans cette rubrique.":this._watchFilter==="unwatched"?"Tout ce qui est présent ici a déjà été vu.":"Aucun élément dans cette rubrique."}</div>`;
 
   const status=this._enriching
-    ?\`Identification des films… \${enriched}/\${total}\`
+    ?`Identification des films… ${enriched}/${total}`
     :total
-    ?\`\${total} fichier\${total>1?"s":""} · métadonnées \${progress}%\`
+    ?`${total} fichier${total>1?"s":""} · métadonnées ${progress}%`
     :"";
 
   const familyRow=this._category==="family"
-    ?\`<div class="subtabs family-tabs">\${familyCats.map(cat=>\`<button class="subtab \${cat===this._familyCategory?"active":""}" data-family-category="\${cat}"><ha-icon icon="\${this._icon(cat)}"></ha-icon><span>\${this._label(cat)} (\${this._displayItems("family",cat).length})</span></button>\`).join("")}</div>\`
+    ?`<div class="subtabs family-tabs">${familyCats.map(cat=>`<button class="subtab ${cat===this._familyCategory?"active":""}" data-family-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._displayItems("family",cat).length})</span></button>`).join("")}</div>`
     :'<div class="subtabs family-tabs reserved" aria-hidden="true"></div>';
 
-  const watchRow=\`<div class="subtabs watch-tabs">
-    <button class="subtab \${this._watchFilter==="all"?"active":""}" data-watch-filter="all">Tous (\${watchCounts.all})</button>
-    <button class="subtab \${this._watchFilter==="unwatched"?"active":""}" data-watch-filter="unwatched">Pas encore vus (\${watchCounts.unwatched})</button>
-    <button class="subtab \${this._watchFilter==="watched"?"active":""}" data-watch-filter="watched">Vus (\${watchCounts.watched})</button>
-  </div>\`;
+  const watchRow=`<div class="subtabs watch-tabs">
+    <button class="subtab ${this._watchFilter==="all"?"active":""}" data-watch-filter="all">Tous (${watchCounts.all})</button>
+    <button class="subtab ${this._watchFilter==="unwatched"?"active":""}" data-watch-filter="unwatched">Pas encore vus (${watchCounts.unwatched})</button>
+    <button class="subtab ${this._watchFilter==="watched"?"active":""}" data-watch-filter="watched">Vus (${watchCounts.watched})</button>
+  </div>`;
 
-  this.shadowRoot.innerHTML=\`<style>
+  this.shadowRoot.innerHTML=`<style>
     :host{display:block}
     ha-card{overflow:hidden}
     .wrap{padding:16px}
@@ -1287,12 +1287,12 @@ StreamingLocalCard.prototype._render=function(){
     @media(max-width:600px){.wrap{padding:14px 11px}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
   </style>
   <ha-card><div class="wrap">
-    <div class="top"><div><div class="title">\${this._esc(this._config.title)}</div><div class="status">\${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">\${this._loading?"…":"↻"}</button></div>
-    \${cats.length?\`<div class="tabs">\${cats.map(cat=>\`<button class="tab \${cat===this._category?"active":""}" data-category="\${cat}"><ha-icon icon="\${this._icon(cat)}"></ha-icon><span>\${this._label(cat)} (\${this._categoryCount(cat)})</span></button>\`).join("")}</div>\`:""}
-    \${familyRow}
-    \${watchRow}
-    \${body}
-  </div></ha-card>\`;
+    <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
+    ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+    ${familyRow}
+    ${watchRow}
+    ${body}
+  </div></ha-card>`;
   this._bind();
 };
 
