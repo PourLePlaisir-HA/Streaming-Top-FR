@@ -59,6 +59,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "adn": False,
     },
     "players": deepcopy(DEFAULT_PLAYERS),
+    "playback": {
+        "enabled": False,
+    },
     "local_library": {
         "enabled": False,
         "root_path": "",
@@ -117,6 +120,9 @@ services:
   crunchyroll: false
   mubi: false
   adn: false
+
+playback:
+  enabled: true
 
 players:
   salon:
@@ -263,6 +269,19 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         settings["services"] = normalized
 
     settings["players"] = _normalize_players(raw.get("players"))
+
+    # v0.8.1: direct playback is an explicit optional feature.
+    # Backward compatibility: configurations created before this setting
+    # existed keep playback enabled when at least one destination exists.
+    raw_playback = raw.get("playback")
+    if isinstance(raw_playback, dict) and "enabled" in raw_playback:
+        playback_enabled = _as_bool(
+            raw_playback.get("enabled"),
+            bool(settings["players"]),
+        )
+    else:
+        playback_enabled = bool(settings["players"])
+    settings["playback"] = {"enabled": playback_enabled}
 
     local_library = raw.get("local_library") or {}
     if isinstance(local_library, dict):
