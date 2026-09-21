@@ -744,6 +744,7 @@ def _register_ws(hass):
             or (data["coordinator"].data or {}).get("settings")
             or {}
         )
+        debug_enabled = bool((settings.get("debug") or {}).get("enabled", False))
         local_settings = settings.get("local_library") or {}
         if not local_settings.get("enabled", False):
             connection.send_result(
