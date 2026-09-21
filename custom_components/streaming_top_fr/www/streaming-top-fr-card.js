@@ -1830,3 +1830,83 @@ StreamingLocalCard.prototype._render=function(){
   }
   return result;
 };
+
+
+// ---------------------------------------------------------------------------
+// Streaming Local alphabetical FR movie ordering (v1.0.3)
+// Display-only sorting: French localized title for standalone movies, saga
+// folder as the alphabetical anchor, chronological order inside each saga.
+// ---------------------------------------------------------------------------
+StreamingLocalCard.prototype._localFrenchMovieTitle=function(item){
+  return String(
+    item?.title||
+    item?.parsed_title||
+    item?.filename||
+    ""
+  ).trim();
+};
+StreamingLocalCard.prototype._localSagaLabel=function(item){
+  const parts=String(item?.relative_path||"").split("/").filter(Boolean);
+  return parts.length>=3?String(parts[1]||"").trim():"";
+};
+StreamingLocalCard.prototype._sortMovieCollections=function(items){
+  const source=[...(items||[])];
+  const grouped=new Map();
+
+  for(const item of source){
+    const key=this._collectionKey(item);
+    if(!key)continue;
+    if(!grouped.has(key))grouped.set(key,[]);
+    grouped.get(key).push(item);
+  }
+
+  const sagaKeys=new Set(
+    [...grouped.entries()]
+      .filter(([,group])=>group.length>1)
+      .map(([key])=>key)
+  );
+  const emitted=new Set();
+  const units=[];
+
+  const compareTitle=(a,b)=>String(a||"").localeCompare(
+    String(b||""),
+    "fr",
+    {sensitivity:"base",ignorePunctuation:true,numeric:true}
+  );
+
+  for(const item of source){
+    const key=this._collectionKey(item);
+
+    if(key&&sagaKeys.has(key)){
+      if(emitted.has(key))continue;
+      emitted.add(key);
+
+      const members=[...(grouped.get(key)||[])].sort((a,b)=>{
+        const ay=Number(a?.year),by=Number(b?.year);
+        const aYear=Number.isFinite(ay)&&ay>0?ay:Number.MAX_SAFE_INTEGER;
+        const bYear=Number.isFinite(by)&&by>0?by:Number.MAX_SAFE_INTEGER;
+        return aYear-bYear||
+          compareTitle(
+            this._localFrenchMovieTitle(a),
+            this._localFrenchMovieTitle(b)
+          );
+      });
+
+      const sagaLabel=this._localSagaLabel(members[0])||
+        this._localFrenchMovieTitle(members[0]);
+      units.push({
+        sortTitle:sagaLabel,
+        items:members,
+      });
+      continue;
+    }
+
+    units.push({
+      sortTitle:this._localFrenchMovieTitle(item),
+      items:[item],
+    });
+  }
+
+  units.sort((a,b)=>compareTitle(a.sortTitle,b.sortTitle));
+  return units.flatMap(unit=>unit.items);
+};
