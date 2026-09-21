@@ -8,6 +8,7 @@ on:
       - dev-0.8.0
       - dev-0.8.1
       - dev-0.9.0
+      - dev-0.9.1
   pull_request:
     branches:
       - main
