@@ -16,6 +16,7 @@ from .settings import async_load_legacy_settings, normalize_settings
 from .watch_registry import CanonicalWatchRegistry
 from .local_views import annotate_local_items, sync_historical_work
 from .local_playback import async_launch_vlc_local, log_local_launch_failure
+from .runtime_filter import RuntimeMetadataClient
 
 
 async def async_setup(hass, config):
@@ -68,6 +69,7 @@ async def async_setup_entry(hass, entry):
         entry,
     )
     local_metadata = LocalMetadataClient(session, store)
+    runtime_metadata = RuntimeMetadataClient(session, store)
     await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
@@ -75,6 +77,7 @@ async def async_setup_entry(hass, entry):
         "watch_registry": watch_registry,
         "local_library": LocalLibraryScanner(hass),
         "local_metadata": local_metadata,
+        "runtime_metadata": runtime_metadata,
     }
     entry_runtime = hass.data[DOMAIN][entry.entry_id]
     local_settings = (
@@ -650,6 +653,52 @@ def _register_ws(hass):
 
     @websocket_api.websocket_command(
         {
+            vol.Required("type"): f"{DOMAIN}/get_runtimes",
+            vol.Optional("entry_id"): str,
+            vol.Required("items"): [dict],
+        }
+    )
+    @websocket_api.async_response
+    async def get_runtimes(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        settings = (
+            data["coordinator"].settings
+            or (data["coordinator"].data or {}).get("settings")
+            or {}
+        )
+        duration = settings.get("duration_filter") or {}
+        if not duration.get("enabled", True):
+            connection.send_result(
+                msg["id"],
+                {
+                    "enabled": False,
+                    "max_minutes": int(duration.get("max_minutes") or 120),
+                    "runtimes": {},
+                },
+            )
+            return
+
+        items = [
+            dict(item)
+            for item in (msg.get("items") or [])
+            if isinstance(item, dict)
+        ][:150]
+        runtimes = await data["runtime_metadata"].async_resolve_many(items)
+        connection.send_result(
+            msg["id"],
+            {
+                "enabled": True,
+                "max_minutes": int(duration.get("max_minutes") or 120),
+                "runtimes": runtimes,
+            },
+        )
+
+    @websocket_api.websocket_command(
+        {
             vol.Required("type"): f"{DOMAIN}/find_local_copy",
             vol.Optional("entry_id"): str,
             vol.Required("item"): dict,
@@ -1127,6 +1176,7 @@ def _register_ws(hass):
     websocket_api.async_register_command(hass, get_family_catalog)
     websocket_api.async_register_command(hass, get_local_library)
     websocket_api.async_register_command(hass, enrich_local_library)
+    websocket_api.async_register_command(hass, get_runtimes)
     websocket_api.async_register_command(hass, find_local_copy)
     websocket_api.async_register_command(hass, play_local)
     websocket_api.async_register_command(hass, set_local_watch_status)
