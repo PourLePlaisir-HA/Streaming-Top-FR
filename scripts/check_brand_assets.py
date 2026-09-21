@@ -18,25 +18,30 @@ def png_size(path: Path) -> tuple[int, int]:
 
 
 icon = BRAND / "icon.png"
+icon_2x = BRAND / "icon@2x.png"
 logo = BRAND / "logo.png"
 
 assert icon.is_file(), "brand/icon.png is missing"
+assert icon_2x.is_file(), "brand/icon@2x.png is missing"
 assert logo.is_file(), "brand/logo.png is missing"
 
 icon_width, icon_height = png_size(icon)
+icon_2x_width, icon_2x_height = png_size(icon_2x)
 logo_width, logo_height = png_size(logo)
 
-assert icon_width == icon_height, (
-    f"brand/icon.png must be square, got {icon_width}x{icon_height}"
+assert (icon_width, icon_height) == (256, 256), (
+    f"brand/icon.png must be 256x256, got {icon_width}x{icon_height}"
 )
-assert icon_width >= 128, (
-    f"brand/icon.png is too small: {icon_width}x{icon_height}"
+assert (icon_2x_width, icon_2x_height) == (512, 512), (
+    f"brand/icon@2x.png must be 512x512, got {icon_2x_width}x{icon_2x_height}"
 )
-assert logo_width >= 128 and logo_height >= 128, (
-    f"brand/logo.png is unexpectedly small: {logo_width}x{logo_height}"
+assert 128 <= min(logo_width, logo_height) <= 256, (
+    f"brand/logo.png shortest side must be 128..256 px, got {logo_width}x{logo_height}"
 )
 
 print(
     "Brand assets OK: "
-    f"icon={icon_width}x{icon_height}, logo={logo_width}x{logo_height}"
+    f"icon={icon_width}x{icon_height}, "
+    f"icon@2x={icon_2x_width}x{icon_2x_height}, "
+    f"logo={logo_width}x{logo_height}"
 )
