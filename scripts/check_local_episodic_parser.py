@@ -78,4 +78,20 @@ blake = scanner._parse_media(
 assert blake["franchise_title"] == "Blake et Mortimer", blake
 assert blake["episode_title"] == "le mystere du tresor disparu", blake
 
+
+# Regression: movie release metadata must never be parsed as an episode.
+for raw in [
+    "Movies/Indiana Jones/Indiana.Jones.and.the.Kingdom.of.the.Crystal.Skull.2008.MULTI.1080p.DD5.1.x264.mkv",
+    "Movies/Indiana Jones/Indiana.Jones.and.the.Kingdom.of.the.Crystal.Skull.2008.MULTI.1080p.DD5.1x264.mkv",
+    "Movies/Indiana Jones/Indiana.Jones.and.the.Kingdom.of.the.Crystal.Skull.2008.MULTI.1080p.DD5.1 x264.mkv",
+    "Movies/Indiana Jones/Indiana.Jones.and.the.Kingdom.of.the.Crystal.Skull.2008.MULTI.1080p.DD5.1x265.mkv",
+]:
+    relative = Path(raw)
+    result = scanner._parse_media(relative, relative, settings)
+    assert result["bucket"] == "movies", (raw, result)
+    assert result["media_type"] == "movie", (raw, result)
+    assert result["episodic"] is False, (raw, result)
+    assert result["season"] is None, (raw, result)
+    assert result["episode"] is None, (raw, result)
+
 print("Streaming Local episodic parser checks passed.")

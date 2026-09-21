@@ -35,7 +35,7 @@ _EPISODE = re.compile(
     r"(?i)\bS\s*(?P<season>\d{1,2})[ ._-]*E\s*(?P<episode>\d{1,3})\b"
 )
 _EPISODE_ALT = re.compile(
-    r"(?i)\b(?P<season>\d{1,2})\s*x\s*(?P<episode>\d{1,3})\b"
+    r"(?i)\b(?P<season>\d{1,2})x(?P<episode>\d{1,3})\b"
 )
 _SEASON_FOLDER = re.compile(
     r"(?i)^(?:season|saison|s)[ ._-]*\d{1,2}$"
@@ -129,6 +129,22 @@ class LocalLibraryScanner:
                 if (
                     int(item.get("size") or -1) != int(old_item.get("size") or -2)
                     or int(item.get("mtime") or -1) != int(old_item.get("mtime") or -2)
+                ):
+                    continue
+
+                # Structural media identity always comes from the fresh
+                # filename/path parser. If a parser fix changes that identity,
+                # never carry metadata from the previous interpretation.
+                structural_fields = (
+                    "bucket",
+                    "media_type",
+                    "episodic",
+                    "season",
+                    "episode",
+                )
+                if any(
+                    old_item.get(field) != item.get(field)
+                    for field in structural_fields
                 ):
                     continue
 
@@ -315,6 +331,23 @@ class LocalLibraryScanner:
             cleaned = re.sub(r"\s+", " ", cleaned).strip(" -_.! ")
         return cleaned
 
+    @staticmethod
+    def _episode_match(value: str):
+        """Return a genuine episodic marker, excluding codec false positives."""
+        text = str(value or "")
+        standard = _EPISODE.search(text)
+        if standard:
+            return standard
+
+        for match in _EPISODE_ALT.finditer(text):
+            start = match.start()
+            # Avoid interpreting audio-channel/codec strings such as
+            # "5.1x264" or "7.1x265" as season/episode markers.
+            if start >= 2 and re.fullmatch(r"\d[._]", text[start - 2 : start]):
+                continue
+            return match
+        return None
+
     @classmethod
     def _lookup_title(cls, title: str) -> str:
         """Return a safer catalogue-search title while preserving display text.
@@ -330,7 +363,7 @@ class LocalLibraryScanner:
         self, path: Path, relative: Path, settings: dict[str, Any]
     ) -> dict[str, Any]:
         stem = self._strip_nested_video_extensions(path.stem)
-        episode_match = _EPISODE.search(stem) or _EPISODE_ALT.search(stem)
+        episode_match = self._episode_match(stem)
         year_match = _YEAR.search(stem)
 
         media_type = "tv" if episode_match else "movie"

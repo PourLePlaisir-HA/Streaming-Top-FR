@@ -77,10 +77,10 @@
         }
       },
       "playback": {
-        "title": "Android TV / Freebox playback",
-        "description": "Automated playback is optional. It requires Home Assistant entities for remote control and Android Debug Bridge.",
+        "title": "Direct playback",
+        "description": "Direct playback is optional. Disable it to use Streaming Top FR only as a catalogue and media library.",
         "data": {
-          "configure_player": "Configure a playback destination now"
+          "playback_enabled": "Enable direct playback"
         }
       },
       "player": {
@@ -200,9 +200,10 @@
       },
       "players": {
         "title": "Playback destinations",
-        "description": "Add a destination or select an existing destination to edit it.",
+        "description": "Enable or disable direct playback, then manage playback destinations. Saved destinations are kept when direct playback is disabled.",
         "data": {
-          "player_select": "Destination"
+          "player_select": "Destination",
+          "playback_enabled": "Enable direct playback"
         }
       },
       "player_edit": {
@@ -218,7 +219,7 @@
       },
       "summary": {
         "title": "Settings summary",
-        "description": "### General\n- **Automatic refresh:** {update_hours} h\n\n### Streaming services\n{services}\n\n### Discovery\n- **Visible titles:** {visible_count}\n- **Prefetched titles:** {prefetch_count}\n- **Maximum depth:** {max_depth}\n\n### Top Streaming / IMDb\n- **Top Streaming enabled:** {top_enabled}\n- **Minimum IMDb votes:** {min_imdb_votes}\n- **Short films < 40 min excluded:** {exclude_short_films}\n\n### Decades\n- **Default decade:** {default_decade}s\n\n**Enabled decades:**\n{decades}\n\n_Legend: 🎬 Movies · ✨ Animation · 📺 TV shows_\n\n### Family\n- **Enabled:** {family_enabled}\n- **Target age:** {target_age}\n- **Allow unrated:** {allow_unrated}\n- **Movies:** {family_movies} · **Animation:** {family_animation} · **TV shows:** {family_series}\n\n### Age ratings\n- **Display enabled:** {classification_enabled}\n- **Prefer France:** {classification_france}\n- **US fallback:** {us_fallback}\n- **US TV ratings:** {us_tv}\n\n### Playback destinations\n- **Count:** {player_count}\n- **Destinations:** {players}\n\n_This page is read-only. Return to the menu to edit a section._"
+        "description": "### General\n- **Automatic refresh:** {update_hours} h\n\n### Streaming services\n{services}\n\n### Discovery\n- **Visible titles:** {visible_count}\n- **Prefetched titles:** {prefetch_count}\n- **Maximum depth:** {max_depth}\n\n### Top Streaming / IMDb\n- **Top Streaming enabled:** {top_enabled}\n- **Minimum IMDb votes:** {min_imdb_votes}\n- **Short films < 40 min excluded:** {exclude_short_films}\n\n### Decades\n- **Default decade:** {default_decade}s\n\n**Enabled decades:**\n{decades}\n\n_Legend: 🎬 Movies · ✨ Animation · 📺 TV shows_\n\n### Family\n- **Enabled:** {family_enabled}\n- **Target age:** {target_age}\n- **Allow unrated:** {allow_unrated}\n- **Movies:** {family_movies} · **Animation:** {family_animation} · **TV shows:** {family_series}\n\n### Age ratings\n- **Display enabled:** {classification_enabled}\n- **Prefer France:** {classification_france}\n- **US fallback:** {us_fallback}\n- **US TV ratings:** {us_tv}\n\n### Direct playback\n- **Enabled:** {playback_enabled}\n\n### Playback destinations\n- **Count:** {player_count}\n- **Destinations:** {players}\n\n_This page is read-only. Return to the menu to edit a section._"
       },
       "default_decade": {
         "title": "Default decade",
@@ -251,6 +252,13 @@
           "local_series_folders": "Folder names recognized as TV shows, comma-separated.",
           "local_animation_folders": "Folder names recognized as Animation, comma-separated.",
           "local_documentaries_folders": "Folder names recognized as Documentaries, comma-separated."
+        }
+      },
+      "playback": {
+        "title": "Direct playback",
+        "description": "Enable or disable direct playback actions. Saved destinations are kept when playback is disabled.",
+        "data": {
+          "playback_enabled": "Enable direct playback"
         }
       }
     },

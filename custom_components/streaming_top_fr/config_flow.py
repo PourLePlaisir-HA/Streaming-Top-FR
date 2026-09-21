@@ -45,7 +45,7 @@ FIELD_US_TV = "us_tv"
 FIELD_VISIBLE_COUNT = "visible_count"
 FIELD_PREFETCH_COUNT = "prefetch_count"
 FIELD_MAX_DEPTH = "max_depth"
-FIELD_CONFIGURE_PLAYER = "configure_player"
+FIELD_PLAYBACK_ENABLED = "playback_enabled"
 FIELD_PLAYER_SELECT = "player_select"
 FIELD_PLAYER_ID = "player_id"
 FIELD_PLAYER_NAME = "player_name"
@@ -493,6 +493,7 @@ def _summary_placeholders(
     family = settings.get("family") or {}
     classification = settings.get("classification") or {}
     local_library = settings.get("local_library") or {}
+    playback = settings.get("playback") or {}
     players = settings.get("players") or {}
     player_names = [
         str(player.get("name") or player_id)
@@ -526,6 +527,9 @@ def _summary_placeholders(
         "local_enabled": _status(local_library.get("enabled", False)),
         "local_root_path": str(local_library.get("root_path") or "—"),
         "local_smb_base_uri": str(local_library.get("smb_base_uri") or "—"),
+        "playback_enabled": _status(
+            playback.get("enabled", bool(player_names))
+        ),
         "players": ", ".join(player_names) if player_names else "—",
         "player_count": str(len(player_names)),
     }
@@ -665,19 +669,25 @@ class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         assert self._settings is not None
+        players = self._settings.get("players") or {}
+        playback = self._settings.setdefault(
+            "playback", {"enabled": bool(players)}
+        )
+
         if user_input is not None:
-            if not user_input.get(FIELD_CONFIGURE_PLAYER, False):
+            enabled = bool(user_input.get(FIELD_PLAYBACK_ENABLED, False))
+            playback["enabled"] = enabled
+            if not enabled or players:
                 return self._finish()
             return await self.async_step_player()
 
-        has_players = bool(self._settings.get("players"))
         return self.async_show_form(
             step_id="playback",
             data_schema=vol.Schema(
                 {
                     vol.Optional(
-                        FIELD_CONFIGURE_PLAYER,
-                        default=not has_players,
+                        FIELD_PLAYBACK_ENABLED,
+                        default=bool(playback.get("enabled", bool(players))),
                     ): selector.BooleanSelector()
                 }
             ),
@@ -1014,21 +1024,64 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
             data_schema=_classification_schema(self._settings),
         )
 
+    async def async_step_playback(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+
+        players = self._settings.get("players") or {}
+        playback = self._settings.setdefault(
+            "playback", {"enabled": bool(players)}
+        )
+
+        if user_input is not None:
+            playback["enabled"] = bool(
+                user_input.get(FIELD_PLAYBACK_ENABLED, False)
+            )
+            return self._save()
+
+        return self.async_show_form(
+            step_id="playback",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        FIELD_PLAYBACK_ENABLED,
+                        default=bool(playback.get("enabled", bool(players))),
+                    ): selector.BooleanSelector()
+                }
+            ),
+        )
+
     async def async_step_players(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         self._ensure_loaded()
         assert self._settings is not None
         players = self._settings.get("players") or {}
+        playback = self._settings.setdefault(
+            "playback", {"enabled": bool(players)}
+        )
 
         if user_input is not None:
-            self._selected_player = str(user_input[FIELD_PLAYER_SELECT])
+            playback["enabled"] = bool(
+                user_input.get(FIELD_PLAYBACK_ENABLED, False)
+            )
+            selected = str(
+                user_input.get(FIELD_PLAYER_SELECT) or "__none__"
+            )
+            if selected == "__none__":
+                return self._save()
+            self._selected_player = selected
             return await self.async_step_player_edit()
 
         options = [
             SelectOptionDict(
+                value="__none__", label="— Ne rien modifier —"
+            ),
+            SelectOptionDict(
                 value="__add__", label="➕ Ajouter une destination"
-            )
+            ),
         ]
         options.extend(
             SelectOptionDict(
@@ -1041,15 +1094,21 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
             step_id="players",
             data_schema=vol.Schema(
                 {
+                    vol.Optional(
+                        FIELD_PLAYBACK_ENABLED,
+                        default=bool(
+                            playback.get("enabled", bool(players))
+                        ),
+                    ): selector.BooleanSelector(),
                     vol.Required(
                         FIELD_PLAYER_SELECT,
-                        default="__add__",
+                        default="__none__",
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=options,
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
-                    )
+                    ),
                 }
             ),
         )

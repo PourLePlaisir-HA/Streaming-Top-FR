@@ -3042,7 +3042,25 @@ class JustWatchClient:
                     local_media_key = item.get("media_key") or local_id
                     parsed_title = item.get("title")
                     lookup_title = item.get("lookup_title") or parsed_title
+                    parser_owned_fields = {
+                        "bucket",
+                        "media_type",
+                        "season",
+                        "episode",
+                        "episodic",
+                        "franchise_title",
+                        "episode_title",
+                        "local_id",
+                        "relative_path",
+                        "filename",
+                        "local_path",
+                        "smb_uri",
+                        "size",
+                        "mtime",
+                    }
                     for field, value in metadata.items():
+                        if field in parser_owned_fields:
+                            continue
                         if value is not None:
                             item[field] = value
                     item["parsed_title"] = parsed_title
