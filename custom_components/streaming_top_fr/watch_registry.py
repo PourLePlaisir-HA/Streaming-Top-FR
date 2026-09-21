@@ -105,6 +105,10 @@ class CanonicalWatchRegistry:
             return False
         desired = canonical_work_key(item)
         aliases = item_aliases(item, extra_alias)
+        if desired:
+            resolved_desired = self._resolve_alias(desired)
+            if resolved_desired:
+                desired = resolved_desired
         if not desired:
             for alias in aliases:
                 desired = self._resolve_alias(alias)
