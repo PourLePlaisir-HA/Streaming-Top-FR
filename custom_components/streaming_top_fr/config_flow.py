@@ -536,6 +536,9 @@ def _summary_placeholders(
     classification = settings.get("classification") or {}
     duration_filter = settings.get("duration_filter") or {}
     local_library = settings.get("local_library") or {}
+    local_enabled = bool(local_library.get("enabled", False))
+    local_auth_mode = str(local_library.get("smb_auth_mode") or "configured").casefold()
+    local_auth_label = "Streaming Top FR" if local_auth_mode == "configured" else "VLC"
     playback = settings.get("playback") or {}
     players = settings.get("players") or {}
     player_names = [
@@ -569,9 +572,10 @@ def _summary_placeholders(
         "us_tv": _status(classification.get("us_tv", True)),
         "duration_filter_enabled": _status(duration_filter.get("enabled", True)),
         "duration_filter_max_minutes": str(int(duration_filter.get("max_minutes", 120))),
-        "local_enabled": _status(local_library.get("enabled", False)),
-        "local_root_path": str(local_library.get("root_path") or "—"),
-        "local_smb_base_uri": str(local_library.get("smb_base_uri") or "—"),
+        "local_enabled": _status(local_enabled),
+        "local_auth_mode": local_auth_label if local_enabled else "—",
+        "local_root_path": str(local_library.get("root_path") or "—") if local_enabled else "—",
+        "local_smb_base_uri": str(local_library.get("smb_base_uri") or "—") if local_enabled else "—",
         "playback_enabled": _status(
             playback.get("enabled", bool(player_names))
         ),
