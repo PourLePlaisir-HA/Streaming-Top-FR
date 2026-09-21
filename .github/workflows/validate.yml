@@ -60,6 +60,9 @@ jobs:
       - name: Check optional Debug mode
         run: python scripts/check_debug_mode.py
 
+      - name: Check brand assets
+        run: python scripts/check_brand_assets.py
+
       - name: Validate JSON
         run: |
           python -m json.tool custom_components/streaming_top_fr/manifest.json >/dev/null
