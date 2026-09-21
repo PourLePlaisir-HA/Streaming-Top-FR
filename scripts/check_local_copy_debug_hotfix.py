@@ -71,6 +71,7 @@ def find_match(item, index):
 
 
 runtime = {
+    "LOCAL_INDEX_METADATA_KEY": "local-canonical-index-v1",
     "_PACKAGE_LOGGER": FakeLogger(),
     "_local_playback_payload": lambda settings: {"enabled": True, "players": []},
     "_local_match_token": local_match_token,
