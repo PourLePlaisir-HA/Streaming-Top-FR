@@ -338,8 +338,10 @@ class LocalLibraryScanner:
         episode = int(episode_match.group("episode")) if episode_match else None
 
         title_source = stem
+        franchise_title = None
+        episode_title = None
         if episode_match:
-            title_source = stem[: episode_match.start()]
+            raw_episode_title = stem[: episode_match.start()]
 
             # Episodic media can live under Series, Animation or Documentaries.
             # Prefer the actual programme folder, never the category or
@@ -356,6 +358,38 @@ class LocalLibraryScanner:
                 parents.append(parent)
             if parents:
                 title_source = parents[-1]
+
+            franchise_source = re.sub(r"[._]+", " ", title_source)
+            franchise_title = (
+                self._clean_local_title(franchise_source)
+                or self._clean_name(title_source)
+            )
+
+            episode_source = re.sub(r"[._]+", " ", raw_episode_title)
+            episode_source = _YEAR.sub("", episode_source)
+            episode_source = self._clean_local_title(episode_source)
+
+            # Common release pattern:
+            #   Franchise.Episode.Title.S01E01...
+            # Strip the franchise prefix only for display. Catalogue lookup
+            # continues to use the franchise/show title.
+            if franchise_title and episode_source:
+                franchise_fold = franchise_title.casefold()
+                episode_fold = episode_source.casefold()
+                if episode_fold == franchise_fold:
+                    episode_title = None
+                elif episode_fold.startswith(franchise_fold + " "):
+                    episode_title = episode_source[len(franchise_title):].strip(
+                        " -–—_:."
+                    )
+                elif episode_fold.startswith(franchise_fold + " : "):
+                    episode_title = episode_source[len(franchise_title):].strip(
+                        " -–—_:."
+                    )
+                else:
+                    episode_title = episode_source
+                if not episode_title:
+                    episode_title = None
 
         # Release names commonly use dots/underscores as separators.
         # Normalize them before looking for technical tags so tails such as
@@ -385,4 +419,6 @@ class LocalLibraryScanner:
             "season": season,
             "episode": episode,
             "episodic": bool(episode_match),
+            "franchise_title": franchise_title if episode_match else None,
+            "episode_title": episode_title if episode_match else None,
         }
