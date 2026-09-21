@@ -159,7 +159,7 @@ if (card._familyCategories().includes("documentaries")) {
 
 const playable = card._data.items.find(x => x.local_id === "local:m1");
 const vlcControls = card._vlcControls(playable);
-if (!vlcControls.includes("Lire avec VLC") || !vlcControls.includes("Salon") || !vlcControls.includes("Étage")) {
+if (!vlcControls.includes("Voir avec VLC") || !vlcControls.includes("sur Salon") || !vlcControls.includes("sur Étage")) {
   throw new Error("VLC destination controls failed");
 }
 card._data.local_playback.enabled = false;
