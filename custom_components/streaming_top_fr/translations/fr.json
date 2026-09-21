@@ -131,8 +131,7 @@
           "classification": "Classification d'âge",
           "players": "Destinations de lecture",
           "default_decade": "Décennie par défaut",
-          "local_library": "Streaming Local",
-          "playback": "Lecture directe"
+          "local_library": "Streaming Local"
         }
       },
       "general": {
@@ -212,9 +211,10 @@
       },
       "players": {
         "title": "Destinations de lecture",
-        "description": "Ajoutez une destination ou sélectionnez une destination existante pour la modifier.",
+        "description": "Activez ou désactivez la lecture directe, puis gérez vos destinations. Les destinations sont conservées même lorsque la lecture est désactivée.",
         "data": {
-          "player_select": "Destination"
+          "player_select": "Destination",
+          "playback_enabled": "Activer la lecture directe"
         }
       },
       "player_edit": {
