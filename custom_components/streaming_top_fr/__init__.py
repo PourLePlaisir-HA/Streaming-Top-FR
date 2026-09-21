@@ -558,8 +558,28 @@ def _register_ws(hass):
             )
             return
 
+        auth_mode = str(local_settings.get("smb_auth_mode") or "vlc_saved").casefold()
+        smb_username = None
+        smb_password = None
+        if auth_mode == "configured":
+            smb_username = str(local_settings.get("smb_username") or "").strip()
+            smb_password = str(local_settings.get("smb_password") or "")
+            if not smb_username:
+                connection.send_error(
+                    msg["id"],
+                    "missing_smb_credentials",
+                    "Utilisateur SMB manquant dans la configuration Streaming Local.",
+                )
+                return
+
         task = hass.async_create_task(
-            async_launch_vlc_local(hass, player, smb_uri),
+            async_launch_vlc_local(
+                hass,
+                player,
+                smb_uri,
+                smb_username=smb_username,
+                smb_password=smb_password,
+            ),
             f"{DOMAIN}_vlc_{player_id}_{local_id[-8:]}",
         )
         task.add_done_callback(log_local_launch_failure)
