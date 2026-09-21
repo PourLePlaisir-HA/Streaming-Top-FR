@@ -113,10 +113,9 @@ def _local_playback_payload(settings):
     playback = settings.get("playback") or {}
     local_settings = settings.get("local_library") or {}
     smb_base = str(local_settings.get("smb_base_uri") or "").strip()
-    enabled = bool(
-        playback.get("enabled", bool(players))
-        and smb_base.lower().startswith("smb://")
-    )
+    playback_enabled = bool(playback.get("enabled", bool(players)))
+    smb_configured = smb_base.lower().startswith("smb://")
+
     destinations = []
     for player_id, player in players.items():
         if not isinstance(player, dict):
@@ -131,10 +130,20 @@ def _local_playback_payload(settings):
                 "name": str(player.get("name") or player_id),
             }
         )
+
+    reason = None
+    if not playback_enabled:
+        reason = "Lecture directe désactivée dans Destinations de lecture."
+    elif not smb_configured:
+        reason = "URI SMB de base manquante ou invalide dans Streaming Local."
+    elif not destinations:
+        reason = "Aucune destination Android TV compatible avec Remote + ADB."
+
     return {
-        "enabled": enabled,
+        "enabled": bool(playback_enabled and smb_configured and destinations),
         "mode": "vlc_smb",
         "players": destinations,
+        "reason": reason,
     }
 
 
