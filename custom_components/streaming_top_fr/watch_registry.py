@@ -7,7 +7,12 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .watch_identity import canonical_work_key, episode_code, item_aliases
+from .watch_identity import (
+    canonical_work_key,
+    episode_code,
+    item_aliases,
+    strict_fallback_key,
+)
 
 
 STORE_VERSION = 1
@@ -109,6 +114,16 @@ class CanonicalWatchRegistry:
             return False
 
         changed = False
+        if desired.startswith("imdb:"):
+            fallback = strict_fallback_key(item)
+            if fallback and fallback != desired:
+                fallback_target = self._resolve_alias(fallback) or fallback
+                if fallback_target in self.data["works"]:
+                    changed |= self._merge_rows(fallback_target, desired)
+                if self.data["aliases"].get(fallback) != desired:
+                    self.data["aliases"][fallback] = desired
+                    changed = True
+
         # IMDb is the strongest identity. If an alias was previously attached
         # to a fallback/local key, migrate that state to the IMDb work.
         for alias in aliases:
@@ -298,7 +313,13 @@ class CanonicalWatchRegistry:
     def same_work(self, first: dict[str, Any], second: dict[str, Any]) -> bool:
         a = self.key_for_item(first)
         b = self.key_for_item(second)
-        return bool(a and b and a == b)
+        if a and b and a == b:
+            return True
+        # A streaming item may not have its IMDb id yet. In that case allow
+        # only the same strict title + year + type fallback.
+        fallback_a = strict_fallback_key(first)
+        fallback_b = strict_fallback_key(second)
+        return bool(fallback_a and fallback_b and fallback_a == fallback_b)
 
     def snapshot(self) -> dict[str, Any]:
         return deepcopy(self.data)
