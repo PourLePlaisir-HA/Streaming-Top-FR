@@ -516,7 +516,7 @@ StreamingTopFrCard.prototype._detail=async function(item){
     }
   }
 
-  const result=_stfrDetailBeforeLocalCopy.call(this,resolved);
+  const result=await _stfrDetailBeforeLocalCopy.call(this,resolved);
   const modal=this.shadowRoot?.querySelector(".modalbg");
   const diagnostic=resolved?._local_diagnostic;
   if(modal&&diagnostic){
