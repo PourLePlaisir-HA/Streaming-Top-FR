@@ -7,6 +7,7 @@ on:
       - dev-0.7.1
       - dev-0.8.0
       - dev-0.8.1
+      - dev-0.9.0
   pull_request:
     branches:
       - main
@@ -31,8 +32,19 @@ jobs:
           git fetch --depth=1 origin refs/tags/0.7.1:refs/tags/0.7.1
           python scripts/check_historical_engine.py
 
+      - name: Guard stable Streaming Local engine
+        run: |
+          git fetch --depth=1 origin 1272a4a878d425f33591f7a69428759d0057ce88
+          python scripts/check_local_engine_v081.py
+
       - name: Check Streaming Local episodic parser
         run: python scripts/check_local_episodic_parser.py
+
+      - name: Check canonical watched identities
+        run: python scripts/check_watch_identity.py
+
+      - name: Check reversible canonical watch registry
+        run: python scripts/check_watch_registry.py
 
       - name: Validate JSON
         run: |
@@ -43,3 +55,6 @@ jobs:
 
       - name: Validate JavaScript syntax
         run: node --check custom_components/streaming_top_fr/www/streaming-top-fr-card.js
+
+      - name: Check Streaming Local Family/watched views
+        run: node scripts/check_local_views.js

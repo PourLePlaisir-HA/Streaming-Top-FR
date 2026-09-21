@@ -13,6 +13,8 @@ from .coordinator import StreamingTopCoordinator
 from .playback import SUPPORTED_PLAYBACK_PROVIDERS, async_launch, log_launch_failure
 from .local_library import LocalLibraryScanner
 from .settings import async_load_legacy_settings, normalize_settings
+from .watch_registry import CanonicalWatchRegistry
+from .local_views import annotate_local_items, sync_historical_work
 
 
 async def async_setup(hass, config):
@@ -53,6 +55,9 @@ async def async_setup_entry(hass, entry):
 
     store = StreamingTopStore(hass)
     await store.async_load()
+    watch_registry = CanonicalWatchRegistry(hass)
+    await watch_registry.async_load()
+    await watch_registry.async_import_historical(store.watched_items())
     session = async_get_clientsession(hass)
     coordinator = StreamingTopCoordinator(
         hass,
@@ -66,6 +71,7 @@ async def async_setup_entry(hass, entry):
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
         "store": store,
+        "watch_registry": watch_registry,
         "local_library": LocalLibraryScanner(hass),
         "local_metadata": local_metadata,
     }
@@ -148,6 +154,15 @@ def _register_ws(hass):
         store = data["store"]
         if msg["status"] == "watched":
             await store.async_set_watched(msg["key"], msg["enabled"], msg.get("item"))
+            status_item = dict(msg.get("item") or {})
+            if not status_item:
+                status_item = {"media_key": msg["key"]}
+            await data["watch_registry"].async_set_work(
+                status_item,
+                msg["enabled"],
+                source="streaming",
+                alias_key=msg["key"],
+            )
         elif msg["status"] == "watchlist":
             await store.async_set_watchlist(msg["key"], msg["enabled"], msg.get("item"))
         else:
@@ -311,13 +326,12 @@ def _register_ws(hass):
         else:
             result = scanner.last_result
 
-        items = [dict(item) for item in result.items]
-        for item in items:
-            if not item.get("media_key"):
-                item["media_key"] = item.get("local_id")
-            # The Home Assistant mount path is backend-only. The frontend only
-            # needs the relative path and future VLC SMB URI.
-            item.pop("local_path", None)
+        items = await annotate_local_items(
+            result.items,
+            data["watch_registry"],
+            settings.get("family") or {},
+            settings.get("classification") or {},
+        )
 
         enriched_count = sum(
             1 for item in items if item.get("metadata_status")
@@ -332,6 +346,7 @@ def _register_ws(hass):
                 "scan_revision": result.revision,
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
+                "family": dict(settings.get("family") or {}),
                 "items": items,
                 "errors": list(result.errors),
             },
@@ -392,11 +407,12 @@ def _register_ws(hass):
         if stale:
             result = current
 
-        items = [dict(item) for item in result.items]
-        for item in items:
-            if not item.get("media_key"):
-                item["media_key"] = item.get("local_id")
-            item.pop("local_path", None)
+        items = await annotate_local_items(
+            result.items,
+            data["watch_registry"],
+            settings.get("family") or {},
+            settings.get("classification") or {},
+        )
 
         enriched_count = sum(
             1 for item in items if item.get("metadata_status")
@@ -411,8 +427,72 @@ def _register_ws(hass):
                 "scan_revision": result.revision,
                 "enriched_count": enriched_count,
                 "metadata_complete": bool(items) and enriched_count == len(items),
+                "family": dict(settings.get("family") or {}),
                 "items": items,
                 "errors": list(result.errors),
+            },
+        )
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/set_local_watch_status",
+            vol.Optional("entry_id"): str,
+            vol.Required("items"): [dict],
+            vol.Required("enabled"): bool,
+        }
+    )
+    @websocket_api.async_response
+    async def set_local_watch_status(hass, connection, msg):
+        data = _entry_data(hass, msg.get("entry_id"))
+        if not data:
+            connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
+            return
+
+        items = [dict(item) for item in (msg.get("items") or []) if isinstance(item, dict)]
+        if not items:
+            connection.send_error(msg["id"], "empty_items", "Aucun média à mettre à jour")
+            return
+
+        registry = data["watch_registry"]
+        episodic = [
+            item
+            for item in items
+            if item.get("season") is not None and item.get("episode") is not None
+        ]
+        work_items = [item for item in items if item not in episodic]
+
+        if episodic:
+            await registry.async_set_episodes(
+                episodic,
+                msg["enabled"],
+                source="local",
+            )
+
+        historical_changed = False
+        for item in work_items:
+            await registry.async_set_work(
+                item,
+                msg["enabled"],
+                source="local",
+                alias_key=str(item.get("media_key") or item.get("local_id") or ""),
+            )
+            historical_changed |= await sync_historical_work(
+                data["store"],
+                data["coordinator"],
+                registry,
+                item,
+                msg["enabled"],
+            )
+
+        if historical_changed:
+            await data["coordinator"].async_request_refresh()
+
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "enabled": bool(msg["enabled"]),
+                "updated": len(items),
             },
         )
 
@@ -571,6 +651,7 @@ def _register_ws(hass):
     websocket_api.async_register_command(hass, get_family_catalog)
     websocket_api.async_register_command(hass, get_local_library)
     websocket_api.async_register_command(hass, enrich_local_library)
+    websocket_api.async_register_command(hass, set_local_watch_status)
     websocket_api.async_register_command(hass, refresh_local_library)
     websocket_api.async_register_command(hass, refresh)
     websocket_api.async_register_command(hass, play)

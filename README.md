@@ -1,7 +1,6 @@
-# Streaming Top FR 0.7.0
-
+# Streaming Top FR
 <p align="center">
-  <img src="custom_components/streaming_top_fr/brand/logo.png" alt="Streaming Top FR" width="220">
+  <img src="https://raw.githubusercontent.com/PourLePlaisir-HA/Streaming-Top-FR/main/custom_components/streaming_top_fr/brand/logo.png" alt="Streaming Top FR" width="220">
 </p>
 
 <p align="center">
