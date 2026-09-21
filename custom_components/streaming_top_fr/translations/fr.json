@@ -280,6 +280,23 @@
     "error": {
       "invalid_player_id": "L'identifiant de destination est invalide.",
       "player_already_exists": "Une destination utilise déjà cet identifiant."
+    },
+    "init": {
+      "menu_options": {
+        "duration_filter": "Filtre de durée"
+      }
+    },
+    "duration_filter": {
+      "title": "Filtre de durée",
+      "description": "Affiche un filtre optionnel dans les vues Films de Streaming, Top Streaming et Streaming Local. Le bouton reste désactivé tant que l’utilisateur ne l’active pas dans la carte.",
+      "data": {
+        "duration_filter_enabled": "Afficher le filtre de durée",
+        "duration_filter_max_minutes": "Durée maximale (minutes)"
+      },
+      "data_description": {
+        "duration_filter_enabled": "Désactivez cette option pour masquer totalement le filtre dans les cartes.",
+        "duration_filter_max_minutes": "Seuls les films dont la durée connue est strictement inférieure à ce seuil seront affichés lorsque le filtre est activé."
+      }
     }
   }
 }
