@@ -671,7 +671,15 @@ def _register_ws(hass):
         if not local_settings.get("enabled", False):
             connection.send_result(
                 msg["id"],
-                {"match": None, "local_playback": _local_playback_payload(settings)},
+                {
+                    "match": None,
+                    "local_playback": _local_playback_payload(settings),
+                    "diagnostic": {
+                        "local_enabled": False,
+                        "streaming": dict(msg.get("item") or {}),
+                        "index": {"available": False, "reason": "local_disabled"},
+                    },
+                },
             )
             return
 
@@ -688,11 +696,88 @@ def _register_ws(hass):
                 "canonical_media_key": match.get("canonical_media_key"),
             }
 
+        streaming_imdb = str(target_item.get("imdb_id") or "").strip().casefold()
+        streaming_media_key = str(target_item.get("media_key") or "").strip()
+        try:
+            streaming_year = int(target_item.get("year"))
+        except (TypeError, ValueError):
+            streaming_year = None
+        streaming_tokens = sorted({
+            _local_match_token(value)
+            for value in (
+                target_item.get("title"),
+                target_item.get("original_title"),
+                target_item.get("subtitle"),
+            )
+            if _local_match_token(value)
+        })
+
+        by_imdb = index.get("by_imdb") or {}
+        by_canonical = index.get("by_canonical") or {}
+        by_title_year = index.get("by_title_year") or {}
+        year_candidates = []
+        if streaming_year is not None:
+            prefix = f"{streaming_year}:"
+            seen_local_ids = set()
+            for key, candidate in by_title_year.items():
+                if not str(key).startswith(prefix) or not isinstance(candidate, dict):
+                    continue
+                local_id = str(candidate.get("local_id") or "")
+                if not local_id or local_id in seen_local_ids:
+                    continue
+                seen_local_ids.add(local_id)
+                year_candidates.append(
+                    {
+                        "key": key,
+                        "local_id": candidate.get("local_id"),
+                        "title": candidate.get("title"),
+                        "year": candidate.get("year"),
+                        "imdb_id": candidate.get("imdb_id"),
+                        "canonical_media_key": candidate.get("canonical_media_key"),
+                    }
+                )
+                if len(year_candidates) >= 12:
+                    break
+
+        diagnostic = {
+            "local_enabled": True,
+            "streaming": {
+                "title": target_item.get("title"),
+                "original_title": target_item.get("original_title"),
+                "subtitle": target_item.get("subtitle"),
+                "year": target_item.get("year"),
+                "imdb_id": target_item.get("imdb_id"),
+                "media_key": target_item.get("media_key"),
+                "media_type": target_item.get("media_type"),
+                "normalized_titles": streaming_tokens,
+            },
+            "index": {
+                "available": bool(index),
+                "schema": index.get("schema"),
+                "imdb_count": len(by_imdb),
+                "canonical_count": len(by_canonical),
+                "title_year_count": len(by_title_year),
+                "imdb_lookup": by_imdb.get(streaming_imdb) if streaming_imdb else None,
+                "canonical_lookup": by_canonical.get(streaming_media_key) if streaming_media_key else None,
+                "title_year_lookups": [
+                    {
+                        "key": f"{streaming_year}:{token}",
+                        "match": by_title_year.get(f"{streaming_year}:{token}"),
+                    }
+                    for token in streaming_tokens
+                    if streaming_year is not None
+                ],
+                "same_year_candidates": year_candidates,
+            },
+            "resolved_match": public_match,
+        }
+
         connection.send_result(
             msg["id"],
             {
                 "match": public_match,
                 "local_playback": _local_playback_payload(settings),
+                "diagnostic": diagnostic,
             },
         )
 
