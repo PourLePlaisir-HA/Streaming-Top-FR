@@ -203,6 +203,34 @@ class CanonicalWatchRegistry:
         await self.async_save()
         return key
 
+    async def async_set_episodes(
+        self,
+        items: list[dict[str, Any]],
+        watched: bool,
+        *,
+        source: str,
+    ) -> None:
+        timestamp = _now_iso()
+        changed = False
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            changed |= self.observe_item(item)
+            key = self.key_for_item(item)
+            code = episode_code(item)
+            if not key or not code:
+                continue
+            row = self.data["works"].setdefault(key, {"episodes": {}})
+            episodes = row.setdefault("episodes", {})
+            episodes[code] = {
+                "watched": bool(watched),
+                "updated_at": timestamp,
+                "source": str(source),
+            }
+            changed = True
+        if changed:
+            await self.async_save()
+
     def state_for_item(self, item: dict[str, Any]) -> dict[str, Any]:
         key = self.key_for_item(item)
         row = self.data["works"].get(key) if key else None
