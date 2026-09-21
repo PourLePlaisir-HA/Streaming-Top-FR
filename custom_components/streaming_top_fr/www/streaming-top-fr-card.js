@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.8.1";
+const STFR_VERSION = "0.9.0-beta.1";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -425,7 +425,7 @@ class StreamingTopFrCatalogCard extends StreamingTopFrCard {
 }
 customElements.define('streaming-top-fr-catalog-card',StreamingTopFrCatalogCard);
 
-// v0.8.1 optional direct playback layer.
+// v0.9.0-beta.1 optional direct playback layer.
 // Keep the validated historical card classes untouched: this wrapper only
 // suppresses playback controls when the user explicitly disables playback.
 const _stfrHistoricalPlaySections=StreamingTopFrCard.prototype._playSections;
@@ -434,7 +434,7 @@ StreamingTopFrCard.prototype._directPlaybackEnabled=function(){
   if(playback&&Object.prototype.hasOwnProperty.call(playback,"enabled")){
     return playback.enabled!==false;
   }
-  // Backward compatibility for pre-0.8.1 settings.
+  // Backward compatibility for pre-0.9.0-beta.1 settings.
   return this._players().length>0;
 };
 StreamingTopFrCard.prototype._playSections=function(item){
