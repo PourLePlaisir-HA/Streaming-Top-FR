@@ -43,6 +43,22 @@ def work_title(item: dict[str, Any]) -> str:
     ).strip()
 
 
+def strict_fallback_key(item: dict[str, Any]) -> str | None:
+    """Return the strict title/year/type identity, even when IMDb is known."""
+    if not isinstance(item, dict):
+        return None
+    title = work_title(item)
+    year = item.get("year")
+    try:
+        year_i = int(year)
+    except (TypeError, ValueError):
+        year_i = 0
+    title_slug = _slug(title)
+    if title_slug and 1800 <= year_i <= 2200:
+        return f"fallback:{_media_type(item)}:{year_i}:{title_slug}"
+    return None
+
+
 def canonical_work_key(item: dict[str, Any]) -> str | None:
     """Return a conservative provider-independent identity for one work."""
     if not isinstance(item, dict):
@@ -52,16 +68,9 @@ def canonical_work_key(item: dict[str, Any]) -> str | None:
     if imdb_id:
         return f"imdb:{imdb_id}"
 
-    title = work_title(item)
-    year = item.get("year")
-    try:
-        year_i = int(year)
-    except (TypeError, ValueError):
-        year_i = 0
-
-    title_slug = _slug(title)
-    if title_slug and 1800 <= year_i <= 2200:
-        return f"fallback:{_media_type(item)}:{year_i}:{title_slug}"
+    fallback = strict_fallback_key(item)
+    if fallback:
+        return fallback
 
     # Unmatched Local items remain trackable without being automatically
     # associated with an unrelated streaming title.
