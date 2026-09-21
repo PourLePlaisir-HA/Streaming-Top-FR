@@ -1088,15 +1088,13 @@ StreamingLocalCard.prototype._vlcControls=function(item,label=""){
   const players=Array.isArray(cfg.players)?cfg.players:[];
   if(cfg.enabled!==true||!item?.local_id||!players.length){
     if(cfg.enabled===true&&item?.local_id&&!players.length){
-      console.warn("[Streaming Top FR]",STFR_VERSION,"VLC activé mais aucune destination compatible n'a été reçue.");
+      console.warn("[Streaming Top FR]",STFR_VERSION,"VLC activé mais aucune destination compatible n\'a été reçue.");
     }
     return"";
   }
-  const heading=label
-    ?`Lire avec VLC · ${this._esc(label)}`
-    :"Lire avec VLC";
-  const buttons=players.map(player=>`<button class="vlc-destination" data-local-play-player="${this._esc(player.id)}"><ha-icon icon="mdi:vlc"></ha-icon><span>${this._esc(player.name||player.id)}</span></button>`).join("");
-  return `<div class="vlc-block"><div class="vlc-title">${heading}</div><div class="vlc-row">${buttons}</div></div>`;
+  const episodeSuffix=label?` · ${this._esc(label)}`:"";
+  const buttons=players.map(player=>`<button class="vlc-destination" data-local-play-player="${this._esc(player.id)}"><ha-icon icon="mdi:vlc"></ha-icon><span class="vlc-copy"><strong>Voir avec VLC${episodeSuffix}</strong><small>sur ${this._esc(player.name||player.id)}</small></span></button>`).join("");
+  return `<div class="vlc-row">${buttons}</div>`;
 };
 StreamingLocalCard.prototype._playLocal=async function(item,playerId,button){
   if(!this._hass||!item?.local_id||!playerId)return;
@@ -1246,10 +1244,13 @@ StreamingLocalCard.prototype._detail=function(item){
       <div><h2>${this._esc(title)}</h2><div class="modal-meta">${this._esc(meta)}</div></div>
     </div>
     <p>${this._esc(item.description||"Aucun synopsis disponible pour le moment.")}</p>
-    <div class="details">
-      <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
-      ${parsed}${path}
-    </div>
+    <details class="technical-details">
+      <summary>Détails techniques</summary>
+      <div class="details">
+        <div class="detail-row"><strong>Identification</strong><span>${this._esc(match)}</span></div>
+        ${parsed}${path}
+      </div>
+    </details>
     ${vlcControls}
     <div class="watch-actions"><button class="watch-main" data-item-watch="${seen?"false":"true"}"><ha-icon icon="${seen?"mdi:eye-off-outline":"mdi:check-circle-outline"}"></ha-icon>${seen?"Remettre dans Pas encore vus":"Marquer vu"}</button></div>
   </div>`;
@@ -1364,11 +1365,12 @@ StreamingLocalCard.prototype._render=function(){
     .modal-head img{width:88px;aspect-ratio:2/3;object-fit:cover;border-radius:9px}
     .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
     .modal p{line-height:1.45;color:var(--secondary-text-color)}
+    .technical-details{margin:14px 0 4px;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.technical-details summary{padding:10px 2px;cursor:pointer;font-size:.88rem;font-weight:800;color:var(--secondary-text-color);list-style-position:inside}.technical-details[open] summary{color:var(--primary-text-color)}.technical-details .details{margin:0;padding:2px 2px 12px}
     .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
     .season-story-title{margin:0 0 6px;font-size:1.02rem;font-weight:700;color:var(--primary-text-color)}
     .series-summary{margin-top:6px;color:var(--secondary-text-color);font-size:.86rem}
-    .watch-actions{display:flex;margin:16px 0 12px}.watch-main{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer;font-weight:800}.watch-main ha-icon{--mdc-icon-size:18px}
-    .vlc-block{margin:16px 0 10px;padding:12px;border-radius:14px;background:var(--secondary-background-color)}.vlc-title{margin-bottom:9px;font-weight:800}.vlc-row{display:flex;gap:10px;flex-wrap:wrap}.vlc-destination{min-width:130px;min-height:54px;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid rgba(222,86,44,.58);border-radius:999px;padding:9px 16px;background:linear-gradient(rgba(196,72,31,.32),rgba(91,34,22,.42)),rgba(20,16,14,.82);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(8px);cursor:pointer;font-weight:800}.vlc-destination:hover{filter:brightness(1.08)}.vlc-destination:disabled{opacity:.45;cursor:wait}.vlc-destination ha-icon{--mdc-icon-size:21px;color:#fff}
+    .watch-actions{display:flex;justify-content:center;margin:16px 0 12px}.watch-main{display:flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 13px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer;font-weight:800}.watch-main ha-icon{--mdc-icon-size:18px}
+    .vlc-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:16px 0 10px}.vlc-destination{min-width:180px;min-height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid rgba(222,86,44,.58);border-radius:999px;padding:10px 18px;background:linear-gradient(rgba(196,72,31,.32),rgba(91,34,22,.42)),rgba(20,16,14,.82);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(8px);cursor:pointer;font-weight:800;text-align:center}.vlc-destination:hover{filter:brightness(1.08)}.vlc-destination:disabled{opacity:.45;cursor:wait}.vlc-destination ha-icon{--mdc-icon-size:28px;color:#fff}.vlc-copy{display:flex;flex-direction:column;align-items:center;line-height:1.08}.vlc-copy strong{font-size:.88rem;color:#fff}.vlc-copy small{margin-top:5px;font-size:.92rem;font-weight:900;color:#fff}
     .episode-list{display:grid;gap:7px}
     .episode-row{width:100%;display:flex;align-items:stretch;gap:6px;border-radius:12px;background:var(--secondary-background-color)}
     .episode-row.selected{outline:2px solid var(--primary-color)}
@@ -1382,7 +1384,7 @@ StreamingLocalCard.prototype._render=function(){
   </style>
   <ha-card><div class="wrap">
     <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-    ${cats.length?`<div class="tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+    ${cats.length?`<div class="tabs category-tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
     ${familyRow}
     ${watchRow}
     ${body}
