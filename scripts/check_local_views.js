@@ -167,4 +167,69 @@ if (card._vlcControls(playable) !== "") {
   throw new Error("VLC controls must be hidden when direct playback is disabled");
 }
 
+
+// v1.0.3: Local Movies are ordered by localized French title. A saga keeps
+// one alphabetical position and its members are ordered chronologically.
+const sortCard = new LocalCard();
+sortCard._category = "movies";
+sortCard._familyCategory = "movies";
+sortCard._watchFilter = "all";
+sortCard._data = {
+  family: { enabled: false },
+  items: [
+    {
+      local_id: "local:ij3",
+      bucket: "movies",
+      media_type: "movie",
+      title: "Indiana Jones et la Dernière Croisade",
+      parsed_title: "Indiana Jones and the Last Crusade",
+      year: 1989,
+      relative_path: "Films/Indiana Jones/Indiana.Jones.3.1989.mkv",
+    },
+    {
+      local_id: "local:call",
+      bucket: "movies",
+      media_type: "movie",
+      title: "Dix pour cent : Le film",
+      parsed_title: "Call My Agent!",
+      year: 2026,
+      relative_path: "Films/Call.My.Agent.2026.mkv",
+    },
+    {
+      local_id: "local:ij1",
+      bucket: "movies",
+      media_type: "movie",
+      title: "Les Aventuriers de l'arche perdue",
+      parsed_title: "Raiders of the Lost Ark",
+      year: 1981,
+      relative_path: "Films/Indiana Jones/Indiana.Jones.1.1981.mkv",
+    },
+    {
+      local_id: "local:a",
+      bucket: "movies",
+      media_type: "movie",
+      title: "Avatar",
+      year: 2009,
+      relative_path: "Films/Avatar.2009.mkv",
+    },
+    {
+      local_id: "local:ij2",
+      bucket: "movies",
+      media_type: "movie",
+      title: "Indiana Jones et le Temple maudit",
+      parsed_title: "Indiana Jones and the Temple of Doom",
+      year: 1984,
+      relative_path: "Films/Indiana Jones/Indiana.Jones.2.1984.mkv",
+    },
+  ],
+};
+const sortedMovies = sortCard._displayItems("movies");
+const sortedIds = sortedMovies.map(item => item.local_id);
+const expectedIds = ["local:a", "local:call", "local:ij1", "local:ij2", "local:ij3"];
+if (JSON.stringify(sortedIds) !== JSON.stringify(expectedIds)) {
+  throw new Error(`French title / saga chronology sort failed: ${JSON.stringify(sortedIds)}`);
+}
+
+console.log("Streaming Local French alphabetical + saga chronology checks passed.");
+
 console.log("Streaming Local Family/watched/VLC view checks passed.");

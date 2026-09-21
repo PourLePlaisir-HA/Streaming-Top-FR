@@ -86,6 +86,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "us_fallback": True,
         "us_tv": True,
     },
+    "duration_filter": {
+        "enabled": True,
+        "max_minutes": 120,
+    },
+    "debug": {
+        "enabled": False,
+    },
     "discovery": {
         "visible_count": 10,
         "prefetch_count": 20,
@@ -180,6 +187,13 @@ classification:
   france: true           # Priorité à la classification française
   us_fallback: true      # Si aucune FR exploitable, afficher la classification US
   us_tv: true            # Autoriser les classifications TV-Y, TV-PG, TV-14, TV-MA...
+
+duration_filter:
+  enabled: true          # Afficher le filtre de durée dans les vues Films
+  max_minutes: 120       # Seuil du bouton : films strictement inférieurs à 120 min
+
+debug:
+  enabled: false         # Active les traces détaillées de diagnostic
 
 discovery:
   visible_count: 10      # Nombre de tuiles visibles dans « À découvrir » (pas de 1)
@@ -385,6 +399,31 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
             "france": _as_bool(classification.get("france"), defaults["france"]),
             "us_fallback": _as_bool(classification.get("us_fallback"), defaults["us_fallback"]),
             "us_tv": _as_bool(classification.get("us_tv"), defaults["us_tv"]),
+        }
+
+    duration_filter = raw.get("duration_filter") or {}
+    if isinstance(duration_filter, dict):
+        defaults = DEFAULT_SETTINGS["duration_filter"]
+        settings["duration_filter"] = {
+            "enabled": _as_bool(
+                duration_filter.get("enabled"),
+                defaults["enabled"],
+            ),
+            "max_minutes": _as_int(
+                duration_filter.get("max_minutes"),
+                defaults["max_minutes"],
+                30,
+                360,
+            ),
+        }
+
+    debug = raw.get("debug") or {}
+    if isinstance(debug, dict):
+        settings["debug"] = {
+            "enabled": _as_bool(
+                debug.get("enabled"),
+                DEFAULT_SETTINGS["debug"]["enabled"],
+            ),
         }
 
     discovery = raw.get("discovery") or {}

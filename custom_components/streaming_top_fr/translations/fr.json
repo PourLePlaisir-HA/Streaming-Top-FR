@@ -131,7 +131,9 @@
           "classification": "Classification d'âge",
           "players": "Destinations de lecture",
           "default_decade": "Décennie par défaut",
-          "local_library": "Streaming Local"
+          "local_library": "Streaming Local",
+          "duration_filter": "Filtrer sur la durée max des films",
+          "debug": "Mode Debug"
         }
       },
       "general": {
@@ -230,7 +232,7 @@
       },
       "summary": {
         "title": "Synthèse des paramètres",
-        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Lecture directe\n- **Activée :** {playback_enabled}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
+        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Filtre de durée des films\n- **Disponible dans les cartes :** {duration_filter_enabled}\n- **Seuil :** < {duration_filter_max_minutes} min\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Debug\n- **Logs détaillés :** {debug_enabled}\n\n### Streaming Local\n- **Activé :** {local_enabled}\n- **Mode d’identifiants SMB :** {local_auth_mode}\n- **Vidéothèque Home Assistant :** {local_root_path}\n- **URI SMB :** {local_smb_base_uri}\n\n### Lecture directe\n- **Activée :** {playback_enabled}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
       },
       "default_decade": {
         "title": "Décennie par défaut",
@@ -274,6 +276,28 @@
         "description": "Active ou désactive les actions de lecture directe. Les destinations enregistrées sont conservées lorsque la lecture est désactivée.",
         "data": {
           "playback_enabled": "Activer la lecture directe"
+        }
+      },
+      "duration_filter": {
+        "title": "Filtrer sur la durée max des films",
+        "description": "Affiche un filtre optionnel dans les vues Films de Streaming, Top Streaming et Streaming Local. Le bouton reste inactif tant que l’utilisateur ne l’active pas dans la carte.",
+        "data": {
+          "duration_filter_enabled": "Afficher le filtre de durée",
+          "duration_filter_max_minutes": "Durée maximale (minutes)"
+        },
+        "data_description": {
+          "duration_filter_enabled": "Désactivez cette option pour masquer totalement le filtre dans les cartes.",
+          "duration_filter_max_minutes": "Seuls les films dont la durée connue est strictement inférieure à ce seuil sont affichés lorsque le filtre est actif."
+        }
+      },
+      "debug": {
+        "title": "Mode Debug",
+        "description": "Active les traces détaillées de Streaming Top FR pour faciliter le diagnostic. À laisser désactivé en usage normal.",
+        "data": {
+          "debug_enabled": "Activer les logs Debug"
+        },
+        "data_description": {
+          "debug_enabled": "Active les logs détaillés de l’intégration et affiche les informations techniques de correspondance Streaming ↔ Local dans les popups."
         }
       }
     },

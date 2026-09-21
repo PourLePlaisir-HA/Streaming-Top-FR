@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.0";
+const STFR_VERSION = "1.0.3";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -442,6 +442,148 @@ StreamingTopFrCard.prototype._playSections=function(item){
   return _stfrHistoricalPlaySections.call(this,item);
 };
 
+
+// v1.0.1-beta.8: bridge Streaming/Top popups to an already indexed Local copy.
+// The historical cards remain untouched; lookup and playback are added as a
+// prototype layer so the stable Streaming engine stays byte-for-byte protected.
+StreamingTopFrCard.prototype._localCopyPlayers=function(item){
+  const cfg=item?._local_playback||{};
+  const players=Array.isArray(cfg.players)?cfg.players:[];
+  return cfg.enabled===true?players:[];
+};
+StreamingTopFrCard.prototype._localCopyPlaySection=function(item){
+  const match=item?._local_copy;
+  const players=this._localCopyPlayers(item);
+  if(!match?.local_id||!players.length)return"";
+  const buttons=players.map(player=>`<button class="vlc" data-stream-local-id="${this._esc(match.local_id)}" data-stream-local-player="${this._esc(player.id)}" style="background:linear-gradient(rgba(196,72,31,.32),rgba(91,34,22,.42)),rgba(20,16,14,.82)!important;border-color:rgba(222,86,44,.58)!important"><span class="play-brand"><ha-icon icon="mdi:vlc"></ha-icon></span><span class="playcopy"><strong>Voir sur VLC</strong><small>${this._esc(player.name||player.id)}</small></span></button>`).join("");
+  return `<div class="service-play local-vlc"><div class="playrow">${buttons}</div></div>`;
+};
+StreamingTopFrCard.prototype._playLocalCopy=async function(localId,playerId,button){
+  if(!this._hass||!localId||!playerId)return;
+  const old=button?.innerHTML;
+  if(button){
+    button.disabled=true;
+    button.innerHTML='<span class="play-brand"><ha-icon icon="mdi:loading"></ha-icon></span><span class="playcopy"><strong>Lancement…</strong></span>';
+  }
+  try{
+    await this._hass.callWS({
+      type:"streaming_top_fr/play_local",
+      local_id:localId,
+      player:playerId,
+    });
+    if(button){
+      button.innerHTML='<span class="play-brand"><ha-icon icon="mdi:check"></ha-icon></span><span class="playcopy"><strong>Lancé</strong></span>';
+    }
+  }catch(e){
+    if(button){
+      button.disabled=false;
+      button.innerHTML=old||"Voir sur VLC";
+    }
+    this._error=`VLC : ${String(e)}`;
+  }
+};
+
+const _stfrPlaySectionsBeforeLocalCopy=StreamingTopFrCard.prototype._playSections;
+StreamingTopFrCard.prototype._playSections=function(item){
+  return _stfrPlaySectionsBeforeLocalCopy.call(this,item)+this._localCopyPlaySection(item);
+};
+
+const _stfrDetailBeforeLocalCopy=StreamingTopFrCard.prototype._detail;
+StreamingTopFrCard.prototype._detail=async function(item){
+  let resolved=item;
+  const requestItem={
+    media_type:item?.media_type||null,
+    media_key:item?.media_key||null,
+    imdb_id:item?.imdb_id||null,
+    title:item?.title||null,
+    original_title:item?.original_title||null,
+    subtitle:item?.subtitle||null,
+    year:item?.year??null,
+  };
+  let localDiagnostic={
+    frontend_version:STFR_VERSION,
+    request_sent:false,
+    request_item:requestItem,
+    websocket_error:null,
+    response_received:false,
+  };
+  if(this._hass&&String(item?.media_type||"").toLowerCase()==="movie"){
+    try{
+      localDiagnostic.request_sent=true;
+      const local=await this._hass.callWS({
+        type:"streaming_top_fr/find_local_copy",
+        item:requestItem,
+      });
+      localDiagnostic={
+        ...localDiagnostic,
+        response_received:true,
+        backend:local?.diagnostic||null,
+        match:local?.match||null,
+        local_playback:local?.local_playback||null,
+      };
+      resolved={
+        ...item,
+        _local_copy:local?.match||null,
+        _local_playback:local?.local_playback||null,
+        _local_diagnostic:localDiagnostic,
+      };
+    }catch(e){
+      localDiagnostic.websocket_error={
+        string:String(e),
+        name:e?.name??null,
+        message:e?.message??null,
+        code:e?.code??null,
+        details:e?.details??null,
+        body:e?.body??null,
+        raw:(e&&typeof e==="object")
+          ?Object.fromEntries(Object.entries(e).map(([k,v])=>[
+              k,
+              (v&&typeof v==="object")?JSON.parse(JSON.stringify(v)):v
+            ]))
+          :e,
+      };
+      resolved={
+        ...item,
+        _local_copy:null,
+        _local_playback:null,
+        _local_diagnostic:localDiagnostic,
+      };
+    }
+  }else{
+    resolved={...item,_local_diagnostic:localDiagnostic};
+  }
+
+  const result=await _stfrDetailBeforeLocalCopy.call(this,resolved);
+  const modal=this.shadowRoot?.querySelector(".modalbg");
+  const diagnostic=resolved?._local_diagnostic;
+  const debugEnabled=this._data?.settings?.debug?.enabled===true;
+  if(modal&&diagnostic&&debugEnabled){
+    const panel=document.createElement("details");
+    panel.className="stream-local-diagnostic";
+    panel.style.cssText="margin:14px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color);padding:8px 0";
+    const summary=document.createElement("summary");
+    summary.textContent="Détails techniques — correspondance Local";
+    summary.style.cssText="cursor:pointer;font-weight:800;color:var(--secondary-text-color)";
+    const pre=document.createElement("pre");
+    pre.textContent=JSON.stringify(diagnostic,null,2);
+    pre.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.72rem;line-height:1.35;max-height:260px;overflow:auto;background:var(--secondary-background-color);padding:10px;border-radius:10px";
+    panel.append(summary,pre);
+    const buttons=modal.querySelector(".buttons");
+    const target=buttons?.parentElement||modal.querySelector(".modal")||modal;
+    if(buttons)target.insertBefore(panel,buttons);else target.appendChild(panel);
+  }
+  modal?.querySelectorAll("[data-stream-local-id][data-stream-local-player]").forEach(button=>{
+    button.addEventListener("click",async event=>{
+      event.stopPropagation();
+      await this._playLocalCopy(
+        button.dataset.streamLocalId,
+        button.dataset.streamLocalPlayer,
+        button
+      );
+    });
+  });
+  return result;
+};
 
 class StreamingLocalCard extends HTMLElement {
   setConfig(c){
@@ -1425,3 +1567,346 @@ window.customCards.push({type:'streaming-top-fr-card',name:'Streaming Top FR',de
 window.customCards.push({type:'streaming-top-fr-catalog-card',name:'Top Streaming FR',description:'Classements par décennie Films / Animation / Séries / Famille disponibles sur vos services'});
 window.customCards.push({type:'streaming-local-card',name:'Streaming Local',description:'Vidéothèque locale Films / Séries / Animation / Documentaires avec métadonnées IMDb / JustWatch'});
 console.info(`STREAMING TOP FR ${STFR_VERSION}`);
+
+
+// ---------------------------------------------------------------------------
+// Optional movie runtime filter (v1.0.3)
+// Added as prototype decorators so the validated Streaming/Top class bodies
+// remain unchanged. Runtime lookups are on-demand and isolated from catalogue
+// construction and Streaming Local scanning.
+// ---------------------------------------------------------------------------
+function stfrDurationLabel(minutes){
+  const value=Math.max(1,Number(minutes)||120);
+  const hours=Math.floor(value/60);
+  const mins=value%60;
+  if(hours&&mins)return `${hours} h ${String(mins).padStart(2,"0")}`;
+  if(hours)return `${hours} h`;
+  return `${mins} min`;
+}
+function stfrDurationKey(item){
+  return String(item?.local_id||item?.media_key||item?.canonical_media_key||"").trim();
+}
+function stfrDurationValue(card,item){
+  const direct=Number(item?.runtime);
+  if(Number.isFinite(direct)&&direct>0)return direct;
+  const key=stfrDurationKey(item);
+  const cached=Number(card?._durationRuntimeMap?.[key]);
+  return Number.isFinite(cached)&&cached>0?cached:null;
+}
+function stfrDurationPayload(item){
+  return {
+    runtime_key:stfrDurationKey(item),
+    media_type:item?.media_type||"movie",
+    media_key:item?.media_key||null,
+    local_id:item?.local_id||null,
+    canonical_media_key:item?.canonical_media_key||null,
+    imdb_id:item?.imdb_id||null,
+    title:item?.title||null,
+    original_title:item?.original_title||null,
+    parsed_title:item?.parsed_title||null,
+    year:item?.year??null,
+    runtime:item?.runtime??null,
+  };
+}
+async function stfrEnsureDurationRuntimes(card,items){
+  if(!card?._hass)return;
+  card._durationRuntimeMap=card._durationRuntimeMap||{};
+  card._durationAttempted=card._durationAttempted||new Set();
+  const unique=new Map();
+  for(const item of items||[]){
+    const key=stfrDurationKey(item);
+    if(!key)continue;
+    const direct=Number(item?.runtime);
+    if(Number.isFinite(direct)&&direct>0){
+      card._durationRuntimeMap[key]=direct;
+      continue;
+    }
+    if(card._durationRuntimeMap[key]!=null||card._durationAttempted.has(key))continue;
+    unique.set(key,item);
+  }
+  const pending=[...unique.values()];
+  if(!pending.length)return;
+
+  pending.forEach(item=>card._durationAttempted.add(stfrDurationKey(item)));
+  card._durationLoading=true;
+  card._durationError=null;
+  card._render();
+
+  try{
+    for(let start=0;start<pending.length;start+=60){
+      const chunk=pending.slice(start,start+60);
+      const result=await card._hass.callWS({
+        type:"streaming_top_fr/get_runtimes",
+        items:chunk.map(stfrDurationPayload),
+      });
+      const runtimes=result?.runtimes||{};
+      Object.entries(runtimes).forEach(([key,value])=>{
+        const minutes=Number(value);
+        if(Number.isFinite(minutes)&&minutes>0)card._durationRuntimeMap[key]=minutes;
+      });
+    }
+  }catch(e){
+    card._durationError=String(e?.message||e);
+  }finally{
+    card._durationLoading=false;
+    card._render();
+  }
+}
+function stfrDurationPass(card,item){
+  const threshold=Number(card?._durationConfig?.()?.max_minutes??120);
+  const runtime=stfrDurationValue(card,item);
+  return runtime!==null&&runtime<threshold;
+}
+function stfrDurationButton(card,className="tab"){
+  const cfg=card._durationConfig();
+  const button=document.createElement("button");
+  button.className=`${className} duration-filter-toggle ${card._durationFilterActive?"active":""}`;
+  button.type="button";
+  const label=stfrDurationLabel(cfg.max_minutes??120);
+  button.innerHTML=card._durationLoading
+    ?'<ha-icon icon="mdi:loading"></ha-icon><span>Durée…</span>'
+    :`<ha-icon icon="mdi:timer-outline"></ha-icon><span>&lt; ${card._esc(label)}</span>`;
+  button.title=card._durationFilterActive
+    ?`Afficher tous les films (filtre actuel : moins de ${label})`
+    :`Afficher uniquement les films de moins de ${label}`;
+  button.addEventListener("click",async event=>{
+    event.stopPropagation();
+    if(card._durationFilterActive){
+      card._durationFilterActive=false;
+      card._render();
+      return;
+    }
+    card._durationFilterActive=true;
+    card._render();
+    await stfrEnsureDurationRuntimes(card,card._durationCandidates());
+  });
+  return button;
+}
+function stfrMaybeLoadDuration(card){
+  if(!card._durationFilterActive||card._durationLoading)return;
+  const items=card._durationCandidates();
+  const missing=(items||[]).some(item=>{
+    const direct=Number(item?.runtime);
+    const key=stfrDurationKey(item);
+    return key&&!(Number.isFinite(direct)&&direct>0)&&
+      card._durationRuntimeMap?.[key]==null&&!card._durationAttempted?.has(key);
+  });
+  if(missing)void stfrEnsureDurationRuntimes(card,items);
+}
+
+StreamingTopFrCard.prototype._durationConfig=function(){
+  const cfg=this._data?.settings?.duration_filter||{};
+  return{
+    enabled:cfg.enabled!==false,
+    max_minutes:Number(cfg.max_minutes||120),
+  };
+};
+StreamingTopFrCard.prototype._durationMovieView=function(){
+  return this._media==="movies";
+};
+StreamingTopFrCard.prototype._durationCandidates=function(){
+  if(!this._durationMovieView())return[];
+  if(this._section==="discover")return[...(this._pd()?.movies||[])];
+  const bucket={
+    watched:"watched",
+    watchlist:"watchlist",
+    not_interested:"not_interested",
+  }[this._section];
+  return bucket?this._stored(bucket):[];
+};
+
+const _stfrItemsBeforeDurationFilter=StreamingTopFrCard.prototype._items;
+StreamingTopFrCard.prototype._items=function(){
+  if(
+    !this._durationConfig().enabled||
+    !this._durationFilterActive||
+    this._durationLoading||
+    !this._durationMovieView()
+  )return _stfrItemsBeforeDurationFilter.call(this);
+
+  if(this._section==="discover"){
+    const watched=this._watched(),hidden=this._notInterested();
+    const all=(this._pd()?.movies||[]).filter(
+      item=>!watched.has(item.media_key)&&!hidden.has(item.media_key)
+    );
+    const configured=Number(this._data?.settings?.discovery?.visible_count??10);
+    const visible=Number.isFinite(configured)?Math.max(1,Math.floor(configured)):10;
+    return all.filter(item=>stfrDurationPass(this,item)).slice(0,visible);
+  }
+  return _stfrItemsBeforeDurationFilter.call(this).filter(
+    item=>stfrDurationPass(this,item)
+  );
+};
+
+const _stfrRenderBeforeDurationFilter=StreamingTopFrCard.prototype._render;
+StreamingTopFrCard.prototype._render=function(){
+  const result=_stfrRenderBeforeDurationFilter.call(this);
+  if(this._durationConfig().enabled&&this._durationMovieView()){
+    const row=this.shadowRoot?.querySelector(".media-tabs");
+    if(row&&!row.querySelector(".duration-filter-toggle")){
+      row.appendChild(stfrDurationButton(this,"tab media-tab"));
+    }
+    stfrMaybeLoadDuration(this);
+  }
+  return result;
+};
+
+StreamingTopFrCatalogCard.prototype._durationMovieView=function(){
+  return this._category==="movies";
+};
+StreamingTopFrCatalogCard.prototype._durationCandidates=function(){
+  return this._durationMovieView()
+    ?[...(this._catalogBranch()?.items||[])]
+    :[];
+};
+const _stfrCatalogItemsBeforeDurationFilter=StreamingTopFrCatalogCard.prototype._catalogItems;
+StreamingTopFrCatalogCard.prototype._catalogItems=function(){
+  const items=_stfrCatalogItemsBeforeDurationFilter.call(this);
+  if(
+    !this._durationConfig().enabled||
+    !this._durationFilterActive||
+    this._durationLoading||
+    !this._durationMovieView()
+  )return items;
+  return items.filter(item=>stfrDurationPass(this,item));
+};
+const _stfrCatalogRenderBeforeDurationFilter=StreamingTopFrCatalogCard.prototype._render;
+StreamingTopFrCatalogCard.prototype._render=function(){
+  const result=_stfrCatalogRenderBeforeDurationFilter.call(this);
+  if(this._durationConfig().enabled&&this._durationMovieView()){
+    const categories=this.shadowRoot?.querySelector(".category-tabs");
+    if(categories&&!this.shadowRoot.querySelector(".duration-filter-row")){
+      const row=document.createElement("div");
+      row.className="tabs duration-filter-row";
+      row.style.cssText="justify-content:center;margin-top:8px";
+      row.appendChild(stfrDurationButton(this,"tab"));
+      categories.insertAdjacentElement("afterend",row);
+    }
+    stfrMaybeLoadDuration(this);
+  }
+  return result;
+};
+
+StreamingLocalCard.prototype._durationConfig=function(){
+  const cfg=this._data?.duration_filter||{};
+  return{
+    enabled:cfg.enabled!==false,
+    max_minutes:Number(cfg.max_minutes||120),
+  };
+};
+StreamingLocalCard.prototype._durationMovieView=function(){
+  return this._effectiveCategory()==="movies";
+};
+StreamingLocalCard.prototype._durationCandidates=function(){
+  if(!this._durationMovieView())return[];
+  return this._displayItems(this._category,this._familyCategory).filter(
+    item=>String(item?.media_type||"").toLowerCase()==="movie"&&!item?.episodic
+  );
+};
+const _stfrLocalItemsBeforeDurationFilter=StreamingLocalCard.prototype._items;
+StreamingLocalCard.prototype._items=function(){
+  const items=_stfrLocalItemsBeforeDurationFilter.call(this);
+  if(
+    !this._durationConfig().enabled||
+    !this._durationFilterActive||
+    this._durationLoading||
+    !this._durationMovieView()
+  )return items;
+  return items.filter(item=>stfrDurationPass(this,item));
+};
+const _stfrLocalRenderBeforeDurationFilter=StreamingLocalCard.prototype._render;
+StreamingLocalCard.prototype._render=function(){
+  const result=_stfrLocalRenderBeforeDurationFilter.call(this);
+  if(this._durationConfig().enabled&&this._durationMovieView()){
+    const watchRow=this.shadowRoot?.querySelector(".watch-tabs");
+    if(watchRow&&!this.shadowRoot.querySelector(".duration-filter-row")){
+      const row=document.createElement("div");
+      row.className="subtabs duration-filter-row adaptive-tabs";
+      row.style.cssText="justify-content:center";
+      row.appendChild(stfrDurationButton(this,"subtab"));
+      watchRow.parentNode?.insertBefore(row,watchRow);
+    }
+    stfrMaybeLoadDuration(this);
+  }
+  return result;
+};
+
+
+// ---------------------------------------------------------------------------
+// Streaming Local alphabetical FR movie ordering (v1.0.3)
+// Display-only sorting: French localized title for standalone movies, saga
+// folder as the alphabetical anchor, chronological order inside each saga.
+// ---------------------------------------------------------------------------
+StreamingLocalCard.prototype._localFrenchMovieTitle=function(item){
+  return String(
+    item?.title||
+    item?.parsed_title||
+    item?.filename||
+    ""
+  ).trim();
+};
+StreamingLocalCard.prototype._localSagaLabel=function(item){
+  const parts=String(item?.relative_path||"").split("/").filter(Boolean);
+  return parts.length>=3?String(parts[1]||"").trim():"";
+};
+StreamingLocalCard.prototype._sortMovieCollections=function(items){
+  const source=[...(items||[])];
+  const grouped=new Map();
+
+  for(const item of source){
+    const key=this._collectionKey(item);
+    if(!key)continue;
+    if(!grouped.has(key))grouped.set(key,[]);
+    grouped.get(key).push(item);
+  }
+
+  const sagaKeys=new Set(
+    [...grouped.entries()]
+      .filter(([,group])=>group.length>1)
+      .map(([key])=>key)
+  );
+  const emitted=new Set();
+  const units=[];
+
+  const compareTitle=(a,b)=>String(a||"").localeCompare(
+    String(b||""),
+    "fr",
+    {sensitivity:"base",ignorePunctuation:true,numeric:true}
+  );
+
+  for(const item of source){
+    const key=this._collectionKey(item);
+
+    if(key&&sagaKeys.has(key)){
+      if(emitted.has(key))continue;
+      emitted.add(key);
+
+      const members=[...(grouped.get(key)||[])].sort((a,b)=>{
+        const ay=Number(a?.year),by=Number(b?.year);
+        const aYear=Number.isFinite(ay)&&ay>0?ay:Number.MAX_SAFE_INTEGER;
+        const bYear=Number.isFinite(by)&&by>0?by:Number.MAX_SAFE_INTEGER;
+        return aYear-bYear||
+          compareTitle(
+            this._localFrenchMovieTitle(a),
+            this._localFrenchMovieTitle(b)
+          );
+      });
+
+      const sagaLabel=this._localSagaLabel(members[0])||
+        this._localFrenchMovieTitle(members[0]);
+      units.push({
+        sortTitle:sagaLabel,
+        items:members,
+      });
+      continue;
+    }
+
+    units.push({
+      sortTitle:this._localFrenchMovieTitle(item),
+      items:[item],
+    });
+  }
+
+  units.sort((a,b)=>compareTitle(a.sortTitle,b.sortTitle));
+  return units.flatMap(unit=>unit.items);
+};
