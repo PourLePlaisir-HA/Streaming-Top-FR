@@ -151,6 +151,12 @@ def _register_ws(hass):
             connection.send_error(msg["id"], "not_loaded", "Streaming Top FR not loaded")
             return
         payload = dict(data["coordinator"].data or {})
+        public_settings = dict(payload.get("settings") or {})
+        public_local = dict(public_settings.get("local_library") or {})
+        public_local.pop("smb_username", None)
+        public_local.pop("smb_password", None)
+        public_settings["local_library"] = public_local
+        payload["settings"] = public_settings
         store = data["store"]
         payload.update(
             {
