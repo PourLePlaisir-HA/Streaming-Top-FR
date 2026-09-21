@@ -1,4 +1,4 @@
-const STFR_VERSION = "0.9.1-beta.1";
+const STFR_VERSION = "0.9.1-beta.2";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -1081,15 +1081,27 @@ StreamingLocalCard.prototype._setWatch=async function(items,enabled){
   }
 };
 StreamingLocalCard.prototype._localPlayback=function(){
-  return this._data?.local_playback||{enabled:false,players:[]};
+  const cfg=this._data?.local_playback;
+  if(!cfg||typeof cfg!=="object")return{enabled:false,players:[],reason:"Configuration VLC non reçue du backend."};
+  const players=Array.isArray(cfg.players)?cfg.players.filter(player=>player?.id):[];
+  return{...cfg,players};
 };
 StreamingLocalCard.prototype._vlcControls=function(item,label=""){
   const cfg=this._localPlayback();
-  const players=Array.isArray(cfg.players)?cfg.players:[];
-  if(cfg.enabled!==true||!item?.local_id||!players.length)return"";
+  const players=cfg.players;
   const heading=label
     ?`Lire avec VLC · ${this._esc(label)}`
     :"Lire avec VLC";
+  if(!item?.local_id){
+    return `<div class="vlc-block unavailable"><div class="vlc-title">${heading}</div><div class="vlc-unavailable">Lecture indisponible : fichier Local non identifié.</div></div>`;
+  }
+  if(cfg.enabled!==true){
+    const reason=cfg.reason||"Lecture directe désactivée ou URI SMB non exploitable.";
+    return `<div class="vlc-block unavailable"><div class="vlc-title">${heading}</div><div class="vlc-unavailable">${this._esc(reason)}</div></div>`;
+  }
+  if(!players.length){
+    return `<div class="vlc-block unavailable"><div class="vlc-title">${heading}</div><div class="vlc-unavailable">Aucune destination Android TV compatible (Remote + ADB) n’est disponible.</div></div>`;
+  }
   const buttons=players.map(player=>`<button class="vlc-destination" data-local-play-player="${this._esc(player.id)}"><ha-icon icon="mdi:vlc"></ha-icon><span>${this._esc(player.name||player.id)}</span></button>`).join("");
   return `<div class="vlc-block"><div class="vlc-title">${heading}</div><div class="vlc-row">${buttons}</div></div>`;
 };
