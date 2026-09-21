@@ -491,6 +491,17 @@ def _register_ws(hass):
 
         settings = data["coordinator"].settings or (data["coordinator"].data or {}).get("settings") or {}
         players = settings.get("players") or {}
+        playback = settings.get("playback") or {}
+        playback_enabled = bool(
+            playback.get("enabled", bool(players))
+        )
+        if not playback_enabled:
+            connection.send_error(
+                msg["id"],
+                "playback_disabled",
+                "Lecture directe désactivée dans la configuration.",
+            )
+            return
         player_id = str(msg.get("player") or "").strip()
         player = players.get(player_id)
         if not isinstance(player, dict):
