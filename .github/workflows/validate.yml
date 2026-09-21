@@ -11,6 +11,7 @@ on:
       - dev-0.9.1
       - dev-0.9.2
       - dev-1.0.1
+      - dev-1.0.2
   pull_request:
     branches:
       - main
@@ -51,6 +52,9 @@ jobs:
 
       - name: Check Local VLC playback
         run: python scripts/check_local_playback.py
+
+      - name: Check optional movie duration filter
+        run: python scripts/check_duration_filter.py
 
       - name: Validate JSON
         run: |
