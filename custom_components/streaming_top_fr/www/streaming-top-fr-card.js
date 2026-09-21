@@ -1361,11 +1361,11 @@ StreamingLocalCard.prototype._render=function(){
     .refresh{width:36px;height:36px;border:0;border-radius:50%;background:var(--secondary-background-color);cursor:pointer;font-size:20px}
     .tabs,.subtabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
     .tabs{margin-bottom:8px}
-    .adaptive-tabs{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 14px;overflow:visible;margin-left:auto;margin-right:auto}.category-tabs{max-width:760px;padding-bottom:6px;margin-bottom:8px}.family-tabs,.watch-tabs{justify-content:center}
+    .adaptive-tabs{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 14px;overflow:visible;margin-left:auto;margin-right:auto}.category-groups{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px}.category-row{display:flex;justify-content:center;align-items:center;gap:14px;overflow:visible;padding:0;margin:0}.family-tabs,.watch-tabs{justify-content:center}
     .subtabs{min-height:36px;margin-bottom:8px}
     .subtabs.reserved{visibility:hidden}
     .tab,.subtab{display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 12px;background:var(--secondary-background-color);cursor:pointer;white-space:nowrap}
-    .category-tabs .tab{justify-content:center;font-weight:800}
+    .category-row .tab{justify-content:center;font-weight:800}
     .subtab{padding:7px 11px;font-size:.86rem}
     .tab.active,.subtab.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
     .tab ha-icon,.subtab ha-icon{--mdc-icon-size:18px}
@@ -1389,7 +1389,7 @@ StreamingLocalCard.prototype._render=function(){
     .modal-close{position:absolute;right:10px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:var(--secondary-background-color);font-size:25px;cursor:pointer}
     .modal-head{display:flex;gap:14px;padding-right:42px;align-items:flex-start}
     .modal-head img{width:88px;aspect-ratio:2/3;object-fit:cover;border-radius:9px}
-    .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}
+    .modal h2{margin:4px 0 6px;font-size:1.35rem}.modal-meta{color:var(--secondary-text-color)}.local-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.age-badge{display:inline-grid;place-items:center;flex:0 0 auto;box-sizing:border-box;font-weight:900;line-height:1;vertical-align:middle}.age-badge.fr{width:29px;height:29px;border-radius:50%;background:#d9d9d9!important;color:#111!important;border:0!important;font-size:.66rem;box-shadow:none!important}.age-badge.us{min-width:42px;height:26px;padding:0 7px;border-radius:6px;background:#242424!important;color:#fff!important;border:0!important;font-size:.64rem;letter-spacing:.01em;box-shadow:none!important}
     .modal p{line-height:1.45;color:var(--secondary-text-color)}
     .technical-details{margin:14px 0 4px;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.technical-details summary{padding:10px 2px;cursor:pointer;font-size:.88rem;font-weight:800;color:var(--secondary-text-color);list-style-position:inside}.technical-details[open] summary{color:var(--primary-text-color)}.technical-details .details{margin:0;padding:2px 2px 12px}
     .details{display:grid;gap:7px;margin-top:14px}.detail-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:.88rem}.detail-row span{overflow-wrap:anywhere;color:var(--secondary-text-color)}
@@ -1406,11 +1406,11 @@ StreamingLocalCard.prototype._render=function(){
     .episode-select ha-icon{flex:0 0 auto;color:var(--primary-color)}
     .episode-watch{flex:0 0 44px;border:0;border-left:1px solid var(--divider-color);background:none;cursor:pointer}.episode-watch ha-icon{--mdc-icon-size:22px;color:var(--secondary-text-color)}.episode-watch.on ha-icon{color:var(--primary-color)}
     .episode-help{margin-top:12px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.35}
-    @media(max-width:600px){.wrap{padding:14px 11px}.adaptive-tabs{gap:8px}.category-tabs .tab{justify-content:center}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
+    @media(max-width:600px){.wrap{padding:14px 11px}.adaptive-tabs{gap:8px}.category-row{gap:8px;flex-wrap:wrap}.category-row .tab{justify-content:center}.rail{grid-auto-columns:minmax(140px,44vw)}.status{display:none}.modal{padding:15px}.modal-head img{width:74px}.detail-row{grid-template-columns:1fr;gap:2px}.tab,.subtab{padding-left:10px;padding-right:10px}}
   </style>
   <ha-card><div class="wrap">
     <div class="top"><div><div class="title">${this._esc(this._config.title)}</div><div class="status">${this._esc(status)}</div></div><div class="spacer"></div><button class="refresh" title="Rescanner">${this._loading?"…":"↻"}</button></div>
-    ${cats.length?`<div class="tabs category-tabs">${cats.map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div>`:""}
+    ${cats.length?`<div class="category-groups"><div class="tabs category-row">${cats.slice(0,3).map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div><div class="tabs category-row">${cats.slice(3).map(cat=>`<button class="tab ${cat===this._category?"active":""}" data-category="${cat}"><ha-icon icon="${this._icon(cat)}"></ha-icon><span>${this._label(cat)} (${this._categoryCount(cat)})</span></button>`).join("")}</div></div>`:""}
     ${familyRow}
     ${watchRow}
     ${body}
