@@ -76,6 +76,17 @@ async def async_setup_entry(hass, entry):
         "local_library": LocalLibraryScanner(hass),
         "local_metadata": local_metadata,
     }
+    entry_runtime = hass.data[DOMAIN][entry.entry_id]
+    local_settings = (
+        coordinator.settings
+        or (coordinator.data or {}).get("settings")
+        or {}
+    ).get("local_library") or {}
+    if local_settings.get("enabled", False):
+        hass.async_create_task(
+            _async_refresh_local_canonical_index(entry_runtime),
+            f"{DOMAIN}_local_canonical_index_bootstrap",
+        )
     await _register_frontend(hass)
     _register_ws(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -108,6 +119,9 @@ def _entry_data(hass, entry_id=None):
     return data.get(entry_id) if entry_id else next(iter(data.values()), None)
 
 
+LOCAL_INDEX_METADATA_KEY = "local-canonical-index-v1"
+
+
 def _local_match_token(value):
     return "".join(
         char for char in str(value or "").casefold()
@@ -115,57 +129,109 @@ def _local_match_token(value):
     )
 
 
-def _local_movie_title_candidates(item, candidates):
-    """Return raw Local movie candidates sharing an exact normalized title."""
-    target_titles = {
-        _local_match_token(value)
-        for value in (
-            item.get("title"),
-            item.get("original_title"),
-            item.get("subtitle"),
-        )
-        if _local_match_token(value)
+def _local_public_ref(item):
+    """Keep only playback-safe identity fields in the persisted Local index."""
+    return {
+        "local_id": item.get("local_id"),
+        "title": item.get("title") or item.get("parsed_title"),
+        "year": item.get("year"),
+        "imdb_id": item.get("imdb_id"),
+        "canonical_media_key": item.get("canonical_media_key"),
     }
-    if not target_titles:
-        return []
 
-    matches = []
-    for candidate in candidates or []:
+
+def _build_local_canonical_index(items):
+    """Build a persistent identity -> Local file index from enriched Local items."""
+    by_imdb = {}
+    by_canonical = {}
+    by_title_year = {}
+    ambiguous_title_year = set()
+
+    for item in items or []:
         if (
-            not isinstance(candidate, dict)
-            or str(candidate.get("media_type") or "").casefold() != "movie"
-            or candidate.get("episodic")
-            or not candidate.get("local_id")
+            not isinstance(item, dict)
+            or str(item.get("media_type") or "").casefold() != "movie"
+            or item.get("episodic")
+            or not item.get("local_id")
         ):
             continue
-        candidate_titles = {
+
+        ref = _local_public_ref(item)
+        imdb_id = str(item.get("imdb_id") or "").strip().casefold()
+        canonical = str(item.get("canonical_media_key") or "").strip()
+
+        if imdb_id:
+            by_imdb.setdefault(imdb_id, ref)
+        if canonical:
+            by_canonical.setdefault(canonical, ref)
+
+        try:
+            year = int(item.get("year"))
+        except (TypeError, ValueError):
+            year = None
+
+        title_tokens = {
             _local_match_token(value)
             for value in (
-                candidate.get("title"),
-                candidate.get("parsed_title"),
-                candidate.get("lookup_title"),
+                item.get("title"),
+                item.get("parsed_title"),
+                item.get("lookup_title"),
             )
             if _local_match_token(value)
         }
-        if target_titles & candidate_titles:
-            matches.append(candidate)
-    return matches
+        if year is not None:
+            for token in title_tokens:
+                key = f"{year}:{token}"
+                if key in by_title_year and by_title_year[key].get("local_id") != ref.get("local_id"):
+                    ambiguous_title_year.add(key)
+                else:
+                    by_title_year[key] = ref
+
+    for key in ambiguous_title_year:
+        by_title_year.pop(key, None)
+
+    return {
+        "schema": 1,
+        "by_imdb": by_imdb,
+        "by_canonical": by_canonical,
+        "by_title_year": by_title_year,
+    }
 
 
-def _find_local_movie_match(item, candidates):
-    """Find a conservative Local copy of a streaming movie."""
+async def _persist_local_canonical_index(store, items):
+    index = _build_local_canonical_index(items)
+    store.set_metadata(LOCAL_INDEX_METADATA_KEY, index)
+    await store.async_save()
+    return index
+
+
+def _find_local_index_match(item, index):
+    """Resolve a Streaming movie against the persisted Local canonical index."""
     if str(item.get("media_type") or "").casefold() not in {"movie", "film"}:
         return None
+    if not isinstance(index, dict):
+        return None
 
-    target_imdb = str(item.get("imdb_id") or "").strip().casefold()
-    target_media_key = str(item.get("media_key") or "").strip()
-    target_year = item.get("year")
+    imdb_id = str(item.get("imdb_id") or "").strip().casefold()
+    if imdb_id:
+        match = (index.get("by_imdb") or {}).get(imdb_id)
+        if isinstance(match, dict):
+            return match
+
+    media_key = str(item.get("media_key") or "").strip()
+    if media_key:
+        match = (index.get("by_canonical") or {}).get(media_key)
+        if isinstance(match, dict):
+            return match
+
     try:
-        target_year = int(target_year) if target_year not in (None, "") else None
+        year = int(item.get("year"))
     except (TypeError, ValueError):
-        target_year = None
+        year = None
+    if year is None:
+        return None
 
-    target_titles = {
+    title_tokens = {
         _local_match_token(value)
         for value in (
             item.get("title"),
@@ -174,49 +240,41 @@ def _find_local_movie_match(item, candidates):
         )
         if _local_match_token(value)
     }
+    matches = []
+    for token in title_tokens:
+        match = (index.get("by_title_year") or {}).get(f"{year}:{token}")
+        if isinstance(match, dict):
+            matches.append(match)
 
-    eligible = [
-        candidate
-        for candidate in (candidates or [])
-        if isinstance(candidate, dict)
-        and str(candidate.get("media_type") or "").casefold() == "movie"
-        and not candidate.get("episodic")
-        and candidate.get("local_id")
-    ]
+    unique = {
+        str(match.get("local_id") or ""): match
+        for match in matches
+        if match.get("local_id")
+    }
+    return next(iter(unique.values())) if len(unique) == 1 else None
 
-    if target_imdb:
-        for candidate in eligible:
-            if str(candidate.get("imdb_id") or "").strip().casefold() == target_imdb:
-                return candidate
 
-    if target_media_key:
-        for candidate in eligible:
-            if str(candidate.get("canonical_media_key") or "").strip() == target_media_key:
-                return candidate
+async def _async_refresh_local_canonical_index(data):
+    """Refresh the persisted Local index without changing the protected engines."""
+    coordinator = data["coordinator"]
+    settings = coordinator.settings or (coordinator.data or {}).get("settings") or {}
+    local_settings = settings.get("local_library") or {}
+    if not local_settings.get("enabled", False):
+        await _persist_local_canonical_index(data["store"], [])
+        return
 
-    if not target_titles or target_year is None:
-        return None
+    scanner = data["local_library"]
+    result = scanner.last_result
+    if not result.items and not result.errors:
+        result = await scanner.async_scan(local_settings)
+    if result.errors and not result.items:
+        return
 
-    for candidate in eligible:
-        try:
-            candidate_year = int(candidate.get("year"))
-        except (TypeError, ValueError):
-            continue
-        if candidate_year != target_year:
-            continue
-        candidate_titles = {
-            _local_match_token(value)
-            for value in (
-                candidate.get("title"),
-                candidate.get("parsed_title"),
-                candidate.get("lookup_title"),
-            )
-            if _local_match_token(value)
-        }
-        if target_titles & candidate_titles:
-            return candidate
-
-    return None
+    await data["local_metadata"].async_enrich_local_items(
+        result.items,
+        settings.get("classification") or {},
+    )
+    await _persist_local_canonical_index(data["store"], result.items)
 
 
 def _local_playback_payload(settings):
@@ -547,6 +605,7 @@ def _register_ws(hass):
             result.items,
             settings.get("classification") or {},
         )
+        await _persist_local_canonical_index(data["store"], result.items)
 
         # A refresh may have completed while metadata enrichment was running.
         # Never send the old inventory back to the card in that case.
@@ -609,28 +668,9 @@ def _register_ws(hass):
             )
             return
 
-        scanner = data["local_library"]
-        result = scanner.last_result
-        if not result.items and not result.errors:
-            result = await scanner.async_scan(local_settings)
-
         target_item = dict(msg.get("item") or {})
-        match = _find_local_movie_match(target_item, result.items)
-
-        # After a Home Assistant restart, the scanner inventory is rebuilt
-        # before Local metadata is necessarily reattached to each item. If the
-        # canonical match is missing, hydrate only exact-title movie candidates
-        # through the existing Local metadata cache/client, then retry. This
-        # keeps the validated scanner and LocalMetadataClient engines untouched
-        # and avoids enriching the whole NAS merely to open one Streaming popup.
-        if match is None:
-            candidates = _local_movie_title_candidates(target_item, result.items)
-            if candidates:
-                await data["local_metadata"].async_enrich_local_items(
-                    candidates,
-                    settings.get("classification") or {},
-                )
-                match = _find_local_movie_match(target_item, result.items)
+        index = data["store"].get_metadata(LOCAL_INDEX_METADATA_KEY) or {}
+        match = _find_local_index_match(target_item, index)
         public_match = None
         if isinstance(match, dict):
             public_match = {
