@@ -44,7 +44,7 @@ assert "runtime<threshold" in card
 assert 'type:"streaming_top_fr/get_runtimes"' in card
 
 # Version alignment.
-assert 'const STFR_VERSION = "1.0.5";' in card
-assert '"version": "1.0.5"' in manifest
+assert 'const STFR_VERSION = "1.0.6-beta.1";' in card
+assert '"version": "1.0.6-beta.1"' in manifest
 
 print("Optional movie duration filter checks passed.")
