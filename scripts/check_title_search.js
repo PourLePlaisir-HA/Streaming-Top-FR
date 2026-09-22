@@ -229,3 +229,15 @@ if (local._stfrSearchNormalize("Éléphant") !== "elephant") {
 }
 
 console.log("Instant contains-title search and searchbox override passed.");
+
+
+const noResult = streamingFixture();
+noResult._stfrSearchQuery = "introuvable";
+const noResultMessage = noResult._stfrSearchNoResultMessage();
+if (
+  !noResultMessage.includes("introuvable") ||
+  !noResultMessage.includes("Aucun résultat")
+) {
+  throw new Error("No-result search feedback does not explain the empty result");
+}
+console.log("No-result search feedback passed.");
