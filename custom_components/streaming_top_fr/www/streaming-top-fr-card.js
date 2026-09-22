@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.4";
+const STFR_VERSION = "1.0.5-beta.2";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -1567,6 +1567,178 @@ window.customCards.push({type:'streaming-top-fr-card',name:'Streaming Top FR',de
 window.customCards.push({type:'streaming-top-fr-catalog-card',name:'Top Streaming FR',description:'Classements par décennie Films / Animation / Séries / Famille disponibles sur vos services'});
 window.customCards.push({type:'streaming-local-card',name:'Streaming Local',description:'Vidéothèque locale Films / Séries / Animation / Documentaires avec métadonnées IMDb / JustWatch'});
 console.info(`STREAMING TOP FR ${STFR_VERSION}`);
+
+// ---------------------------------------------------------------------------
+// Progressive poster loading (v1.0.5-beta.2)
+// Shared by Streaming, Top Streaming and Streaming Local.
+// Card-level Lovelace overrides win over integration settings.
+// ---------------------------------------------------------------------------
+function stfrProgressiveSettings(card){
+  const global=card?._data?.settings?.discovery||card?._data?.discovery||{};
+  const local=card?._config||{};
+  const rawBatch=Object.prototype.hasOwnProperty.call(local,"posters_par_lot")
+    ?local.posters_par_lot
+    :global.posters_par_lot;
+  const batchNumber=Number(rawBatch??8);
+  const postersPerBatch=Number.isFinite(batchNumber)
+    ?Math.max(1,Math.min(50,Math.floor(batchNumber)))
+    :8;
+  const infinite=Object.prototype.hasOwnProperty.call(local,"scroll_infini")
+    ?Boolean(local.scroll_infini)
+    :Boolean(global.scroll_infini??false);
+  return{postersPerBatch,infinite};
+}
+
+function stfrProgressiveContext(card){
+  if(card instanceof StreamingTopFrCatalogCard)
+    return `catalog|${card._decade||""}|${card._category||""}|${card._familyCategory||""}`;
+  if(card instanceof StreamingLocalCard)
+    return `local|${card._category||""}|${card._familyCategory||""}|${card._watchFilter||""}`;
+  return `stream|${card._provider||""}|${card._media||""}|${card._section||""}`;
+}
+
+function stfrProgressiveRows(card){
+  const width=Number(card?.getBoundingClientRect?.().width||card?.shadowRoot?.host?.getBoundingClientRect?.().width||0);
+  if(width>=1200)return 3;
+  return 2;
+}
+
+function stfrProgressiveCapacity(card,rail){
+  const rows=stfrProgressiveRows(card);
+  const first=[...rail.children].find(el=>el.classList?.contains("mcard"));
+  const railWidth=Number(rail.clientWidth||rail.getBoundingClientRect?.().width||0);
+  const itemWidth=Number(first?.getBoundingClientRect?.().width||0);
+  let gap=13;
+  try{
+    const css=getComputedStyle(rail);
+    gap=parseFloat(css.columnGap||css.gap||"13")||13;
+  }catch(_e){}
+  const columns=itemWidth>0&&railWidth>0
+    ?Math.max(1,Math.floor((railWidth+gap)/(itemWidth+gap)))
+    :2;
+  return Math.max(1,columns*rows);
+}
+
+function stfrProgressiveStyle(card){
+  if(card.shadowRoot?.querySelector("style[data-stfr-progressive]"))return;
+  const style=document.createElement("style");
+  style.dataset.stfrProgressive="1";
+  style.textContent=`
+    .stfr-more-wrap{display:flex;justify-content:center;padding:4px 0 2px}
+    .stfr-more-button{border:0;border-radius:999px;padding:9px 16px;font:inherit;font-weight:800;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}
+    .stfr-more-button:hover{filter:brightness(1.06)}
+  `;
+  card.shadowRoot?.appendChild(style);
+}
+
+function stfrApplyProgressive(card){
+  const rail=card.shadowRoot?.querySelector(".rail");
+  if(!rail)return;
+  stfrProgressiveStyle(card);
+
+  const rows=stfrProgressiveRows(card);
+  rail.style.gridTemplateRows=`repeat(${rows}, auto)`;
+
+  const cards=[...rail.children].filter(el=>el.classList?.contains("mcard"));
+  if(!cards.length)return;
+
+  const context=stfrProgressiveContext(card);
+  const capacity=stfrProgressiveCapacity(card,rail);
+  if(card._stfrProgressiveContext!==context){
+    card._stfrProgressiveContext=context;
+    card._stfrRenderLimit=capacity;
+  }
+  if(!Number.isFinite(card._stfrRenderLimit)||card._stfrRenderLimit<capacity)
+    card._stfrRenderLimit=capacity;
+
+  const limit=Math.min(cards.length,Math.floor(card._stfrRenderLimit));
+  cards.forEach((el,index)=>{el.style.display=index<limit?"":"none";});
+
+  card.shadowRoot?.querySelector(".stfr-more-wrap")?.remove();
+  const hasMore=limit<cards.length;
+  const cfg=stfrProgressiveSettings(card);
+
+  const reveal=()=>{
+    card._stfrRenderLimit=Math.min(cards.length,limit+cfg.postersPerBatch);
+    stfrApplyProgressive(card);
+  };
+
+  if(hasMore&&!cfg.infinite){
+    const wrap=document.createElement("div");
+    wrap.className="stfr-more-wrap";
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="stfr-more-button";
+    const remaining=cards.length-limit;
+    const amount=Math.min(cfg.postersPerBatch,remaining);
+    button.textContent=`Voir ${amount} de plus`;
+    button.addEventListener("click",event=>{
+      event.stopPropagation();
+      card._stfrRenderLimit=Math.min(cards.length,limit+cfg.postersPerBatch);
+      stfrApplyProgressive(card);
+    });
+    wrap.appendChild(button);
+    rail.insertAdjacentElement("afterend",wrap);
+  }
+
+  if(hasMore&&cfg.infinite){
+    rail.addEventListener("scroll",()=>{
+      const nearEnd=rail.scrollLeft+rail.clientWidth>=rail.scrollWidth-120;
+      if(nearEnd){
+        card._stfrRenderLimit=Math.min(cards.length,(card._stfrRenderLimit||limit)+cfg.postersPerBatch);
+        stfrApplyProgressive(card);
+      }
+    },{passive:true,once:true});
+  }
+
+  if(Number.isFinite(card._stfrSavedScrollLeft)){
+    rail.scrollLeft=Math.min(card._stfrSavedScrollLeft,Math.max(0,rail.scrollWidth-rail.clientWidth));
+    card._stfrSavedScrollLeft=null;
+  }
+}
+
+function stfrDecorateProgressiveRender(klass){
+  const previous=klass.prototype._render;
+  klass.prototype._render=function(){
+    const oldRail=this.shadowRoot?.querySelector(".rail");
+    if(oldRail)this._stfrSavedScrollLeft=oldRail.scrollLeft;
+    const result=previous.call(this);
+    stfrApplyProgressive(this);
+    return result;
+  };
+}
+
+// Streaming discovery previously returned only visible_count items. Keep the
+// full prefetched reserve available to the progressive renderer.
+const _stfrProgressiveStreamingItems=StreamingTopFrCard.prototype._items;
+StreamingTopFrCard.prototype._items=function(){
+  if(this._section!=="discover")return _stfrProgressiveStreamingItems.call(this);
+  const watched=this._watched(),hidden=this._notInterested();
+  let items=(this._pd()?.[this._media]||[]).filter(
+    item=>!watched.has(item.media_key)&&!hidden.has(item.media_key)
+  );
+  if(
+    this._durationConfig?.().enabled&&
+    this._durationFilterActive&&
+    !this._durationLoading&&
+    this._durationMovieView?.()
+  )items=items.filter(item=>stfrDurationPass(this,item));
+  const discovery=this._data?.settings?.discovery||{};
+  const visible=Number(discovery.visible_count??10);
+  const prefetch=Number(discovery.prefetch_count??20);
+  const batch=stfrProgressiveSettings(this).postersPerBatch;
+  const target=Math.max(
+    Number.isFinite(visible)?visible:10,
+    Number.isFinite(prefetch)?prefetch:20,
+    (Number.isFinite(visible)?visible:10)+batch
+  );
+  return items.slice(0,Math.min(100,Math.max(1,Math.floor(target))));
+};
+
+stfrDecorateProgressiveRender(StreamingTopFrCard);
+stfrDecorateProgressiveRender(StreamingTopFrCatalogCard);
+stfrDecorateProgressiveRender(StreamingLocalCard);
+
 
 
 // ---------------------------------------------------------------------------
