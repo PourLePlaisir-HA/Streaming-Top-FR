@@ -10,7 +10,7 @@ assert "def normalize_genres(" in sources
 assert '"science_fiction": "Science-fiction"' in sources
 assert '"act": ("action", "adventure")' in sources
 assert sources.count("genres { shortName }") >= 6
-assert "genres { genres { text } }" in sources
+assert "genres {{ genres {{ text }} }}" in sources
 assert '"genres_raw"' in sources
 assert '"genre_labels"' in sources
 assert '"genre_source"' in sources
