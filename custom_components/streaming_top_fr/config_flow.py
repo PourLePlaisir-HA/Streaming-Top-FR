@@ -45,10 +45,13 @@ FIELD_US_TV = "us_tv"
 FIELD_VISIBLE_COUNT = "visible_count"
 FIELD_PREFETCH_COUNT = "prefetch_count"
 FIELD_MAX_DEPTH = "max_depth"
-FIELD_POSTERS_PER_BATCH = "posters_par_lot"
-FIELD_INFINITE_SCROLL = "scroll_infini"
 FIELD_DURATION_FILTER_ENABLED = "duration_filter_enabled"
 FIELD_DURATION_FILTER_MAX_MINUTES = "duration_filter_max_minutes"
+FIELD_LAYOUT_ROWS_SMALL = "layout_rows_small"
+FIELD_LAYOUT_ROWS_MEDIUM = "layout_rows_medium"
+FIELD_LAYOUT_ROWS_LARGE = "layout_rows_large"
+FIELD_LAYOUT_POSTERS_PER_BATCH = "posters_par_lot"
+FIELD_LAYOUT_INFINITE_SCROLL = "scroll_infini"
 FIELD_DEBUG_ENABLED = "debug_enabled"
 FIELD_PLAYBACK_ENABLED = "playback_enabled"
 FIELD_PLAYER_SELECT = "player_select"
@@ -124,33 +127,18 @@ def _discovery_schema(settings: dict[str, Any]) -> vol.Schema:
                 FIELD_MAX_DEPTH,
                 default=int(discovery.get("max_depth", 100)),
             ): _number(1, 100),
-            vol.Required(
-                FIELD_POSTERS_PER_BATCH,
-                default=int(discovery.get("posters_par_lot", 8)),
-            ): _number(1, 50),
-            vol.Required(
-                FIELD_INFINITE_SCROLL,
-                default=bool(discovery.get("scroll_infini", False)),
-            ): selector.BooleanSelector(),
         }
     )
 
 
 def _apply_discovery(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
     visible = int(user_input[FIELD_VISIBLE_COUNT])
-    posters_par_lot = max(1, min(50, int(user_input[FIELD_POSTERS_PER_BATCH])))
-    prefetch = max(
-        visible,
-        int(user_input[FIELD_PREFETCH_COUNT]),
-        min(100, visible + posters_par_lot),
-    )
+    prefetch = max(visible, int(user_input[FIELD_PREFETCH_COUNT]))
     max_depth = max(prefetch, int(user_input[FIELD_MAX_DEPTH]))
     settings["discovery"] = {
         "visible_count": visible,
         "prefetch_count": prefetch,
         "max_depth": max_depth,
-        "posters_par_lot": posters_par_lot,
-        "scroll_infini": bool(user_input[FIELD_INFINITE_SCROLL]),
     }
 
 def _duration_filter_schema(settings: dict[str, Any]) -> vol.Schema:
@@ -175,6 +163,46 @@ def _apply_duration_filter(
     settings["duration_filter"] = {
         "enabled": bool(user_input.get(FIELD_DURATION_FILTER_ENABLED, False)),
         "max_minutes": int(user_input[FIELD_DURATION_FILTER_MAX_MINUTES]),
+    }
+
+
+def _card_layout_schema(settings: dict[str, Any]) -> vol.Schema:
+    layout = settings.get("card_layout") or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                FIELD_LAYOUT_ROWS_SMALL,
+                default=int(layout.get("rows_small", 2)),
+            ): _number(1, 6),
+            vol.Required(
+                FIELD_LAYOUT_ROWS_MEDIUM,
+                default=int(layout.get("rows_medium", 2)),
+            ): _number(1, 6),
+            vol.Required(
+                FIELD_LAYOUT_ROWS_LARGE,
+                default=int(layout.get("rows_large", 3)),
+            ): _number(1, 6),
+            vol.Required(
+                FIELD_LAYOUT_POSTERS_PER_BATCH,
+                default=int(layout.get("posters_par_lot", 8)),
+            ): _number(1, 50),
+            vol.Optional(
+                FIELD_LAYOUT_INFINITE_SCROLL,
+                default=bool(layout.get("scroll_infini", False)),
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+def _apply_card_layout(
+    settings: dict[str, Any], user_input: dict[str, Any]
+) -> None:
+    settings["card_layout"] = {
+        "rows_small": int(user_input[FIELD_LAYOUT_ROWS_SMALL]),
+        "rows_medium": int(user_input[FIELD_LAYOUT_ROWS_MEDIUM]),
+        "rows_large": int(user_input[FIELD_LAYOUT_ROWS_LARGE]),
+        "posters_par_lot": int(user_input[FIELD_LAYOUT_POSTERS_PER_BATCH]),
+        "scroll_infini": bool(user_input.get(FIELD_LAYOUT_INFINITE_SCROLL, False)),
     }
 
 
@@ -571,6 +599,7 @@ def _summary_placeholders(
     family = settings.get("family") or {}
     classification = settings.get("classification") or {}
     duration_filter = settings.get("duration_filter") or {}
+    card_layout = settings.get("card_layout") or {}
     debug = settings.get("debug") or {}
     local_library = settings.get("local_library") or {}
     local_enabled = bool(local_library.get("enabled", False))
@@ -609,6 +638,11 @@ def _summary_placeholders(
         "us_tv": _status(classification.get("us_tv", True)),
         "duration_filter_enabled": _status(duration_filter.get("enabled", True)),
         "duration_filter_max_minutes": str(int(duration_filter.get("max_minutes", 120))),
+        "layout_rows_small": str(int(card_layout.get("rows_small", 2))),
+        "layout_rows_medium": str(int(card_layout.get("rows_medium", 2))),
+        "layout_rows_large": str(int(card_layout.get("rows_large", 3))),
+        "layout_posters_per_batch": str(int(card_layout.get("posters_par_lot", 8))),
+        "layout_infinite_scroll": _status(card_layout.get("scroll_infini", False)),
         "debug_enabled": _status(debug.get("enabled", False)),
         "local_enabled": _status(local_enabled),
         "local_auth_mode": local_auth_label if local_enabled else "—",
@@ -867,6 +901,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                 "general",
                 "services",
                 "discovery",
+                "card_layout",
                 "duration_filter",
                 "debug",
                 "top_catalog",
@@ -953,6 +988,19 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
         return self.async_show_form(
             step_id="discovery",
             data_schema=_discovery_schema(self._settings),
+        )
+
+    async def async_step_card_layout(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure_loaded()
+        assert self._settings is not None
+        if user_input is not None:
+            _apply_card_layout(self._settings, user_input)
+            return self._save()
+        return self.async_show_form(
+            step_id="card_layout",
+            data_schema=_card_layout_schema(self._settings),
         )
 
     async def async_step_duration_filter(

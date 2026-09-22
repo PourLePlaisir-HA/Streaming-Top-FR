@@ -269,21 +269,64 @@ type: custom:streaming-local-card
 title: Streaming Local
 ```
 
-### Chargement progressif des posters
+Catalogue de la vidéothèque locale, suivi Vu / Pas encore vu et lecture VLC.
 
-Les trois cartes acceptent les mêmes surcharges Lovelace :
+---
 
-```yaml
-posters_par_lot: 8
-scroll_infini: false
+## 📐 Affichage responsive des cartes
+
+À partir de la série **1.0.5**, les trois cartes utilisent une grille verticale responsive avec chargement progressif des affiches.
+
+Le nombre de colonnes s'adapte automatiquement à la largeur réelle de chaque carte. Le comportement ne dépend donc pas directement de l'appareil : une carte étroite sur un grand écran peut utiliser le même mode qu'une tablette, tandis qu'une carte occupant une grande section exploite davantage de colonnes.
+
+Le nombre de lignes visibles est configurable dans :
+
+**Paramètres → Appareils et services → Streaming Top FR → Configurer → Affichage des cartes**
+
+Valeurs par défaut :
+
+```text
+Espace étroit  (< 700 px)     : 2 lignes
+Espace moyen   (700–1199 px)  : 2 lignes
+Grand espace   (≥ 1200 px)    : 3 lignes
+Posters ajoutés par lot       : 8
+Scroll infini par défaut      : Non
 ```
 
-- `posters_par_lot` : nombre de posters ajoutés à chaque étape, de 1 à 50.
-- `scroll_infini: false` : affiche le bouton **Voir N de plus**.
-- `scroll_infini: true` : charge automatiquement le lot suivant en approchant de la fin du rail.
-- Si ces clés sont absentes de la carte, les valeurs de la configuration native Home Assistant sont utilisées.
+Chaque nombre de lignes peut être réglé de **1 à 6**. Le nombre de posters ajoutés par lot peut être réglé de **1 à 50**.
 
-Catalogue de la vidéothèque locale, suivi Vu / Pas encore vu et lecture VLC.
+Les titres sont affichés dans l'ordre naturel, de gauche à droite puis de haut en bas.
+
+Par défaut, la carte n'active pas de scroll vertical interne au premier affichage : elle montre uniquement le nombre de lignes configuré, puis propose un bouton **Voir N de plus ↓**. Chaque clic rend jusqu'à `N` posters supplémentaires, sans jamais dépasser le nombre de titres réellement disponibles dans le pool courant.
+
+Le **scroll infini** reste disponible en option. Lorsqu'il est activé, les lots suivants sont rendus automatiquement à l'approche du bas de la grille.
+
+Les deux paramètres peuvent être surchargés indépendamment dans chaque carte Lovelace :
+
+```yaml
+type: custom:streaming-top-fr-card
+scroll_infini: false
+posters_par_lot: 8
+```
+
+`scroll_infini` et `posters_par_lot` suivent la priorité suivante :
+
+1. valeur définie dans la carte Lovelace ;
+2. sinon, valeur de la configuration globale de l'intégration ;
+3. sinon, valeurs par défaut : `false` et `8`.
+
+Exemple avec un comportement différent pour Streaming Local :
+
+```yaml
+type: custom:streaming-local-card
+scroll_infini: true
+posters_par_lot: 20
+```
+
+Le dimensionnement se fait carte par carte. Deux cartes placées côte à côte sur un écran large peuvent donc automatiquement utiliser un mode plus compact qu'une carte seule occupant toute la largeur.
+
+La position de scroll est conservée par vue lors des rerenders et rafraîchissements afin d'éviter de revenir systématiquement en haut de la carte.
+
 
 ---
 

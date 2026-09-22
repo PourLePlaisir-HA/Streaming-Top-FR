@@ -141,5 +141,3 @@ discovery:
   visible_count: 10
   prefetch_count: 20
   max_depth: 100
-  posters_par_lot: 8
-  scroll_infini: false

@@ -14,6 +14,7 @@ on:
       - dev-1.0.2
       - dev-1.0.3
       - dev-1.0.4
+      - dev-1.0.5
   pull_request:
     branches:
       - main
@@ -35,7 +36,7 @@ jobs:
 
       - name: Guard historical Streaming engine
         run: |
-          git fetch --depth=1 origin refs/tags/0.7.1:refs/tags/0.7.1
+          git fetch --depth=1 origin refs/tags/1.0.4:refs/tags/1.0.4
           python scripts/check_historical_engine.py
 
       - name: Guard stable Streaming Local engine
@@ -79,6 +80,9 @@ jobs:
 
       - name: Validate JavaScript syntax
         run: node --check custom_components/streaming_top_fr/www/streaming-top-fr-card.js
+
+      - name: Check responsive card layout
+        run: node scripts/check_responsive_layout.js
 
       - name: Check Streaming Local Family/watched views
         run: node scripts/check_local_views.js

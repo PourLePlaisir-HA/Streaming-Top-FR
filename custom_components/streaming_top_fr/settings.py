@@ -90,6 +90,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "enabled": True,
         "max_minutes": 120,
     },
+    "card_layout": {
+        "rows_small": 2,
+        "rows_medium": 2,
+        "rows_large": 3,
+        "posters_par_lot": 8,
+        "scroll_infini": False,
+    },
     "debug": {
         "enabled": False,
     },
@@ -97,8 +104,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "visible_count": 10,
         "prefetch_count": 20,
         "max_depth": 100,
-        "posters_par_lot": 8,
-        "scroll_infini": False,
     },
 }
 
@@ -194,6 +199,15 @@ duration_filter:
   enabled: true          # Afficher le filtre de durée dans les vues Films
   max_minutes: 120       # Seuil du bouton : films strictement inférieurs à 120 min
 
+# Affichage responsive des trois cartes.
+# Les seuils sont basés sur la largeur réelle de chaque carte, pas sur le type d'appareil.
+card_layout:
+  rows_small: 2          # < 700 px (smartphone / carte étroite)
+  rows_medium: 2         # 700 à 1199 px (tablette / carte PC réduite)
+  rows_large: 3          # >= 1200 px (grande carte PC)
+  posters_par_lot: 8     # Nombre de posters ajoutés par "Voir plus" / lot du scroll infini
+  scroll_infini: false   # false = bouton "Voir plus" ; true = chargement automatique au scroll
+
 debug:
   enabled: false         # Active les traces détaillées de diagnostic
 
@@ -201,8 +215,6 @@ discovery:
   visible_count: 10      # Nombre de tuiles visibles dans « À découvrir » (pas de 1)
   prefetch_count: 20     # Fenêtre active totale : visibles + réserve, toujours maintenue pleine
   max_depth: 100         # Profondeur maximale explorée pour reconstituer la fenêtre active
-  posters_par_lot: 8     # Nombre de posters ajoutés par « Voir N de plus » (1 à 50)
-  scroll_infini: false   # false = bouton « Voir plus » ; true = chargement automatique en fin de rail
 """
 
 
@@ -421,6 +433,40 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
             ),
         }
 
+    card_layout = raw.get("card_layout") or {}
+    if isinstance(card_layout, dict):
+        defaults = DEFAULT_SETTINGS["card_layout"]
+        settings["card_layout"] = {
+            "rows_small": _as_int(
+                card_layout.get("rows_small"),
+                defaults["rows_small"],
+                1,
+                6,
+            ),
+            "rows_medium": _as_int(
+                card_layout.get("rows_medium"),
+                defaults["rows_medium"],
+                1,
+                6,
+            ),
+            "rows_large": _as_int(
+                card_layout.get("rows_large"),
+                defaults["rows_large"],
+                1,
+                6,
+            ),
+            "posters_par_lot": _as_int(
+                card_layout.get("posters_par_lot"),
+                defaults["posters_par_lot"],
+                1,
+                50,
+            ),
+            "scroll_infini": _as_bool(
+                card_layout.get("scroll_infini"),
+                defaults["scroll_infini"],
+            ),
+        }
+
     debug = raw.get("debug") or {}
     if isinstance(debug, dict):
         settings["debug"] = {
@@ -436,28 +482,13 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         visible = _as_int(discovery.get("visible_count"), defaults["visible_count"], 1, 100)
         prefetch = _as_int(discovery.get("prefetch_count"), defaults["prefetch_count"], 1, 100)
         max_depth = _as_int(discovery.get("max_depth"), defaults["max_depth"], 1, 100)
-        posters_par_lot = _as_int(
-            discovery.get("posters_par_lot"),
-            defaults["posters_par_lot"],
-            1,
-            50,
-        )
-        scroll_infini = _as_bool(
-            discovery.get("scroll_infini"),
-            defaults["scroll_infini"],
-        )
 
-        # Keep at least one complete progressive batch in reserve. The existing
-        # discovery hard limit remains 100; a larger batch is simply capped by
-        # the number of titles actually available.
-        prefetch = max(prefetch, visible, min(100, visible + posters_par_lot))
+        prefetch = max(prefetch, visible)
         max_depth = max(max_depth, prefetch)
         settings["discovery"] = {
             "visible_count": visible,
             "prefetch_count": prefetch,
             "max_depth": max_depth,
-            "posters_par_lot": posters_par_lot,
-            "scroll_infini": scroll_infini,
         }
 
     return settings

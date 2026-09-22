@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.5-beta.2";
+const STFR_VERSION = "1.0.5";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -1568,178 +1568,6 @@ window.customCards.push({type:'streaming-top-fr-catalog-card',name:'Top Streamin
 window.customCards.push({type:'streaming-local-card',name:'Streaming Local',description:'Vidéothèque locale Films / Séries / Animation / Documentaires avec métadonnées IMDb / JustWatch'});
 console.info(`STREAMING TOP FR ${STFR_VERSION}`);
 
-// ---------------------------------------------------------------------------
-// Progressive poster loading (v1.0.5-beta.2)
-// Shared by Streaming, Top Streaming and Streaming Local.
-// Card-level Lovelace overrides win over integration settings.
-// ---------------------------------------------------------------------------
-function stfrProgressiveSettings(card){
-  const global=card?._data?.settings?.discovery||card?._data?.discovery||{};
-  const local=card?._config||{};
-  const rawBatch=Object.prototype.hasOwnProperty.call(local,"posters_par_lot")
-    ?local.posters_par_lot
-    :global.posters_par_lot;
-  const batchNumber=Number(rawBatch??8);
-  const postersPerBatch=Number.isFinite(batchNumber)
-    ?Math.max(1,Math.min(50,Math.floor(batchNumber)))
-    :8;
-  const infinite=Object.prototype.hasOwnProperty.call(local,"scroll_infini")
-    ?Boolean(local.scroll_infini)
-    :Boolean(global.scroll_infini??false);
-  return{postersPerBatch,infinite};
-}
-
-function stfrProgressiveContext(card){
-  if(card instanceof StreamingTopFrCatalogCard)
-    return `catalog|${card._decade||""}|${card._category||""}|${card._familyCategory||""}`;
-  if(card instanceof StreamingLocalCard)
-    return `local|${card._category||""}|${card._familyCategory||""}|${card._watchFilter||""}`;
-  return `stream|${card._provider||""}|${card._media||""}|${card._section||""}`;
-}
-
-function stfrProgressiveRows(card){
-  const width=Number(card?.getBoundingClientRect?.().width||card?.shadowRoot?.host?.getBoundingClientRect?.().width||0);
-  if(width>=1200)return 3;
-  return 2;
-}
-
-function stfrProgressiveCapacity(card,rail){
-  const rows=stfrProgressiveRows(card);
-  const first=[...rail.children].find(el=>el.classList?.contains("mcard"));
-  const railWidth=Number(rail.clientWidth||rail.getBoundingClientRect?.().width||0);
-  const itemWidth=Number(first?.getBoundingClientRect?.().width||0);
-  let gap=13;
-  try{
-    const css=getComputedStyle(rail);
-    gap=parseFloat(css.columnGap||css.gap||"13")||13;
-  }catch(_e){}
-  const columns=itemWidth>0&&railWidth>0
-    ?Math.max(1,Math.floor((railWidth+gap)/(itemWidth+gap)))
-    :2;
-  return Math.max(1,columns*rows);
-}
-
-function stfrProgressiveStyle(card){
-  if(card.shadowRoot?.querySelector("style[data-stfr-progressive]"))return;
-  const style=document.createElement("style");
-  style.dataset.stfrProgressive="1";
-  style.textContent=`
-    .stfr-more-wrap{display:flex;justify-content:center;padding:4px 0 2px}
-    .stfr-more-button{border:0;border-radius:999px;padding:9px 16px;font:inherit;font-weight:800;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}
-    .stfr-more-button:hover{filter:brightness(1.06)}
-  `;
-  card.shadowRoot?.appendChild(style);
-}
-
-function stfrApplyProgressive(card){
-  const rail=card.shadowRoot?.querySelector(".rail");
-  if(!rail)return;
-  stfrProgressiveStyle(card);
-
-  const rows=stfrProgressiveRows(card);
-  rail.style.gridTemplateRows=`repeat(${rows}, auto)`;
-
-  const cards=[...rail.children].filter(el=>el.classList?.contains("mcard"));
-  if(!cards.length)return;
-
-  const context=stfrProgressiveContext(card);
-  const capacity=stfrProgressiveCapacity(card,rail);
-  if(card._stfrProgressiveContext!==context){
-    card._stfrProgressiveContext=context;
-    card._stfrRenderLimit=capacity;
-  }
-  if(!Number.isFinite(card._stfrRenderLimit)||card._stfrRenderLimit<capacity)
-    card._stfrRenderLimit=capacity;
-
-  const limit=Math.min(cards.length,Math.floor(card._stfrRenderLimit));
-  cards.forEach((el,index)=>{el.style.display=index<limit?"":"none";});
-
-  card.shadowRoot?.querySelector(".stfr-more-wrap")?.remove();
-  const hasMore=limit<cards.length;
-  const cfg=stfrProgressiveSettings(card);
-
-  const reveal=()=>{
-    card._stfrRenderLimit=Math.min(cards.length,limit+cfg.postersPerBatch);
-    stfrApplyProgressive(card);
-  };
-
-  if(hasMore&&!cfg.infinite){
-    const wrap=document.createElement("div");
-    wrap.className="stfr-more-wrap";
-    const button=document.createElement("button");
-    button.type="button";
-    button.className="stfr-more-button";
-    const remaining=cards.length-limit;
-    const amount=Math.min(cfg.postersPerBatch,remaining);
-    button.textContent=`Voir ${amount} de plus`;
-    button.addEventListener("click",event=>{
-      event.stopPropagation();
-      card._stfrRenderLimit=Math.min(cards.length,limit+cfg.postersPerBatch);
-      stfrApplyProgressive(card);
-    });
-    wrap.appendChild(button);
-    rail.insertAdjacentElement("afterend",wrap);
-  }
-
-  if(hasMore&&cfg.infinite){
-    rail.addEventListener("scroll",()=>{
-      const nearEnd=rail.scrollLeft+rail.clientWidth>=rail.scrollWidth-120;
-      if(nearEnd){
-        card._stfrRenderLimit=Math.min(cards.length,(card._stfrRenderLimit||limit)+cfg.postersPerBatch);
-        stfrApplyProgressive(card);
-      }
-    },{passive:true,once:true});
-  }
-
-  if(Number.isFinite(card._stfrSavedScrollLeft)){
-    rail.scrollLeft=Math.min(card._stfrSavedScrollLeft,Math.max(0,rail.scrollWidth-rail.clientWidth));
-    card._stfrSavedScrollLeft=null;
-  }
-}
-
-function stfrDecorateProgressiveRender(klass){
-  const previous=klass.prototype._render;
-  klass.prototype._render=function(){
-    const oldRail=this.shadowRoot?.querySelector(".rail");
-    if(oldRail)this._stfrSavedScrollLeft=oldRail.scrollLeft;
-    const result=previous.call(this);
-    stfrApplyProgressive(this);
-    return result;
-  };
-}
-
-// Streaming discovery previously returned only visible_count items. Keep the
-// full prefetched reserve available to the progressive renderer.
-const _stfrProgressiveStreamingItems=StreamingTopFrCard.prototype._items;
-StreamingTopFrCard.prototype._items=function(){
-  if(this._section!=="discover")return _stfrProgressiveStreamingItems.call(this);
-  const watched=this._watched(),hidden=this._notInterested();
-  let items=(this._pd()?.[this._media]||[]).filter(
-    item=>!watched.has(item.media_key)&&!hidden.has(item.media_key)
-  );
-  if(
-    this._durationConfig?.().enabled&&
-    this._durationFilterActive&&
-    !this._durationLoading&&
-    this._durationMovieView?.()
-  )items=items.filter(item=>stfrDurationPass(this,item));
-  const discovery=this._data?.settings?.discovery||{};
-  const visible=Number(discovery.visible_count??10);
-  const prefetch=Number(discovery.prefetch_count??20);
-  const batch=stfrProgressiveSettings(this).postersPerBatch;
-  const target=Math.max(
-    Number.isFinite(visible)?visible:10,
-    Number.isFinite(prefetch)?prefetch:20,
-    (Number.isFinite(visible)?visible:10)+batch
-  );
-  return items.slice(0,Math.min(100,Math.max(1,Math.floor(target))));
-};
-
-stfrDecorateProgressiveRender(StreamingTopFrCard);
-stfrDecorateProgressiveRender(StreamingTopFrCatalogCard);
-stfrDecorateProgressiveRender(StreamingLocalCard);
-
-
 
 // ---------------------------------------------------------------------------
 // Optional movie runtime filter (v1.0.4)
@@ -2081,4 +1909,624 @@ StreamingLocalCard.prototype._sortMovieCollections=function(items){
 
   units.sort((a,b)=>compareTitle(a.sortTitle,b.sortTitle));
   return units.flatMap(unit=>unit.items);
+};
+
+
+
+// ---------------------------------------------------------------------------
+// Responsive vertical grid + progressive rendering (v1.0.5)
+// Presentation-only layer: the validated Streaming, Top Streaming and Local
+// engines remain unchanged. Each card reacts to its own width, not to the
+// device type, so two cards side-by-side on a desktop can use a compact mode.
+//
+// v1.0.5:
+// - default mode is explicit "Voir N de plus" loading (no nested scroll first)
+// - optional per-card/global infinite scroll
+// - configurable batch size
+// - scroll position is preserved per logical view across re-renders/refreshes
+// ---------------------------------------------------------------------------
+const STFR_LAYOUT_BREAKPOINT_MEDIUM=700;
+const STFR_LAYOUT_BREAKPOINT_LARGE=1200;
+const STFR_LAYOUT_DEFAULTS={
+  rows_small:2,
+  rows_medium:2,
+  rows_large:3,
+  posters_par_lot:8,
+  scroll_infini:false,
+};
+
+function stfrClampInt(value,fallback,minimum,maximum){
+  const n=Number(value);
+  if(!Number.isFinite(n))return fallback;
+  return Math.max(minimum,Math.min(maximum,Math.floor(n)));
+}
+
+function stfrBool(value,fallback=false){
+  if(typeof value==="boolean")return value;
+  if(typeof value==="number")return value!==0;
+  if(typeof value==="string"){
+    const normalized=value.trim().toLowerCase();
+    if(["true","yes","1","on","oui"].includes(normalized))return true;
+    if(["false","no","0","off","non"].includes(normalized))return false;
+  }
+  return fallback;
+}
+
+function stfrLayoutConfig(card){
+  const raw=card instanceof StreamingLocalCard
+    ?card?._data?.card_layout
+    :card?._data?.settings?.card_layout;
+  return{
+    rows_small:stfrClampInt(
+      raw?.rows_small,STFR_LAYOUT_DEFAULTS.rows_small,1,6
+    ),
+    rows_medium:stfrClampInt(
+      raw?.rows_medium,STFR_LAYOUT_DEFAULTS.rows_medium,1,6
+    ),
+    rows_large:stfrClampInt(
+      raw?.rows_large,STFR_LAYOUT_DEFAULTS.rows_large,1,6
+    ),
+    posters_par_lot:stfrClampInt(
+      raw?.posters_par_lot,STFR_LAYOUT_DEFAULTS.posters_par_lot,1,50
+    ),
+    scroll_infini:stfrBool(
+      raw?.scroll_infini,STFR_LAYOUT_DEFAULTS.scroll_infini
+    ),
+  };
+}
+
+function stfrHasCardOverride(card,key){
+  return Boolean(
+    card?._config&&
+    Object.prototype.hasOwnProperty.call(card._config,key)
+  );
+}
+
+function stfrBatchSize(card){
+  const global=stfrLayoutConfig(card).posters_par_lot;
+  return stfrHasCardOverride(card,"posters_par_lot")
+    ?stfrClampInt(card._config.posters_par_lot,global,1,50)
+    :global;
+}
+
+function stfrInfiniteScroll(card){
+  const global=stfrLayoutConfig(card).scroll_infini;
+  return stfrHasCardOverride(card,"scroll_infini")
+    ?stfrBool(card._config.scroll_infini,global)
+    :global;
+}
+
+function stfrLayoutMode(width){
+  const w=Number(width)||0;
+  if(w>=STFR_LAYOUT_BREAKPOINT_LARGE)return"large";
+  if(w>=STFR_LAYOUT_BREAKPOINT_MEDIUM)return"medium";
+  return"small";
+}
+
+function stfrLayoutRows(card,width){
+  const cfg=stfrLayoutConfig(card);
+  const mode=stfrLayoutMode(width);
+  return mode==="large"
+    ?cfg.rows_large
+    :mode==="medium"
+    ?cfg.rows_medium
+    :cfg.rows_small;
+}
+
+function stfrLayoutColumns(width){
+  const w=Math.max(240,Number(width)||420);
+  // Aim for poster widths close to the historical 145-175 px cards.
+  // Very narrow containers still keep two columns for a touch-friendly mobile
+  // layout; wider cards gain columns instead of oversized posters.
+  return Math.max(2,Math.min(12,Math.floor((w+12)/(150+12))));
+}
+
+function stfrLayoutWidth(card){
+  const measured=Number(card?.getBoundingClientRect?.().width);
+  if(Number.isFinite(measured)&&measured>0)return measured;
+  const railWidth=Number(card?.shadowRoot?.querySelector?.(".rail")?.clientWidth);
+  if(Number.isFinite(railWidth)&&railWidth>0)return railWidth;
+  return Number(card?._stfrLayoutWidth)||420;
+}
+
+function stfrLayoutCapacity(card,width=stfrLayoutWidth(card)){
+  const columns=stfrLayoutColumns(width);
+  return{
+    width,
+    columns,
+    rows:stfrLayoutRows(card,width),
+  };
+}
+
+function stfrLayoutKey(card,kind){
+  const duration=card?._durationFilterActive?"short":"all";
+  if(kind==="streaming"){
+    return[
+      "streaming",
+      card?._provider||"",
+      card?._media||"",
+      card?._section||"",
+      duration,
+    ].join(":");
+  }
+  if(kind==="catalog"){
+    return[
+      "catalog",
+      card?._decade||"",
+      card?._category||"",
+      card?._familyType||"",
+      duration,
+    ].join(":");
+  }
+  return[
+    "local",
+    card?._category||"",
+    card?._familyCategory||"",
+    card?._watchFilter||"all",
+    duration,
+  ].join(":");
+}
+
+function stfrViewState(card,key,capacity,full){
+  card._stfrLayoutStates=card._stfrLayoutStates||new Map();
+  let state=card._stfrLayoutStates.get(key);
+  if(!state){
+    state={
+      limit:Math.min(full,capacity),
+      expanded:false,
+      scrollTop:0,
+    };
+    card._stfrLayoutStates.set(key,state);
+  }else if(!state.expanded){
+    state.limit=Math.min(full,capacity);
+  }else{
+    state.limit=Math.min(full,Math.max(Number(state.limit)||0,capacity));
+  }
+
+  // Infinite scroll starts with one prefetched visual batch so the viewport
+  // immediately becomes scrollable. Manual mode stays at exactly the visible
+  // row capacity until the user presses "Voir N de plus".
+  if(stfrInfiniteScroll(card)&&!state.expanded&&full>capacity){
+    state.limit=Math.min(full,capacity+stfrBatchSize(card));
+    state.expanded=true;
+  }
+
+  return state;
+}
+
+function stfrLazyItems(card,items,key){
+  const all=Array.isArray(items)?items:[];
+  card._stfrLayoutFullCount=all.length;
+  if(!card._stfrRendering)return all;
+
+  const metrics=stfrLayoutCapacity(card);
+  const capacity=Math.max(1,metrics.columns*metrics.rows);
+  const state=stfrViewState(card,key,capacity,all.length);
+  card._stfrLayoutKey=key;
+  card._stfrLayoutLimit=state.limit;
+  card._stfrLayoutExpanded=state.expanded;
+
+  return all.slice(0,Math.min(all.length,state.limit));
+}
+
+function stfrStreamingLayoutItems(card,originalItems){
+  if(card._section!=="discover")return originalItems.call(card);
+
+  const watched=card._watched();
+  const hidden=card._notInterested();
+  let items=[...(card._pd()?.[card._media]||[])].filter(
+    item=>!watched.has(item.media_key)&&!hidden.has(item.media_key)
+  );
+
+  if(
+    card._durationConfig?.().enabled&&
+    card._durationFilterActive&&
+    !card._durationLoading&&
+    card._durationMovieView?.()
+  ){
+    items=items.filter(item=>stfrDurationPass(card,item));
+  }
+  return items;
+}
+
+function stfrGridCardNodes(rail){
+  return[...(rail?.children||[])].filter(
+    node=>!node.classList?.contains("stfr-lazy-sentinel")
+  );
+}
+
+function stfrFallbackRowHeight(rail,columns,isLocal){
+  const width=Number(rail?.clientWidth)||420;
+  const gap=12;
+  const cardWidth=Math.max(110,(width-gap*(columns-1))/columns);
+  return cardWidth*1.5+(isLocal?72:88);
+}
+
+function stfrVisibleGridHeight(rail,columns,rows,isLocal){
+  const cards=stfrGridCardNodes(rail);
+  if(!cards.length)return 0;
+  const fallback=stfrFallbackRowHeight(rail,columns,isLocal);
+  let total=0;
+  const visibleRows=Math.min(rows,Math.ceil(cards.length/columns));
+  for(let row=0;row<visibleRows;row++){
+    const slice=cards.slice(row*columns,(row+1)*columns);
+    const rowHeight=Math.max(
+      fallback,
+      ...slice.map(node=>{
+        const rectHeight=Number(node?.getBoundingClientRect?.().height);
+        if(Number.isFinite(rectHeight)&&rectHeight>0)return rectHeight;
+        const offset=Number(node?.offsetHeight);
+        return Number.isFinite(offset)&&offset>0?offset:0;
+      })
+    );
+    total+=rowHeight;
+  }
+  if(visibleRows>1)total+=(visibleRows-1)*12;
+  return Math.ceil(total+4);
+}
+
+function stfrRememberScroll(card){
+  const rail=card?.shadowRoot?.querySelector?.(".rail");
+  const key=card?._stfrLayoutKey;
+  if(!rail||!key)return;
+  const states=card._stfrLayoutStates;
+  const state=states?.get?.(key);
+  if(state)state.scrollTop=Math.max(0,Number(rail.scrollTop)||0);
+}
+
+function stfrScrollableParent(node){
+  let current=node;
+  while(current){
+    if(current instanceof ShadowRoot){
+      current=current.host;
+      continue;
+    }
+    current=current.parentNode;
+    if(!current)break;
+    if(current===document.body||current===document.documentElement)break;
+    try{
+      const style=getComputedStyle(current);
+      const overflow=String(style?.overflowY||"");
+      if(
+        /auto|scroll|overlay/i.test(overflow)&&
+        Number(current.scrollHeight)>Number(current.clientHeight)+1
+      )return current;
+    }catch(_e){}
+  }
+  return document.scrollingElement||document.documentElement;
+}
+
+function stfrCapturePageScroll(card){
+  const scroller=stfrScrollableParent(card);
+  const documentScroller=
+    scroller===document.scrollingElement||
+    scroller===document.documentElement||
+    scroller===document.body;
+  return{
+    scroller,
+    documentScroller,
+    scrollTop:documentScroller
+      ?Math.max(0,Number(window.scrollY)||Number(scroller?.scrollTop)||0)
+      :Math.max(0,Number(scroller?.scrollTop)||0),
+  };
+}
+
+function stfrRestorePageScroll(snapshot){
+  if(!snapshot?.scroller)return;
+  const restore=()=>{
+    if(snapshot.documentScroller){
+      window.scrollTo({top:snapshot.scrollTop,left:window.scrollX,behavior:"instant"});
+      snapshot.scroller.scrollTop=snapshot.scrollTop;
+    }else{
+      snapshot.scroller.scrollTop=snapshot.scrollTop;
+    }
+  };
+  // Home Assistant and the browser may both apply scroll anchoring after the
+  // DOM replacement. Restore once after layout, then once more on the next
+  // frame so "Voir plus" never sends the dashboard back to the card top.
+  requestAnimationFrame(()=>{
+    restore();
+    requestAnimationFrame(restore);
+  });
+}
+
+function stfrLoadMore(card,rail,count){
+  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  const key=card?._stfrLayoutKey;
+  const state=card?._stfrLayoutStates?.get?.(key);
+  if(!state||Number(state.limit)>=full||card?._stfrLazyLoading)return;
+
+  const pageScroll=stfrCapturePageScroll(card);
+  const increment=stfrClampInt(count,stfrBatchSize(card),1,50);
+  card._stfrLazyLoading=true;
+  state.scrollTop=Math.max(0,Number(rail?.scrollTop)||0);
+  state.expanded=true;
+  state.limit=Math.min(full,Math.max(0,Number(state.limit)||0)+increment);
+  card._stfrLayoutLimit=state.limit;
+  card._stfrLayoutExpanded=true;
+  try{
+    card._render();
+    stfrRestorePageScroll(pageScroll);
+  }finally{
+    card._stfrLazyLoading=false;
+  }
+}
+
+function stfrInstallInfiniteTrigger(card,rail,batch){
+  card._stfrIntersectionObserver?.disconnect?.();
+  card._stfrIntersectionObserver=null;
+
+  const rendered=stfrGridCardNodes(rail).length;
+  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  if(rendered>=full)return;
+
+  const sentinel=document.createElement("div");
+  sentinel.className="stfr-lazy-sentinel";
+  sentinel.setAttribute("aria-hidden","true");
+  sentinel.style.cssText=
+    "grid-column:1/-1;height:1px;min-height:1px;pointer-events:none";
+  rail.appendChild(sentinel);
+
+  if(typeof IntersectionObserver!=="undefined"){
+    card._stfrIntersectionObserver=new IntersectionObserver(
+      entries=>{
+        if(entries.some(entry=>entry.isIntersecting)){
+          stfrLoadMore(card,rail,batch);
+        }
+      },
+      {root:rail,rootMargin:"0px 0px 180px 0px",threshold:0}
+    );
+    card._stfrIntersectionObserver.observe(sentinel);
+    return;
+  }
+
+  rail.addEventListener("scroll",()=>{
+    if(rail.scrollTop+rail.clientHeight>=rail.scrollHeight-180){
+      stfrLoadMore(card,rail,batch);
+    }
+  },{passive:true});
+}
+
+function stfrInstallLoadMoreButton(card,rail,batch){
+  const rendered=stfrGridCardNodes(rail).length;
+  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  const remaining=Math.max(0,full-rendered);
+  if(!remaining)return;
+
+  const next=Math.min(batch,remaining);
+  const button=document.createElement("button");
+  button.type="button";
+  button.className="stfr-load-more";
+  button.textContent=`Voir ${next} de plus ↓`;
+  button.setAttribute(
+    "aria-label",
+    `Afficher ${next} poster${next>1?"s":""} supplémentaire${next>1?"s":""}`
+  );
+  button.style.cssText=[
+    "display:block",
+    "margin:10px auto 2px",
+    "padding:9px 16px",
+    "border:0",
+    "border-radius:999px",
+    "background:var(--secondary-background-color)",
+    "color:var(--primary-text-color)",
+    "font:inherit",
+    "font-weight:800",
+    "cursor:pointer",
+  ].join(";");
+  // Do not let the temporary button become the focused scroll anchor.
+  // _render() removes this node immediately after the click; on mobile/HA,
+  // removing the focused element can move the scroll container back to top.
+  button.addEventListener("pointerdown",event=>{
+    event.preventDefault();
+  });
+  button.addEventListener("mousedown",event=>{
+    event.preventDefault();
+  });
+  button.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    try{button.blur();}catch(_e){}
+    stfrLoadMore(card,rail,batch);
+  });
+  rail.insertAdjacentElement("afterend",button);
+}
+
+function stfrRestoreScroll(card,rail){
+  const key=card?._stfrLayoutKey;
+  const state=card?._stfrLayoutStates?.get?.(key);
+  const target=Math.max(0,Number(state?.scrollTop)||0);
+  const restore=()=>{
+    if(!rail?.isConnected)return;
+    rail.scrollTop=target;
+  };
+  // The new rail exists immediately after _render(), but Home Assistant and
+  // the browser may still recalculate its height/overflow afterwards.
+  // Restore once now, then after layout on two consecutive frames.
+  restore();
+  requestAnimationFrame(()=>{
+    restore();
+    requestAnimationFrame(restore);
+  });
+}
+
+function stfrApplyResponsiveLayout(card){
+  const rail=card?.shadowRoot?.querySelector?.(".rail");
+  if(!rail)return;
+
+  const hostWidth=stfrLayoutWidth(card);
+  card._stfrLayoutWidth=hostWidth;
+  const width=Number(rail.clientWidth)||Math.max(240,hostWidth-32);
+  const columns=stfrLayoutColumns(width);
+  const rows=stfrLayoutRows(card,hostWidth);
+  const capacity=Math.max(1,columns*rows);
+  const isLocal=card instanceof StreamingLocalCard;
+  const batch=stfrBatchSize(card);
+  const infinite=stfrInfiniteScroll(card);
+
+  rail.classList.add("stfr-responsive-grid");
+  rail.style.setProperty("display","grid","important");
+  rail.style.setProperty("grid-auto-flow","row","important");
+  rail.style.setProperty("grid-auto-columns","unset","important");
+  rail.style.setProperty(
+    "grid-template-columns",
+    `repeat(${columns},minmax(0,1fr))`,
+    "important"
+  );
+  rail.style.setProperty("overflow-x","hidden","important");
+  rail.style.setProperty("scroll-snap-type","none","important");
+  rail.style.setProperty("align-items","start","important");
+  // Allow the browser to hand the gesture back to the Home Assistant page
+  // when the internal viewport reaches an edge.
+  rail.style.setProperty("overscroll-behavior-y","auto","important");
+  rail.style.setProperty("scrollbar-width","thin","important");
+
+  const rendered=stfrGridCardNodes(rail).length;
+  const needsScroll=rendered>capacity;
+  if(needsScroll){
+    const visibleHeight=stfrVisibleGridHeight(
+      rail,columns,rows,isLocal
+    );
+    if(visibleHeight>0){
+      rail.style.setProperty("max-height",`${visibleHeight}px`,"important");
+    }
+    rail.style.setProperty("overflow-y","auto","important");
+  }else{
+    rail.style.removeProperty("max-height");
+    rail.style.setProperty("overflow-y","visible","important");
+  }
+
+  stfrRestoreScroll(card,rail);
+
+  if(infinite){
+    stfrInstallInfiniteTrigger(card,rail,batch);
+  }else{
+    card._stfrIntersectionObserver?.disconnect?.();
+    card._stfrIntersectionObserver=null;
+    stfrInstallLoadMoreButton(card,rail,batch);
+  }
+
+  if(typeof ResizeObserver!=="undefined"&&!card._stfrResizeObserver){
+    card._stfrResizeObserver=new ResizeObserver(()=>{
+      const previous=Number(card._stfrLayoutWidth)||0;
+      const current=stfrLayoutWidth(card);
+      if(Math.abs(current-previous)<2)return;
+      stfrRememberScroll(card);
+      card._stfrLayoutWidth=current;
+      card._render();
+    });
+    card._stfrResizeObserver.observe(card);
+  }
+}
+
+function stfrCleanupResponsiveLayout(card){
+  stfrRememberScroll(card);
+  card?._stfrIntersectionObserver?.disconnect?.();
+  card?._stfrResizeObserver?.disconnect?.();
+  card._stfrIntersectionObserver=null;
+  card._stfrResizeObserver=null;
+}
+
+function stfrResetResponsiveState(card){
+  card._stfrLayoutStates=new Map();
+  card._stfrLayoutKey=null;
+  card._stfrLayoutLimit=0;
+  card._stfrLayoutExpanded=false;
+  card._stfrLayoutFullCount=0;
+  card._stfrLayoutWidth=0;
+}
+
+function stfrGridOptions(){
+  // No fixed HA row count: the card owns its internal viewport. Keeping
+  // columns resizable lets users place two cards side-by-side in one section.
+  return{columns:12,min_columns:3};
+}
+
+StreamingTopFrCard.prototype.getGridOptions=stfrGridOptions;
+StreamingTopFrCatalogCard.prototype.getGridOptions=stfrGridOptions;
+StreamingLocalCard.prototype.getGridOptions=stfrGridOptions;
+
+StreamingTopFrCard.prototype._stfrLayoutRows=function(width){
+  return stfrLayoutRows(this,width);
+};
+StreamingTopFrCard.prototype._stfrLayoutColumns=function(width){
+  return stfrLayoutColumns(width);
+};
+StreamingTopFrCard.prototype._stfrBatchSize=function(){
+  return stfrBatchSize(this);
+};
+StreamingTopFrCard.prototype._stfrInfiniteScroll=function(){
+  return stfrInfiniteScroll(this);
+};
+StreamingLocalCard.prototype._stfrLayoutRows=function(width){
+  return stfrLayoutRows(this,width);
+};
+StreamingLocalCard.prototype._stfrLayoutColumns=function(width){
+  return stfrLayoutColumns(width);
+};
+StreamingLocalCard.prototype._stfrBatchSize=function(){
+  return stfrBatchSize(this);
+};
+StreamingLocalCard.prototype._stfrInfiniteScroll=function(){
+  return stfrInfiniteScroll(this);
+};
+
+const _stfrResponsiveStreamingItems=StreamingTopFrCard.prototype._items;
+StreamingTopFrCard.prototype._items=function(){
+  const items=this._stfrRendering
+    ?stfrStreamingLayoutItems(this,_stfrResponsiveStreamingItems)
+    :_stfrResponsiveStreamingItems.call(this);
+  return stfrLazyItems(this,items,stfrLayoutKey(this,"streaming"));
+};
+
+const _stfrResponsiveCatalogItems=StreamingTopFrCatalogCard.prototype._catalogItems;
+StreamingTopFrCatalogCard.prototype._catalogItems=function(){
+  const items=_stfrResponsiveCatalogItems.call(this);
+  return stfrLazyItems(this,items,stfrLayoutKey(this,"catalog"));
+};
+
+const _stfrResponsiveLocalItems=StreamingLocalCard.prototype._items;
+StreamingLocalCard.prototype._items=function(){
+  const items=_stfrResponsiveLocalItems.call(this);
+  return stfrLazyItems(this,items,stfrLayoutKey(this,"local"));
+};
+
+function stfrWrapResponsiveRender(proto,kind){
+  const original=proto._render;
+  proto._render=function(){
+    this._stfrLayoutKind=kind;
+    stfrRememberScroll(this);
+    this._stfrRendering=true;
+    try{
+      return original.call(this);
+    }finally{
+      this._stfrRendering=false;
+      stfrApplyResponsiveLayout(this);
+    }
+  };
+}
+
+function stfrWrapResponsiveSetConfig(proto){
+  const original=proto.setConfig;
+  proto.setConfig=function(config){
+    stfrResetResponsiveState(this);
+    return original.call(this,config);
+  };
+}
+
+stfrWrapResponsiveSetConfig(StreamingTopFrCard.prototype);
+stfrWrapResponsiveSetConfig(StreamingTopFrCatalogCard.prototype);
+stfrWrapResponsiveSetConfig(StreamingLocalCard.prototype);
+
+stfrWrapResponsiveRender(StreamingTopFrCard.prototype,"streaming");
+stfrWrapResponsiveRender(StreamingTopFrCatalogCard.prototype,"catalog");
+stfrWrapResponsiveRender(StreamingLocalCard.prototype,"local");
+
+const _stfrResponsiveDisconnect=StreamingTopFrCard.prototype.disconnectedCallback;
+StreamingTopFrCard.prototype.disconnectedCallback=function(){
+  stfrCleanupResponsiveLayout(this);
+  return _stfrResponsiveDisconnect?.call(this);
+};
+StreamingLocalCard.prototype.disconnectedCallback=function(){
+  stfrCleanupResponsiveLayout(this);
 };

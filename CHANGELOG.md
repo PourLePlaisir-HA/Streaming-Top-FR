@@ -1,13 +1,47 @@
+## 1.0.5
+
+- Stabilise la nouvelle grille responsive introduite avec la série `1.0.5-beta.x`.
+- Conserve les réglages de lignes selon la largeur réelle de chaque carte.
+- Ajoute le chargement progressif avec **Voir N de plus** par défaut.
+- Ajoute `posters_par_lot` configurable (défaut `8`, plage `1–50`).
+- Ajoute `scroll_infini` optionnel (défaut `false`).
+- Autorise la surcharge de ces réglages directement dans chaque carte Lovelace.
+- Conserve la position du dashboard et de la grille lors du chargement de nouveaux lots.
+- Corrige le retour en haut provoqué par la disparition du bouton **Voir plus** après rerender.
+- Conserve la compatibilité des trois cartes : Streaming, Top Streaming et Streaming Local.
+- Aligne le garde-fou CI historique sur la stable conservée `1.0.4`.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.5`.
+
+## 1.0.5-beta.4
+
+- Corrige le retour en haut de la grille après un clic sur **Voir N de plus**.
+- Empêche le bouton temporaire **Voir plus** de devenir l’ancre de focus avant sa suppression par le rerender.
+- Restaure le `scrollTop` interne de la grille immédiatement puis sur deux frames successives, après recalcul du layout Home Assistant.
+- Conserve en parallèle la restauration de la position du dashboard introduite en beta.3.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.5-beta.4`.
+
+## 1.0.5-beta.3
+
+- Corrige le retour en haut du dashboard lors d’un clic sur **Voir N de plus**.
+- Mémorise désormais le conteneur de scroll Home Assistant et sa position avant le rerender, puis restaure cette position après reconstruction du DOM.
+- Conserve également la position interne de la grille.
+- La restauration est appliquée sur deux frames successives afin de neutraliser le scroll anchoring du navigateur/Home Assistant.
+- Aligne le garde-fou CI historique sur la stable conservée `1.0.4` après nettoyage des anciens tags.
+- Aucun changement du moteur Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.5-beta.3`.
+
 ## 1.0.5-beta.2
 
-- Ajoute un chargement progressif commun aux trois cartes Lovelace : **Streaming Top FR**, **Top Streaming FR** et **Streaming Local**.
-- Le rendu initial reste limité à la capacité visible de la carte ; le nombre de rangées reste responsive : 2 sur petit/moyen écran et 3 sur grand écran.
-- Ajoute `posters_par_lot` (défaut `8`, plage `1–50`) pour contrôler le nombre de posters révélés à chaque étape.
-- Ajoute `scroll_infini` (défaut `false`) : désactivé, la carte affiche **Voir N de plus** ; activé, le lot suivant est révélé automatiquement en approchant de la fin du rail.
-- Les réglages Lovelace surchargent les réglages globaux ; sinon la configuration native de l’intégration est utilisée.
-- La réserve de découverte est automatiquement portée à au moins `visible_count + posters_par_lot`, dans la limite technique existante de 100 titres.
-- Si moins de `N` titres restent disponibles, le dernier lot affiche simplement le nombre restant.
-- Conserve la position horizontale du rail lors des rerenders afin d’éviter un retour intempestif au début du carrousel.
+- Remplace le chargement automatique par un bouton **Voir N de plus** par défaut afin de garder les cartes compactes, notamment sur smartphone.
+- Ajoute `posters_par_lot` (défaut `8`, plage `1–50`) pour régler le nombre de posters ajoutés à chaque étape.
+- Ajoute `scroll_infini` (défaut `false`) pour réactiver le chargement automatique en fin de grille si souhaité.
+- Les réglages Lovelace surchargent la configuration globale de l’intégration.
+- La réserve est ajustée pour garder un lot suivant disponible autant que possible, dans la limite du pool existant.
+- Le dernier lot s’adapte automatiquement au nombre de titres restant.
+- Corrige le retour intempestif en haut du dashboard lors de **Voir plus** : la position du scroll Home Assistant est mémorisée puis restaurée après le rerender.
+- Conserve le responsive introduit en `1.0.5-beta.1` et le lazy loading sur les trois cartes.
 - Version frontend/backend : `1.0.5-beta.2`.
 
 ## 0.7.1

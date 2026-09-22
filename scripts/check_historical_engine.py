@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 
-BASELINE = "0.7.1"
+BASELINE = "1.0.4"
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -75,7 +75,7 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-# Protect every method that existed in the v0.7.1 JustWatch engine. New Local
+# Protect every method that existed in the v1.0.4 stable JustWatch engine. New Local
 # methods/classes are allowed, but an existing historical method must stay
 # byte-for-byte identical.
 sources_path = "custom_components/streaming_top_fr/sources.py"
@@ -110,4 +110,4 @@ for name in ("StreamingTopFrCard", "StreamingTopFrCatalogCard"):
         fail(f"classe JS {name} diffère de {BASELINE}")
 
 
-print("Historical Streaming/Top engine matches v0.7.1.")
+print("Historical Streaming/Top engine matches stable v1.0.4.")
