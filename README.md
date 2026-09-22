@@ -14,6 +14,16 @@
 
 ---
 
+### UX 1.0.7
+
+À partir de `1.0.7`, les cartes améliorent la continuité visuelle pendant les chargements :
+
+- une recherche sans résultat affiche un message explicite et permet d'effacer immédiatement la recherche ;
+- la recherche et la sélection courante restent actives après un rafraîchissement ;
+- le premier chargement utilise un skeleton responsive ;
+- un refresh conserve les contenus déjà visibles pendant la récupération des nouvelles données ;
+- les profils smartphone, tablette et desktop large sont couverts par les tests de mise en page.
+
 ## ✨ Pourquoi Streaming Top FR ?
 
 Quand plusieurs plateformes de streaming et une vidéothèque locale cohabitent, trouver un film devient vite plus compliqué que le regarder.
