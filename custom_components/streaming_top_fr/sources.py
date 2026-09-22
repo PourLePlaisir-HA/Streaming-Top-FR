@@ -1268,7 +1268,7 @@ class JustWatchClient:
             primaryImage {{ url width height }}
             ratingsSummary {{ aggregateRating voteCount }}
             plot {{ plotText {{ plainText }} }}
-            genres { genres { text } }
+            genres {{ genres {{ text }} }}
           }}
         }}
         """
