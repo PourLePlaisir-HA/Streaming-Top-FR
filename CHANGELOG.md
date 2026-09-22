@@ -1,3 +1,15 @@
+## 1.0.5-beta.2
+
+- Remplace le chargement automatique par un bouton **Voir N de plus** par défaut afin de garder les cartes compactes, notamment sur smartphone.
+- Ajoute `posters_par_lot` (défaut `8`, plage `1–50`) pour régler le nombre de posters ajoutés à chaque étape.
+- Ajoute `scroll_infini` (défaut `false`) pour réactiver le chargement automatique en fin de grille si souhaité.
+- Les réglages Lovelace surchargent la configuration globale de l’intégration.
+- La réserve est ajustée pour garder un lot suivant disponible autant que possible, dans la limite du pool existant.
+- Le dernier lot s’adapte automatiquement au nombre de titres restant.
+- Corrige le retour intempestif en haut du dashboard lors de **Voir plus** : la position du scroll Home Assistant est mémorisée puis restaurée après le rerender.
+- Conserve le responsive introduit en `1.0.5-beta.1` et le lazy loading sur les trois cartes.
+- Version frontend/backend : `1.0.5-beta.2`.
+
 ## 0.7.1
 
 - Stabilise la hauteur de la navigation Famille sur mobile et tablette (issue #2).
