@@ -1268,7 +1268,6 @@ class JustWatchClient:
             primaryImage {{ url width height }}
             ratingsSummary {{ aggregateRating voteCount }}
             plot {{ plotText {{ plainText }} }}
-            genres {{ genres {{ text }} }}
           }}
         }}
         """
@@ -1303,12 +1302,6 @@ class JustWatchClient:
         image = title_data.get("primaryImage") or {}
         ratings = title_data.get("ratingsSummary") or {}
         plot = ((title_data.get("plot") or {}).get("plotText") or {})
-        imdb_genres = [
-            entry.get("text")
-            for entry in ((title_data.get("genres") or {}).get("genres") or [])
-            if isinstance(entry, dict) and entry.get("text")
-        ]
-        genre_info = normalize_genres(imdb_genres, "imdb")
         result = {
             "imdb_id": imdb_id,
             "title": ((title_data.get("titleText") or {}).get("text") or None),
@@ -1317,7 +1310,6 @@ class JustWatchClient:
             "rating": ratings.get("aggregateRating"),
             "imdb_votes": ratings.get("voteCount"),
             "description": plot.get("plainText"),
-            **genre_info,
             "cached_at": datetime.now(timezone.utc).isoformat(),
             "cache_schema": METADATA_CACHE_SCHEMA,
         }
@@ -1962,7 +1954,6 @@ class JustWatchClient:
             watch_url = self._watch_url(node, package_codes)
             ext = content.get("externalIds") or {}
             jw_poster = poster_url(content.get("fullPosterUrl"))
-            genre_info = normalize_genres(content.get("genres"), "justwatch")
             out.append(
                 {
                     "rank": len(out) + 1,
@@ -1995,7 +1986,6 @@ class JustWatchClient:
                     "watch_url": watch_url,
                     "playback_id": playback_id_from_url(provider, watch_url),
                     "providers": self._provider_offers(node),
-                    **genre_info,
                     "source": "JustWatch popularité plateforme",
                 }
             )
@@ -2245,7 +2235,6 @@ class JustWatchClient:
                 seen.add(key)
                 full_path = content.get("fullPath")
                 ext = content.get("externalIds") or {}
-                genre_info = normalize_genres(content.get("genres"), "justwatch")
                 parsed.append({
                     "rank": None,
                     "global_rank": None,
@@ -2275,7 +2264,6 @@ class JustWatchClient:
                     "trend_difference": None,
                     "details_url": "https://www.justwatch.com" + full_path if full_path else None,
                     "providers": providers,
-                    **genre_info,
                     "popularity_market": market,
                     "popularity_rank": market_rank,
                     "fr_popularity_rank": market_rank if market == "FR" else None,
@@ -2980,10 +2968,6 @@ class JustWatchClient:
                 "rating": imdb_detail.get("rating"),
                 "rating_source": "IMDb" if imdb_detail.get("rating") is not None else None,
                 "imdb_votes": imdb_detail.get("imdb_votes"),
-                "genres_raw": list(imdb_detail.get("genres_raw") or []),
-                "genres": list(imdb_detail.get("genres") or []),
-                "genre_labels": list(imdb_detail.get("genre_labels") or []),
-                "genre_source": imdb_detail.get("genre_source"),
                 "age_certification": None,
                 "age_country": None,
                 "age_fr": None,
@@ -3072,7 +3056,6 @@ class JustWatchClient:
         jw_poster = poster_url(content.get("fullPosterUrl"))
         imdb_poster = poster_lookup.get(imdb_id) if imdb_id else None
 
-        genre_info = normalize_genres(content.get("genres"), "justwatch")
         result = {
             "title": localized_title,
             "year": release_year,
@@ -3089,7 +3072,6 @@ class JustWatchClient:
             "imdb_id": imdb_id,
             "details_url": details_url,
             "providers": self._provider_offers(selected),
-            **genre_info,
             "canonical_media_key": (
                 f"jw:{object_id}" if object_id is not None
                 else (f"imdb:{imdb_id}" if imdb_id else None)
@@ -3329,7 +3311,6 @@ class JustWatchClient:
         poster_lookup = await self._async_imdb_posters([imdb_id]) if imdb_id else {}
         imdb_poster = poster_lookup.get(imdb_id) if imdb_id else None
 
-        genre_info = normalize_genres(content.get("genres"), "justwatch")
         result = {
             "title": localized_title,
             "poster": imdb_poster or jw_poster,
@@ -3348,7 +3329,6 @@ class JustWatchClient:
             "watch_url": watch_url,
             "playback_id": playback_id_from_url("netflix", watch_url),
             "providers": self._provider_offers(selected),
-            **genre_info,
             "media_key": (
                 f"jw:{object_id}"
                 if object_id is not None
@@ -3395,10 +3375,6 @@ class JustWatchClient:
             item["age_fr"] = result.get("age_fr")
             item["age_us"] = result.get("age_us")
             item["imdb_id"] = result.get("imdb_id")
-            item["genres_raw"] = list(result.get("genres_raw") or [])
-            item["genres"] = list(result.get("genres") or [])
-            item["genre_labels"] = list(result.get("genre_labels") or [])
-            item["genre_source"] = result.get("genre_source")
             item["details_url"] = result.get("details_url") or item.get("details_url")
             item["watch_url"] = result.get("watch_url")
             item["playback_id"] = result.get("playback_id")
@@ -3860,10 +3836,6 @@ class LocalMetadataClient(JustWatchClient):
                         else None
                     ),
                     "imdb_votes": imdb_detail.get("imdb_votes"),
-                    "genres_raw": list(imdb_detail.get("genres_raw") or []),
-                    "genres": list(imdb_detail.get("genres") or []),
-                    "genre_labels": list(imdb_detail.get("genre_labels") or []),
-                    "genre_source": imdb_detail.get("genre_source"),
                     "age_certification": age_value,
                     "age_country": age_country,
                     "age_fr": age_fr,
