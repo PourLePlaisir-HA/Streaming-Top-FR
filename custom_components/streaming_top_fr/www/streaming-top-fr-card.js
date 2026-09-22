@@ -2610,9 +2610,11 @@ function stfrResetResponsiveState(card){
 }
 
 function stfrGridOptions(){
-  // No fixed HA row count: the card owns its internal viewport. Keeping
-  // columns resizable lets users place two cards side-by-side in one section.
-  return{columns:12,min_columns:3};
+  // Ask Home Assistant Sections for the full width available to the card.
+  // A section can itself span multiple dashboard columns; using "full" lets
+  // the card grow with that section instead of being capped at 12 cells.
+  // No fixed HA row count: the card owns its internal viewport.
+  return{columns:"full",min_columns:3};
 }
 
 StreamingTopFrCard.prototype.getGridOptions=stfrGridOptions;
