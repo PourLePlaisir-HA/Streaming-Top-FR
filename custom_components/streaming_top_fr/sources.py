@@ -30,6 +30,121 @@ UA = (
 )
 
 
+GENRE_LABELS = {
+    "action": "Action",
+    "adventure": "Aventure",
+    "animation": "Animation",
+    "comedy": "Comédie",
+    "crime": "Crime / Policier",
+    "documentary": "Documentaire",
+    "drama": "Drame",
+    "family": "Famille",
+    "fantasy": "Fantastique",
+    "history": "Histoire",
+    "horror": "Horreur",
+    "music": "Musique",
+    "mystery": "Mystère",
+    "romance": "Romance",
+    "science_fiction": "Science-fiction",
+    "sport": "Sport",
+    "thriller": "Thriller",
+    "war": "Guerre",
+    "western": "Western",
+}
+
+GENRE_ALIASES = {
+    "act": ("action", "adventure"),
+    "action": ("action",),
+    "action-adventure": ("action", "adventure"),
+    "action-and-adventure": ("action", "adventure"),
+    "adventure": ("adventure",),
+    "ani": ("animation",),
+    "animation": ("animation",),
+    "cmy": ("comedy",),
+    "comedy": ("comedy",),
+    "comedie": ("comedy",),
+    "crm": ("crime",),
+    "crime": ("crime",),
+    "policier": ("crime",),
+    "doc": ("documentary",),
+    "documentary": ("documentary",),
+    "documentaire": ("documentary",),
+    "drm": ("drama",),
+    "drama": ("drama",),
+    "drame": ("drama",),
+    "fml": ("family",),
+    "family": ("family",),
+    "famille": ("family",),
+    "fnt": ("fantasy",),
+    "fantasy": ("fantasy",),
+    "fantastique": ("fantasy",),
+    "hst": ("history",),
+    "history": ("history",),
+    "histoire": ("history",),
+    "hrr": ("horror",),
+    "horror": ("horror",),
+    "horreur": ("horror",),
+    "msc": ("music",),
+    "music": ("music",),
+    "musical": ("music",),
+    "musique": ("music",),
+    "mys": ("mystery",),
+    "mystery": ("mystery",),
+    "mystere": ("mystery",),
+    "rma": ("romance",),
+    "romance": ("romance",),
+    "scf": ("science_fiction",),
+    "sci-fi": ("science_fiction",),
+    "science-fiction": ("science_fiction",),
+    "spt": ("sport",),
+    "sport": ("sport",),
+    "trl": ("thriller",),
+    "thriller": ("thriller",),
+    "war": ("war",),
+    "guerre": ("war",),
+    "wsn": ("western",),
+    "wst": ("western",),
+    "western": ("western",),
+}
+
+
+def _genre_token(value: Any) -> str:
+    value = unicodedata.normalize("NFKD", str(value or ""))
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    value = value.casefold().replace("&", " and ")
+    return re.sub(r"[^a-z0-9]+", "-", value).strip("-")
+
+
+def normalize_genres(raw_genres: Any, source: str | None = None) -> dict[str, Any]:
+    """Preserve source genres and expose stable canonical ids for the UI."""
+    raw_values: list[str] = []
+    canonical: list[str] = []
+    for entry in raw_genres or []:
+        if isinstance(entry, dict):
+            raw = (
+                entry.get("shortName")
+                or entry.get("translation")
+                or entry.get("name")
+                or entry.get("text")
+            )
+        else:
+            raw = entry
+        raw = str(raw or "").strip()
+        if not raw:
+            continue
+        if raw not in raw_values:
+            raw_values.append(raw)
+        for genre_id in GENRE_ALIASES.get(_genre_token(raw), ()):
+            if genre_id in GENRE_LABELS and genre_id not in canonical:
+                canonical.append(genre_id)
+    return {
+        "genres_raw": raw_values,
+        "genres": canonical,
+        "genre_labels": [GENRE_LABELS[item] for item in canonical],
+        "genre_source": source if raw_values else None,
+    }
+
+
 def _slug(value: str) -> str:
     value = unicodedata.normalize("NFKD", value or "")
     value = "".join(c for c in value if not unicodedata.combining(c)).casefold()
@@ -620,6 +735,7 @@ class JustWatchClient:
                 fullPosterUrl: posterUrl(profile: S166, format: JPG)
                 originalReleaseYear
                 shortDescription
+                genres { shortName }
                 externalIds { imdbId }
                 scoring {
                   imdbScore
@@ -639,6 +755,7 @@ class JustWatchClient:
                 fullPosterUrl: posterUrl(profile: S166, format: JPG)
                 originalReleaseYear
                 shortDescription
+                genres { shortName }
                 externalIds { imdbId }
                 scoring {
                   imdbScore
@@ -682,6 +799,7 @@ class JustWatchClient:
                 fullPosterUrl: posterUrl(profile: S166, format: JPG)
                 originalReleaseYear
                 shortDescription
+                genres { shortName }
                 externalIds { imdbId }
                 scoring { imdbScore jwRating tmdbScore }
               }
@@ -697,6 +815,7 @@ class JustWatchClient:
                 fullPosterUrl: posterUrl(profile: S166, format: JPG)
                 originalReleaseYear
                 shortDescription
+                genres { shortName }
                 externalIds { imdbId }
                 scoring { imdbScore jwRating tmdbScore }
               }
@@ -792,6 +911,7 @@ class JustWatchClient:
             fullPosterUrl: posterUrl(profile: S166, format: JPG)
             originalReleaseYear
             shortDescription
+            genres { shortName }
             externalIds { imdbId }
             scoring {
               imdbScore
@@ -807,6 +927,7 @@ class JustWatchClient:
             fullPosterUrl: posterUrl(profile: S166, format: JPG)
             originalReleaseYear
             shortDescription
+            genres { shortName }
             externalIds { imdbId }
             scoring {
               imdbScore
@@ -1833,6 +1954,7 @@ class JustWatchClient:
             watch_url = self._watch_url(node, package_codes)
             ext = content.get("externalIds") or {}
             jw_poster = poster_url(content.get("fullPosterUrl"))
+            genre_info = normalize_genres(content.get("genres"), "justwatch")
             out.append(
                 {
                     "rank": len(out) + 1,
@@ -1865,6 +1987,7 @@ class JustWatchClient:
                     "watch_url": watch_url,
                     "playback_id": playback_id_from_url(provider, watch_url),
                     "providers": self._provider_offers(node),
+                    **genre_info,
                     "source": "JustWatch popularité plateforme",
                 }
             )
@@ -2114,6 +2237,7 @@ class JustWatchClient:
                 seen.add(key)
                 full_path = content.get("fullPath")
                 ext = content.get("externalIds") or {}
+                genre_info = normalize_genres(content.get("genres"), "justwatch")
                 parsed.append({
                     "rank": None,
                     "global_rank": None,
@@ -2143,6 +2267,7 @@ class JustWatchClient:
                     "trend_difference": None,
                     "details_url": "https://www.justwatch.com" + full_path if full_path else None,
                     "providers": providers,
+                    **genre_info,
                     "popularity_market": market,
                     "popularity_rank": market_rank,
                     "fr_popularity_rank": market_rank if market == "FR" else None,
@@ -2935,6 +3060,7 @@ class JustWatchClient:
         jw_poster = poster_url(content.get("fullPosterUrl"))
         imdb_poster = poster_lookup.get(imdb_id) if imdb_id else None
 
+        genre_info = normalize_genres(content.get("genres"), "justwatch")
         result = {
             "title": localized_title,
             "year": release_year,
@@ -2951,6 +3077,7 @@ class JustWatchClient:
             "imdb_id": imdb_id,
             "details_url": details_url,
             "providers": self._provider_offers(selected),
+            **genre_info,
             "canonical_media_key": (
                 f"jw:{object_id}" if object_id is not None
                 else (f"imdb:{imdb_id}" if imdb_id else None)
@@ -3190,6 +3317,7 @@ class JustWatchClient:
         poster_lookup = await self._async_imdb_posters([imdb_id]) if imdb_id else {}
         imdb_poster = poster_lookup.get(imdb_id) if imdb_id else None
 
+        genre_info = normalize_genres(content.get("genres"), "justwatch")
         result = {
             "title": localized_title,
             "poster": imdb_poster or jw_poster,
@@ -3208,6 +3336,7 @@ class JustWatchClient:
             "watch_url": watch_url,
             "playback_id": playback_id_from_url("netflix", watch_url),
             "providers": self._provider_offers(selected),
+            **genre_info,
             "media_key": (
                 f"jw:{object_id}"
                 if object_id is not None
