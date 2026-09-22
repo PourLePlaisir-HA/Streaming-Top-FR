@@ -14,8 +14,10 @@ assert "genres {{ genres {{ text }} }}" in sources
 assert '"genres_raw"' in sources
 assert '"genre_labels"' in sources
 assert '"genre_source"' in sources
-assert '"genres_raw",' in local_library
-assert '"genre_source",' in local_library
+assert "class GenreMetadataExtension:" in sources
+assert "attach_tree_from_store" in sources
+assert "_stfr_local_search_with_genres" in sources
+assert "GenreMetadataExtension.attach_tree_from_store" in init_source
 assert '"debug": dict(settings.get("debug") or {})' in init_source
 
 assert "const STFR_GENRE_ORDER=[" in card
