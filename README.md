@@ -14,7 +14,7 @@
 
 ---
 
-## 🧪 Nouveautés 1.0.8-beta.1
+## 🆕 Nouveautés 1.0.8
 
 La série `1.0.8` introduit un **filtre transversal de genres** sur les trois cartes, sans modifier les moteurs historiques de classement, de matching ou de lecture.
 
@@ -44,7 +44,7 @@ Genres normalisés :
 - Guerre
 - Western
 
-Le filtre est volontairement **mono-sélection** dans cette première beta.
+Le filtre est volontairement **mono-sélection** dans cette version.
 
 Il se combine avec :
 
