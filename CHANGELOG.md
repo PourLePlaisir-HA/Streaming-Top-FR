@@ -1,3 +1,14 @@
+## 1.0.6
+
+- Stabilise la recherche instantanée introduite avec la série `1.0.6-beta.x`.
+- La recherche fonctionne désormais en mode `contains`, est insensible à la casse et aux accents, et inspecte tous les champs de titre disponibles : `title`, `franchise_title`, `parsed_title`, `original_title`, `episode_title`, `season_title` et `filename`.
+- Conserve l'option Lovelace `searchbox: true|false` indépendamment sur chacune des trois cartes.
+- Stabilise le support pleine largeur Home Assistant Sections avec `grid_options.columns: full`.
+- Restaure le centrage des buckets **À découvrir / Ma liste / Déjà vus / Pas intéressé** sur les cartes larges, avec un comportement mobile adapté.
+- Conserve le responsive, le lazy loading, `Voir N de plus`, `posters_par_lot` et `scroll_infini`.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.6`.
+
 ## 1.0.6-beta.4
 
 - Regroupe les correctifs validés après publication de `1.0.6-beta.3`.
