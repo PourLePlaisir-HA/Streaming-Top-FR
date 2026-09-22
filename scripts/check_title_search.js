@@ -241,3 +241,22 @@ if (
   throw new Error("No-result search feedback does not explain the empty result");
 }
 console.log("No-result search feedback passed.");
+
+
+const frontendSourceForFocus = fs.readFileSync(
+  require.resolve("../custom_components/streaming_top_fr/www/streaming-top-fr-card.js"),
+  "utf8"
+);
+for (const marker of [
+  'input.addEventListener("keydown"',
+  'input.addEventListener("keypress",shieldKeyboard)',
+  'input.addEventListener("keyup",shieldKeyboard)',
+  'event.stopPropagation();',
+  'queueMicrotask(restore)',
+  'requestAnimationFrame(restore)',
+]) {
+  if (!frontendSourceForFocus.includes(marker)) {
+    throw new Error(`Search focus/shortcut shielding marker missing: ${marker}`);
+  }
+}
+console.log("Search focus/shortcut shielding passed.");
