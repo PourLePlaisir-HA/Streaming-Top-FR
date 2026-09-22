@@ -1,3 +1,14 @@
+## 1.0.7
+
+- Version stable de la série 1.0.7.
+- Recherche sans résultat avec message explicite et effacement immédiat.
+- Conservation de la recherche et des sélections après refresh sur les trois cartes.
+- Skeleton responsive au premier chargement et refresh visuellement plus fluide.
+- Responsive renforcé smartphone, tablette et desktop large.
+- Correction de la perte de focus de la searchbox et blocage des raccourcis clavier Home Assistant pendant la saisie.
+- Validation fonctionnelle des statuts, lecture Streaming, lecture VLC locale, Voir N de plus, scroll_infini et searchbox désactivable.
+- Aucun changement des moteurs de classement, IMDb/JustWatch, VLC ou registres de statuts.
+
 ## 1.0.7-beta.2
 
 - Corrige la perte de focus de la searchbox pendant la saisie continue.
