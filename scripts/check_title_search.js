@@ -41,64 +41,73 @@ const titles = [
   "Insidious",
   "Into the Wild",
   "Indiana Jones et la Dernière Croisade",
+  "Les Chroniques de Riddick : Pitch Black",
   "Élite",
   "Matrix",
 ];
 
-const card = new StreamingCard();
-card._config = { title: "Streaming" };
-card._data = {
-  settings: {
-    card_layout: {
-      rows_small: 2,
-      rows_medium: 2,
-      rows_large: 3,
-      posters_par_lot: 8,
-      scroll_infini: false,
+function streamingFixture(config = {}) {
+  const card = new StreamingCard();
+  card._config = { title: "Streaming", ...config };
+  card._data = {
+    settings: {
+      card_layout: {
+        rows_small: 2,
+        rows_medium: 2,
+        rows_large: 3,
+        posters_par_lot: 8,
+        scroll_infini: false,
+      },
+      discovery: {
+        visible_count: 3,
+        prefetch_count: 20,
+        max_depth: 100,
+      },
     },
-    discovery: {
-      visible_count: 3,
-      prefetch_count: 20,
-      max_depth: 100,
+    provider_order: ["netflix"],
+    providers: {
+      netflix: {
+        movies: titles.map((title, index) => ({
+          media_key: `movie:${index + 1}`,
+          media_type: "movie",
+          title,
+        })),
+        tv: [],
+      },
     },
-  },
-  provider_order: ["netflix"],
-  providers: {
-    netflix: {
-      movies: titles.map((title, index) => ({
-        media_key: `movie:${index + 1}`,
-        media_type: "movie",
-        title,
-      })),
-      tv: [],
-    },
-  },
-  watched_keys: [],
-  watchlist_keys: [],
-  not_interested_keys: [],
-  watched: [],
-  watchlist: [],
-  not_interested: [],
-};
-card._provider = "netflix";
-card._media = "movies";
-card._section = "discover";
-card._stfrLayoutWidth = 390;
-card._stfrRendering = true;
+    watched_keys: [],
+    watchlist_keys: [],
+    not_interested_keys: [],
+    watched: [],
+    watchlist: [],
+    not_interested: [],
+  };
+  card._provider = "netflix";
+  card._media = "movies";
+  card._section = "discover";
+  card._stfrLayoutWidth = 390;
+  card._stfrRendering = true;
+  return card;
+}
+
+const card = streamingFixture();
+
+if (card._stfrSearchBoxEnabled() !== true) {
+  throw new Error("Search box must be enabled by default");
+}
 
 card._stfrSearchQuery = "I";
 let results = card._items();
-if (card._stfrLayoutFullCount !== 12) {
-  throw new Error(`I should match 12 titles, got ${card._stfrLayoutFullCount}`);
-}
-if (results.length !== 4) {
-  throw new Error(`I initial render should respect 4-card capacity, got ${results.length}`);
+const countI = card._stfrLayoutFullCount;
+if (countI < 2 || results.length !== 4) {
+  throw new Error("I search should return multiple titles and respect initial capacity");
 }
 
 card._stfrSearchQuery = "IN";
 results = card._items();
-if (card._stfrLayoutFullCount !== 12) {
-  throw new Error(`IN should match the same 12-title fixture, got ${card._stfrLayoutFullCount}`);
+const countIN = card._stfrLayoutFullCount;
+if (countIN > countI || countIN < 2) {
+  throw new Error("IN should progressively narrow or keep the I result set");
 }
 
 card._stfrSearchQuery = "IND";
@@ -106,23 +115,36 @@ results = card._items();
 if (card._stfrLayoutFullCount !== 2) {
   throw new Error(`IND should match the two Indiana Jones titles, got ${card._stfrLayoutFullCount}`);
 }
-if (!results.every(item => item.title.startsWith("Indiana"))) {
+if (!results.every(item => item.title.includes("Indiana"))) {
   throw new Error("IND returned a non-Indiana title");
 }
 
-card._stfrSearchQuery = "e";
+// Search is now "contains", not only "starts with".
+card._stfrSearchQuery = "pit";
+card._stfrLayoutStates = new Map();
 results = card._items();
-if (card._stfrLayoutFullCount !== 1 || results[0]?.title !== "Élite") {
-  throw new Error("Accent-insensitive prefix search failed for Élite");
+if (
+  card._stfrLayoutFullCount !== 1 ||
+  results[0]?.title !== "Les Chroniques de Riddick : Pitch Black"
+) {
+  throw new Error("Contains search failed for 'Pit' / Pitch Black");
 }
 
-card._stfrSearchQuery = "indiana jones et la d";
+card._stfrSearchQuery = "elite";
+card._stfrLayoutStates = new Map();
+results = card._items();
+if (card._stfrLayoutFullCount !== 1 || results[0]?.title !== "Élite") {
+  throw new Error("Accent-insensitive contains search failed for Élite");
+}
+
+card._stfrSearchQuery = "derniere croisade";
+card._stfrLayoutStates = new Map();
 results = card._items();
 if (
   card._stfrLayoutFullCount !== 1 ||
   !results[0]?.title.includes("Dernière Croisade")
 ) {
-  throw new Error("Multi-word progressive prefix search failed");
+  throw new Error("Multi-word contains search failed");
 }
 
 // Verify that Voir plus operates on the filtered pool, not the unfiltered pool.
@@ -131,14 +153,15 @@ card._stfrLayoutStates = new Map();
 results = card._items();
 const state = card._stfrLayoutStates.get(card._stfrLayoutKey);
 if (!state) throw new Error("Search-specific layout state was not created");
+const filteredCount = card._stfrLayoutFullCount;
 state.expanded = true;
 state.limit = Math.min(
-  card._stfrLayoutFullCount,
+  filteredCount,
   state.limit + card._stfrBatchSize()
 );
 results = card._items();
-if (results.length !== 12) {
-  throw new Error(`Filtered Voir plus should expose 12 results, got ${results.length}`);
+if (results.length !== Math.min(filteredCount, 12)) {
+  throw new Error("Filtered Voir plus did not expand only the matching pool");
 }
 
 // Clearing the field restores the normal unfiltered pool.
@@ -149,21 +172,36 @@ if (card._stfrLayoutFullCount !== titles.length) {
   throw new Error("Clearing search did not restore the full pool");
 }
 
-// Streaming Local uses the same normalization and prefix semantics.
+// Lovelace searchbox:false disables both the UI capability and filtering.
+const disabled = streamingFixture({ searchbox: false });
+if (disabled._stfrSearchBoxEnabled() !== false) {
+  throw new Error("searchbox:false Lovelace override was ignored");
+}
+disabled._stfrSearchQuery = "indiana";
+disabled._stfrLayoutStates = new Map();
+results = disabled._items();
+if (disabled._stfrLayoutFullCount !== titles.length) {
+  throw new Error("Disabled searchbox must not filter the card");
+}
+
+// Streaming Local uses the same contains semantics.
 const local = new LocalCard();
 local._config = {};
-local._stfrSearchQuery = "ind";
+local._stfrSearchQuery = "pit";
 const localFiltered = local._stfrSearchFilter([
   { title: "Indiana Jones" },
-  { title: "Inside Man" },
+  { title: "Les Chroniques de Riddick : Pitch Black" },
   { title: "Été 85" },
 ]);
-if (localFiltered.length !== 1 || localFiltered[0].title !== "Indiana Jones") {
-  throw new Error("Streaming Local prefix search failed");
+if (
+  localFiltered.length !== 1 ||
+  localFiltered[0].title !== "Les Chroniques de Riddick : Pitch Black"
+) {
+  throw new Error("Streaming Local contains search failed");
 }
 
 if (local._stfrSearchNormalize("Éléphant") !== "elephant") {
   throw new Error("French accent normalization failed");
 }
 
-console.log("Instant title prefix search passed.");
+console.log("Instant contains-title search and searchbox override passed.");
