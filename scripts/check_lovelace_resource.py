@@ -83,7 +83,7 @@ class FakeResources:
 
 
 async def main():
-    target = "/streaming_top_fr/streaming-top-fr-card.js?v=1.0.6-beta.3"
+    target = "/streaming_top_fr/streaming-top-fr-card.js?v=1.0.6-beta.4"
 
     # Migrate a historical manually-added URL and collapse duplicates.
     resources = FakeResources(
