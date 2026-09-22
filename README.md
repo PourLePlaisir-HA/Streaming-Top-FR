@@ -299,6 +299,18 @@ Dans Home Assistant :
 
 La configuration se fait ensuite entièrement depuis l'interface Home Assistant.
 
+### Ressource Lovelace automatique
+
+À partir de la version 1.0.4, Streaming Top FR enregistre automatiquement la ressource JavaScript nécessaire aux trois cartes :
+
+```text
+/streaming_top_fr/streaming-top-fr-card.js?v=<version>
+```
+
+Il n'est donc plus nécessaire d'ajouter manuellement cette ressource dans **Paramètres → Tableaux de bord → Ressources**.
+
+Lors d'une mise à jour, l'URL est automatiquement actualisée avec la version installée afin de limiter les problèmes de cache. Si une ancienne ressource Streaming Top FR avait été ajoutée manuellement, elle est réutilisée et mise à jour au lieu de créer un doublon.
+
 ---
 
 # ⚙️ Configuration
