@@ -50,6 +50,8 @@ FIELD_DURATION_FILTER_MAX_MINUTES = "duration_filter_max_minutes"
 FIELD_LAYOUT_ROWS_SMALL = "layout_rows_small"
 FIELD_LAYOUT_ROWS_MEDIUM = "layout_rows_medium"
 FIELD_LAYOUT_ROWS_LARGE = "layout_rows_large"
+FIELD_LAYOUT_POSTERS_PER_BATCH = "posters_par_lot"
+FIELD_LAYOUT_INFINITE_SCROLL = "scroll_infini"
 FIELD_DEBUG_ENABLED = "debug_enabled"
 FIELD_PLAYBACK_ENABLED = "playback_enabled"
 FIELD_PLAYER_SELECT = "player_select"
@@ -180,6 +182,14 @@ def _card_layout_schema(settings: dict[str, Any]) -> vol.Schema:
                 FIELD_LAYOUT_ROWS_LARGE,
                 default=int(layout.get("rows_large", 3)),
             ): _number(1, 6),
+            vol.Required(
+                FIELD_LAYOUT_POSTERS_PER_BATCH,
+                default=int(layout.get("posters_par_lot", 8)),
+            ): _number(1, 50),
+            vol.Optional(
+                FIELD_LAYOUT_INFINITE_SCROLL,
+                default=bool(layout.get("scroll_infini", False)),
+            ): selector.BooleanSelector(),
         }
     )
 
@@ -191,6 +201,8 @@ def _apply_card_layout(
         "rows_small": int(user_input[FIELD_LAYOUT_ROWS_SMALL]),
         "rows_medium": int(user_input[FIELD_LAYOUT_ROWS_MEDIUM]),
         "rows_large": int(user_input[FIELD_LAYOUT_ROWS_LARGE]),
+        "posters_par_lot": int(user_input[FIELD_LAYOUT_POSTERS_PER_BATCH]),
+        "scroll_infini": bool(user_input.get(FIELD_LAYOUT_INFINITE_SCROLL, False)),
     }
 
 
@@ -629,6 +641,8 @@ def _summary_placeholders(
         "layout_rows_small": str(int(card_layout.get("rows_small", 2))),
         "layout_rows_medium": str(int(card_layout.get("rows_medium", 2))),
         "layout_rows_large": str(int(card_layout.get("rows_large", 3))),
+        "layout_posters_per_batch": str(int(card_layout.get("posters_par_lot", 8))),
+        "layout_infinite_scroll": _status(card_layout.get("scroll_infini", False)),
         "debug_enabled": _status(debug.get("enabled", False)),
         "local_enabled": _status(local_enabled),
         "local_auth_mode": local_auth_label if local_enabled else "—",
