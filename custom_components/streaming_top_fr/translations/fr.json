@@ -125,6 +125,7 @@
           "general": "Général",
           "services": "Services de streaming",
           "discovery": "Découverte",
+          "card_layout": "Affichage des cartes",
           "top_catalog": "Top Streaming / IMDb",
           "decades": "Décennies",
           "family": "Famille",
@@ -232,7 +233,7 @@
       },
       "summary": {
         "title": "Synthèse des paramètres",
-        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Filtre de durée des films\n- **Disponible dans les cartes :** {duration_filter_enabled}\n- **Seuil :** < {duration_filter_max_minutes} min\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Debug\n- **Logs détaillés :** {debug_enabled}\n\n### Streaming Local\n- **Activé :** {local_enabled}\n- **Mode d’identifiants SMB :** {local_auth_mode}\n- **Vidéothèque Home Assistant :** {local_root_path}\n- **URI SMB :** {local_smb_base_uri}\n\n### Lecture directe\n- **Activée :** {playback_enabled}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
+        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Affichage responsive des cartes\n- **Espace étroit (< 700 px) :** {layout_rows_small} ligne(s)\n- **Espace moyen (700–1199 px) :** {layout_rows_medium} ligne(s)\n- **Grand espace (≥ 1200 px) :** {layout_rows_large} ligne(s)\n\n### Filtre de durée des films\n- **Disponible dans les cartes :** {duration_filter_enabled}\n- **Seuil :** < {duration_filter_max_minutes} min\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Debug\n- **Logs détaillés :** {debug_enabled}\n\n### Streaming Local\n- **Activé :** {local_enabled}\n- **Mode d’identifiants SMB :** {local_auth_mode}\n- **Vidéothèque Home Assistant :** {local_root_path}\n- **URI SMB :** {local_smb_base_uri}\n\n### Lecture directe\n- **Activée :** {playback_enabled}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
       },
       "default_decade": {
         "title": "Décennie par défaut",
@@ -298,6 +299,15 @@
         },
         "data_description": {
           "debug_enabled": "Active les logs détaillés de l’intégration et affiche les informations techniques de correspondance Streaming ↔ Local dans les popups."
+        }
+      },
+      "card_layout": {
+        "title": "Affichage des cartes",
+        "description": "Le nombre de lignes dépend de la largeur réelle de chaque carte. Une carte étroite sur PC peut donc utiliser le même réglage qu’une tablette. Valeurs autorisées : 1 à 6 lignes.",
+        "data": {
+          "layout_rows_small": "Lignes — espace étroit (< 700 px, smartphone)",
+          "layout_rows_medium": "Lignes — espace moyen (700–1199 px, tablette / carte PC réduite)",
+          "layout_rows_large": "Lignes — grand espace (≥ 1200 px, grande carte PC)"
         }
       }
     },
