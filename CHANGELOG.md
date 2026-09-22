@@ -1,3 +1,15 @@
+## 1.0.6-beta.4
+
+- Regroupe les correctifs validés après publication de `1.0.6-beta.3`.
+- Conserve la recherche instantanée de type `contains`, insensible à la casse et aux accents.
+- Étend la recherche à tous les champs de titre disponibles : `title`, `franchise_title`, `parsed_title`, `original_title`, `episode_title`, `season_title` et `filename`.
+- Corrige notamment le cas où `Pit` doit retrouver un média principal **Les Chroniques de Riddick** avec un alias ou nom de fichier **Pitch Black**.
+- Conserve l'option Lovelace `searchbox: true|false` indépendamment sur chacune des trois cartes.
+- Conserve le support pleine largeur Home Assistant Sections avec `grid_options.columns: full`.
+- Restaure le centrage des buckets **À découvrir / Ma liste / Déjà vus / Pas intéressé** sur les cartes larges, tout en gardant un alignement à gauche utilisable sur mobile.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.6-beta.4`.
+
 ## 1.0.6-beta.3
 
 - Corrige la recherche lorsque le texte recherché se trouve dans un alias de titre plutôt que dans le titre principal.
