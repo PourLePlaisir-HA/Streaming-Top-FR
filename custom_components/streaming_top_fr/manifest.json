@@ -11,5 +11,9 @@
     "@PourLePlaisir-HA"
   ],
   "single_config_entry": true,
-  "integration_type": "service"
+  "integration_type": "service",
+  "dependencies": [
+    "http",
+    "lovelace"
+  ]
 }
