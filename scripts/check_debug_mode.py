@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Stable 1.0.6-beta.1 release guard.
+# Stable 1.0.6-beta.2 release guard.
 
 settings = (ROOT / "custom_components/streaming_top_fr/settings.py").read_text(encoding="utf-8")
 config_flow = (ROOT / "custom_components/streaming_top_fr/config_flow.py").read_text(encoding="utf-8")
@@ -34,7 +34,7 @@ assert "Mode Debug" in fr
 assert "Activer les logs Debug" in fr
 assert "{debug_enabled}" in fr
 
-assert 'const STFR_VERSION = "1.0.6-beta.1";' in card
-assert '"version": "1.0.6-beta.1"' in manifest
+assert 'const STFR_VERSION = "1.0.6-beta.2";' in card
+assert '"version": "1.0.6-beta.2"' in manifest
 
 print("Optional Debug mode checks passed.")
