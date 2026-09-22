@@ -1,3 +1,18 @@
+## 1.0.8-beta.1
+
+- Ajoute un filtre transversal de genres sur Streaming, Top Streaming et Streaming Local.
+- Le filtre est mono-sélection : `Tous` + les genres réellement disponibles dans la sélection courante.
+- Genres canoniques en français : Action, Aventure, Animation, Comédie, Crime / Policier, Documentaire, Drame, Famille, Fantastique, Histoire, Horreur, Musique, Mystère, Romance, Science-fiction, Sport, Thriller, Guerre et Western.
+- Conserve le genre actif après refresh et l'intègre à l'état du lazy loading / `Voir N de plus`.
+- Le filtre genre se combine avec la recherche, les buckets, les catégories, Famille et Vu / Pas encore vu.
+- Ajoute `genre_filter: true|false` comme option Lovelace par carte, activée par défaut.
+- Ajoute les diagnostics de genres dans le mode Debug : valeurs brutes, genres canoniques, libellés, source, filtre actif et résultat du match.
+- Les genres JustWatch sont capturés via `shortName` et normalisés sans modifier les moteurs historiques.
+- Streaming Local utilise les genres JustWatch lorsqu'ils existent et un enrichissement IMDb dédié en fallback.
+- Les caches antérieurs sans genres sont rafraîchis automatiquement, puis les genres sont réhydratés depuis un cache séparé lors des rescans.
+- Les moteurs historiques Streaming / Top et le moteur Streaming Local restent protégés byte-for-byte par le CI.
+- Version frontend/backend : `1.0.8-beta.1`.
+
 ## 1.0.7
 
 - Version stable de la série 1.0.7.
