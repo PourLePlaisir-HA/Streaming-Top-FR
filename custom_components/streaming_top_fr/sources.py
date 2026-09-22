@@ -3988,5 +3988,332 @@ class LocalMetadataClient(JustWatchClient):
             )
         return result
 
+class GenreMetadataExtension:
+    """Non-invasive genre layer around the protected Streaming/Local engines."""
 
+    STALE_AT = "2000-01-01T00:00:00+00:00"
+
+    @staticmethod
+    def _memory(client) -> dict[str, dict[str, Any]]:
+        cache = getattr(client, "_stfr_genre_cache", None)
+        if cache is None:
+            cache = {}
+            setattr(client, "_stfr_genre_cache", cache)
+        return cache
+
+    @classmethod
+    def _store_key(cls, key: str) -> str:
+        return f"genre-v1:{key}"
+
+    @classmethod
+    def _remember(cls, client, key: str, info: dict[str, Any]) -> None:
+        if not key or not isinstance(info, dict):
+            return
+        payload = {
+            "genres_raw": list(info.get("genres_raw") or []),
+            "genres": list(info.get("genres") or []),
+            "genre_labels": list(info.get("genre_labels") or []),
+            "genre_source": info.get("genre_source"),
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "cache_schema": METADATA_CACHE_SCHEMA,
+        }
+        cls._memory(client)[key] = payload
+        if client.store:
+            client.store.set_metadata(cls._store_key(key), payload)
+
+    @classmethod
+    def _record_graphql(cls, client, data: Any) -> None:
+        def walk(value):
+            if isinstance(value, dict):
+                object_id = value.get("objectId")
+                content = value.get("content")
+                if object_id is not None and isinstance(content, dict):
+                    info = normalize_genres(content.get("genres"), "justwatch")
+                    if info.get("genres_raw"):
+                        cls._remember(client, f"jw:{object_id}", info)
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+        walk(data)
+
+    @staticmethod
+    def _item_keys(item: dict[str, Any]) -> list[str]:
+        keys: list[str] = []
+        for field in ("canonical_media_key", "media_key"):
+            value = str(item.get(field) or "").strip()
+            if value and value not in keys:
+                keys.append(value)
+        for field in ("jw_object_id", "_jw_object_id"):
+            value = item.get(field)
+            if value is not None:
+                key = f"jw:{value}"
+                if key not in keys:
+                    keys.append(key)
+        imdb_id = str(item.get("imdb_id") or "").strip().lower()
+        if imdb_id:
+            key = f"imdb:{imdb_id}"
+            if key not in keys:
+                keys.append(key)
+        return keys
+
+    @staticmethod
+    def _apply_info(item: dict[str, Any], info: dict[str, Any] | None) -> bool:
+        if not isinstance(item, dict) or not isinstance(info, dict):
+            return False
+        item["genres_raw"] = list(info.get("genres_raw") or [])
+        item["genres"] = list(info.get("genres") or [])
+        item["genre_labels"] = list(info.get("genre_labels") or [])
+        item["genre_source"] = info.get("genre_source")
+        return True
+
+    @classmethod
+    def apply_cached(cls, client, item: dict[str, Any]) -> bool:
+        if not isinstance(item, dict):
+            return False
+        if "genres" in item and "genres_raw" in item:
+            return True
+        memory = cls._memory(client)
+        for key in cls._item_keys(item):
+            info = memory.get(key)
+            if not info and client.store:
+                info = client.store.get_metadata(cls._store_key(key))
+            if info:
+                return cls._apply_info(item, info)
+        return False
+
+    @classmethod
+    def apply_from_store(cls, store, item: dict[str, Any]) -> bool:
+        if not isinstance(item, dict) or not store:
+            return False
+        if "genres" in item and "genres_raw" in item:
+            return True
+        for key in cls._item_keys(item):
+            info = store.get_metadata(cls._store_key(key))
+            if info:
+                return cls._apply_info(item, info)
+        return False
+
+    @classmethod
+    def attach_tree_from_store(cls, store, value: Any) -> Any:
+        if isinstance(value, dict):
+            if any(
+                value.get(field)
+                for field in (
+                    "media_key", "canonical_media_key", "imdb_id",
+                    "jw_object_id", "_jw_object_id",
+                )
+            ):
+                cls.apply_from_store(store, value)
+            for child in value.values():
+                cls.attach_tree_from_store(store, child)
+        elif isinstance(value, list):
+            for child in value:
+                cls.attach_tree_from_store(store, child)
+        return value
+
+    @classmethod
+    def invalidate_direct_cache_if_needed(cls, store, key: str) -> None:
+        if not store:
+            return
+        cached = store.get_metadata(key)
+        if not isinstance(cached, dict) or "genres" in cached:
+            return
+        cached["cached_at"] = cls.STALE_AT
+        store.set_metadata(key, cached)
+
+    @classmethod
+    def invalidate_pool_cache_if_needed(cls, store, key: str) -> None:
+        if not store:
+            return
+        cached = store.get_metadata(key)
+        if not isinstance(cached, dict):
+            return
+        pool = cached.get("ranked_pool")
+        if not isinstance(pool, list) or not pool:
+            return
+        if all(isinstance(item, dict) and "genres" in item for item in pool):
+            return
+        cached["cached_at"] = cls.STALE_AT
+        store.set_metadata(key, cached)
+
+    @classmethod
+    async def imdb_genres(cls, client, imdb_id: str | None) -> dict[str, Any]:
+        imdb_id = client._normalize_imdb_id(imdb_id)
+        if not imdb_id:
+            return normalize_genres([], "imdb")
+
+        memory_key = f"imdb:{imdb_id}"
+        memory = cls._memory(client)
+        if memory_key in memory:
+            return memory[memory_key]
+
+        if client.store:
+            cached = client.store.get_metadata(cls._store_key(memory_key))
+            if _cache_fresh_hours(cached, IMDB_POSTER_CACHE_DAYS * 24):
+                memory[memory_key] = cached
+                return cached
+
+        query = f"""
+        query LocalTitleGenres {{
+          title(id: "{imdb_id}") {{
+            genres {{ genres {{ text }} }}
+          }}
+        }}
+        """
+        raw_genres: list[str] = []
+        try:
+            async with client._sem:
+                async with client.session.post(
+                    "https://caching.graphql.imdb.com/",
+                    json={"query": query},
+                    headers={
+                        "User-Agent": UA,
+                        "Accept": "application/graphql+json, application/json",
+                        "Content-Type": "application/json",
+                        "Origin": "https://www.imdb.com",
+                        "Referer": "https://www.imdb.com/",
+                        "x-imdb-client-name": "imdb-web-next",
+                        "x-imdb-user-language": "fr-FR",
+                        "x-imdb-user-country": "FR",
+                    },
+                    timeout=25,
+                ) as resp:
+                    if resp.status < 400:
+                        payload = await resp.json()
+                        title_data = ((payload.get("data") or {}).get("title") or {})
+                        raw_genres = [
+                            entry.get("text")
+                            for entry in ((title_data.get("genres") or {}).get("genres") or [])
+                            if isinstance(entry, dict) and entry.get("text")
+                        ]
+        except Exception as err:
+            _LOGGER.debug("IMDb genre lookup failed for %s: %s", imdb_id, err)
+
+        info = normalize_genres(raw_genres, "imdb")
+        cls._remember(client, memory_key, info)
+        return cls._memory(client)[memory_key]
+
+
+# ---------------------------------------------------------------------------
+# Genre extension hooks
+# The protected engines above remain byte-for-byte unchanged. These wrappers
+# only retain source genre metadata and decorate their returned dictionaries.
+# ---------------------------------------------------------------------------
+_stfr_original_jw_post = JustWatchClient._post
+async def _stfr_jw_post_with_genres(self, payload):
+    data = await _stfr_original_jw_post(self, payload)
+    GenreMetadataExtension._record_graphql(self, data)
+    return data
+JustWatchClient._post = _stfr_jw_post_with_genres
+
+_stfr_original_local_post = LocalMetadataClient._post
+async def _stfr_local_post_with_genres(self, payload):
+    data = await _stfr_original_local_post(self, payload)
+    GenreMetadataExtension._record_graphql(self, data)
+    return data
+LocalMetadataClient._post = _stfr_local_post_with_genres
+
+_stfr_original_provider_candidates = JustWatchClient._async_provider_candidates
+async def _stfr_provider_candidates_with_genres(self, provider, media_type, first):
+    items = await _stfr_original_provider_candidates(self, provider, media_type, first)
+    for item in items or []:
+        GenreMetadataExtension.apply_cached(self, item)
+    return items
+JustWatchClient._async_provider_candidates = _stfr_provider_candidates_with_genres
+
+_stfr_original_netflix_search = JustWatchClient.async_search_localized_netflix
+async def _stfr_netflix_search_with_genres(
+    self, original_title, media_type, classification=None
+):
+    cache_key = f"netflix:{media_type}:{_slug(original_title)}"
+    GenreMetadataExtension.invalidate_direct_cache_if_needed(self.store, cache_key)
+    result = await _stfr_original_netflix_search(
+        self, original_title, media_type, classification
+    )
+    if isinstance(result, dict):
+        GenreMetadataExtension.apply_cached(self, result)
+        if self.store:
+            self.store.set_metadata(cache_key, result)
+    return result
+JustWatchClient.async_search_localized_netflix = _stfr_netflix_search_with_genres
+
+_stfr_original_netflix_enrich = JustWatchClient.async_enrich_netflix
+async def _stfr_netflix_enrich_with_genres(self, netflix, classification=None):
+    result = await _stfr_original_netflix_enrich(self, netflix, classification)
+    for bucket in ("movies", "tv"):
+        for item in (netflix or {}).get(bucket, []):
+            GenreMetadataExtension.apply_cached(self, item)
+    return result
+JustWatchClient.async_enrich_netflix = _stfr_netflix_enrich_with_genres
+
+_stfr_original_top_category = JustWatchClient.async_top_catalog_category
+async def _stfr_top_category_with_genres(
+    self,
+    enabled_providers,
+    decade,
+    category,
+    top_count,
+    min_imdb_votes=0,
+    exclude_short_films=False,
+    excluded_keys=None,
+):
+    provider_signature = ",".join(sorted(enabled_providers))
+    cache_key = (
+        f"top-catalog-v5:{provider_signature}:{int(decade)}:{str(category)}:{max(1, min(100, int(top_count)))}:"
+        f"votes{max(0, int(min_imdb_votes or 0))}:short{int(bool(exclude_short_films))}"
+    )
+    GenreMetadataExtension.invalidate_pool_cache_if_needed(self.store, cache_key)
+
+    result = await _stfr_original_top_category(
+        self,
+        enabled_providers,
+        decade,
+        category,
+        top_count,
+        min_imdb_votes=min_imdb_votes,
+        exclude_short_films=exclude_short_films,
+        excluded_keys=excluded_keys,
+    )
+    if isinstance(result, dict):
+        for item in result.get("items") or []:
+            GenreMetadataExtension.apply_cached(self, item)
+
+    if self.store:
+        cached = self.store.get_metadata(cache_key)
+        if isinstance(cached, dict) and isinstance(cached.get("ranked_pool"), list):
+            for item in cached["ranked_pool"]:
+                GenreMetadataExtension.apply_cached(self, item)
+            self.store.set_metadata(cache_key, cached)
+    return result
+JustWatchClient.async_top_catalog_category = _stfr_top_category_with_genres
+
+_stfr_original_local_search = LocalMetadataClient.async_search_local_title
+async def _stfr_local_search_with_genres(
+    self, title, media_type, year=None, classification=None
+):
+    normalized_media = "tv" if str(media_type).lower() in {"tv", "show"} else "movie"
+    try:
+        wanted_year = int(year) if year not in (None, "") else None
+    except (TypeError, ValueError):
+        wanted_year = None
+    cache_key = f"local-title-v11:{normalized_media}:{wanted_year or ''}:{_slug(str(title or '').strip())}"
+    GenreMetadataExtension.invalidate_direct_cache_if_needed(self.store, cache_key)
+
+    result = await _stfr_original_local_search(
+        self, title, media_type, year, classification
+    )
+    if not isinstance(result, dict):
+        return result
+
+    attached = GenreMetadataExtension.apply_cached(self, result)
+    if not attached and result.get("imdb_id"):
+        info = await GenreMetadataExtension.imdb_genres(self, result.get("imdb_id"))
+        GenreMetadataExtension._apply_info(result, info)
+
+    if self.store:
+        self.store.set_metadata(cache_key, result)
+    return result
+LocalMetadataClient.async_search_local_title = _stfr_local_search_with_genres
 
