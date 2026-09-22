@@ -9,7 +9,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS, CONF_UPDATE_HOURS, DEFAULT_UPDATE_HOURS
 from .storage import StreamingTopStore
-from .sources import NetflixOfficialClient, JustWatchClient, LocalMetadataClient
+from .sources import NetflixOfficialClient, JustWatchClient, LocalMetadataClient, GenreMetadataExtension
 from .coordinator import StreamingTopCoordinator
 from .playback import SUPPORTED_PLAYBACK_PROVIDERS, async_launch, log_launch_failure
 from .local_library import LocalLibraryScanner
@@ -371,6 +371,7 @@ def _register_ws(hass):
         public_settings["local_library"] = public_local
         payload["settings"] = public_settings
         store = data["store"]
+        GenreMetadataExtension.attach_tree_from_store(store, payload)
         payload.update(
             {
                 "watched_keys": list(store.watched_keys()),
@@ -382,6 +383,7 @@ def _register_ws(hass):
                 "playback_providers": sorted(SUPPORTED_PLAYBACK_PROVIDERS),
             }
         )
+        GenreMetadataExtension.attach_tree_from_store(store, payload)
         connection.send_result(msg["id"], payload)
 
     @websocket_api.websocket_command(
@@ -582,6 +584,7 @@ def _register_ws(hass):
             settings.get("classification") or {},
         )
 
+        GenreMetadataExtension.attach_tree_from_store(data["store"], items)
         enriched_count = sum(
             1 for item in items if item.get("metadata_status")
         )
@@ -670,6 +673,7 @@ def _register_ws(hass):
             settings.get("classification") or {},
         )
 
+        GenreMetadataExtension.attach_tree_from_store(data["store"], items)
         enriched_count = sum(
             1 for item in items if item.get("metadata_status")
         )
