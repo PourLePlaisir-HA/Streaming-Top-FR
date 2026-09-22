@@ -14,6 +14,86 @@
 
 ---
 
+## 🧪 Nouveautés 1.0.8-beta.1
+
+La série `1.0.8` introduit un **filtre transversal de genres** sur les trois cartes, sans modifier les moteurs historiques de classement, de matching ou de lecture.
+
+### 🏷️ Filtre par genre
+
+Le sélecteur **Genre** apparaît avec `Tous` puis uniquement les genres réellement présents dans la sélection courante.
+
+Genres normalisés :
+
+- Action
+- Aventure
+- Animation
+- Comédie
+- Crime / Policier
+- Documentaire
+- Drame
+- Famille
+- Fantastique
+- Histoire
+- Horreur
+- Musique
+- Mystère
+- Romance
+- Science-fiction
+- Sport
+- Thriller
+- Guerre
+- Western
+
+Le filtre est volontairement **mono-sélection** dans cette première beta.
+
+Il se combine avec :
+
+- la plateforme ;
+- Films / Séries / Animation / Famille ;
+- les décennies ;
+- Ma liste / Déjà vus / Pas intéressé ;
+- Tous / Pas encore vus / Vus sur Streaming Local ;
+- la recherche instantanée ;
+- `Voir N de plus` et `scroll_infini`.
+
+Le genre actif est conservé après un refresh.
+
+### ⚙️ Option Lovelace
+
+Le filtre est actif par défaut. Il peut être désactivé indépendamment sur une carte :
+
+```yaml
+type: custom:streaming-top-fr-card
+genre_filter: false
+```
+
+La même option est disponible sur les trois cartes.
+
+### 🔍 Debug des genres
+
+Lorsque le mode Debug est activé, les détails techniques exposent également :
+
+- `genres_raw` : valeurs brutes fournies par la source ;
+- `genres` : identifiants canoniques utilisés par le filtre ;
+- `genre_labels` : libellés français ;
+- `genre_source` : JustWatch ou IMDb ;
+- `genre_filter` : filtre actuellement sélectionné ;
+- `genre_match` : résultat du filtrage pour le titre.
+
+### 🛡️ Sans régression moteur
+
+Les genres sont ajoutés dans une couche d'extension dédiée.
+
+Les gardes CI continuent de vérifier que :
+
+- le moteur historique Streaming / Top reste inchangé ;
+- le moteur Streaming Local reste inchangé ;
+- le parser Local reste inchangé.
+
+Les anciens caches dépourvus de genres sont rafraîchis automatiquement et les genres sont ensuite conservés dans un cache dédié.
+
+---
+
 ## 🆕 Nouveautés 1.0.7
 
 La version `1.0.7` consolide l'expérience utilisateur des trois cartes sans modifier les moteurs de données ou de classement.
