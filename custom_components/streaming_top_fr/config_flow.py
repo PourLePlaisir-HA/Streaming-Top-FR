@@ -45,6 +45,8 @@ FIELD_US_TV = "us_tv"
 FIELD_VISIBLE_COUNT = "visible_count"
 FIELD_PREFETCH_COUNT = "prefetch_count"
 FIELD_MAX_DEPTH = "max_depth"
+FIELD_POSTERS_PER_BATCH = "posters_par_lot"
+FIELD_INFINITE_SCROLL = "scroll_infini"
 FIELD_DURATION_FILTER_ENABLED = "duration_filter_enabled"
 FIELD_DURATION_FILTER_MAX_MINUTES = "duration_filter_max_minutes"
 FIELD_DEBUG_ENABLED = "debug_enabled"
@@ -122,18 +124,33 @@ def _discovery_schema(settings: dict[str, Any]) -> vol.Schema:
                 FIELD_MAX_DEPTH,
                 default=int(discovery.get("max_depth", 100)),
             ): _number(1, 100),
+            vol.Required(
+                FIELD_POSTERS_PER_BATCH,
+                default=int(discovery.get("posters_par_lot", 8)),
+            ): _number(1, 50),
+            vol.Required(
+                FIELD_INFINITE_SCROLL,
+                default=bool(discovery.get("scroll_infini", False)),
+            ): selector.BooleanSelector(),
         }
     )
 
 
 def _apply_discovery(settings: dict[str, Any], user_input: dict[str, Any]) -> None:
     visible = int(user_input[FIELD_VISIBLE_COUNT])
-    prefetch = max(visible, int(user_input[FIELD_PREFETCH_COUNT]))
+    posters_par_lot = max(1, min(50, int(user_input[FIELD_POSTERS_PER_BATCH])))
+    prefetch = max(
+        visible,
+        int(user_input[FIELD_PREFETCH_COUNT]),
+        min(100, visible + posters_par_lot),
+    )
     max_depth = max(prefetch, int(user_input[FIELD_MAX_DEPTH]))
     settings["discovery"] = {
         "visible_count": visible,
         "prefetch_count": prefetch,
         "max_depth": max_depth,
+        "posters_par_lot": posters_par_lot,
+        "scroll_infini": bool(user_input[FIELD_INFINITE_SCROLL]),
     }
 
 def _duration_filter_schema(settings: dict[str, Any]) -> vol.Schema:
