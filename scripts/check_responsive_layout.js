@@ -99,6 +99,22 @@ if (streaming._stfrLayoutColumns(1600) < 8) {
   throw new Error("Wide card should gain substantially more columns");
 }
 
+const responsiveFormats = [
+  { name: "smartphone", width: 390, expectedColumns: 2, expectedRows: 2 },
+  { name: "tablet", width: 820, expectedColumns: 5, expectedRows: 4 },
+  { name: "desktop-large", width: 1600, expectedColumns: 9, expectedRows: 3 },
+];
+for (const format of responsiveFormats) {
+  const columns = streaming._stfrLayoutColumns(format.width);
+  const rows = streaming._stfrLayoutRows(format.width);
+  if (columns !== format.expectedColumns || rows !== format.expectedRows) {
+    throw new Error(
+      `${format.name} responsive profile failed: ${columns}x${rows}, expected ${format.expectedColumns}x${format.expectedRows}`
+    );
+  }
+}
+console.log("Smartphone, tablet and large-desktop responsive profiles passed.");
+
 if (streaming._stfrBatchSize() !== 8) {
   throw new Error("Default/global batch size failed");
 }
@@ -260,3 +276,57 @@ if (!frontendSource.includes('row.style.justifyContent=width>=700?"center":"flex
   throw new Error("Responsive Streaming bucket centering rule is missing");
 }
 console.log("Centered Streaming buckets on wide cards passed.");
+
+if (!frontendSource.includes("function stfrInstallLoadingUx(card)")) {
+  throw new Error("Initial-load skeleton helper is missing");
+}
+if (!frontendSource.includes("stfr-skeleton-grid")) {
+  throw new Error("Skeleton grid markup is missing");
+}
+if (!frontendSource.includes('haCard.setAttribute("aria-busy",card?._loading?"true":"false")')) {
+  throw new Error("Loading accessibility state is missing");
+}
+if (!frontendSource.includes("function stfrWrapRefreshPersistence(proto)")) {
+  throw new Error("Refresh UI-state persistence wrapper is missing");
+}
+
+const refreshStreaming = streamingFixture();
+refreshStreaming._stfrSearchQuery = "pitch";
+refreshStreaming._provider = "netflix";
+refreshStreaming._media = "movies";
+refreshStreaming._section = "watchlist";
+const streamingState = refreshStreaming._stfrCaptureRefreshState();
+refreshStreaming._stfrSearchQuery = "";
+refreshStreaming._section = "discover";
+refreshStreaming._stfrRestoreRefreshState(streamingState);
+if (
+  refreshStreaming._stfrSearchQuery !== "pitch" ||
+  refreshStreaming._section !== "watchlist"
+) {
+  throw new Error("Streaming search/bucket state was not restored after refresh");
+}
+
+const localRefresh = new LocalCard();
+localRefresh._config = {};
+localRefresh._data = {
+  items: [],
+  family: { enabled: true },
+};
+localRefresh._category = "movies";
+localRefresh._familyCategory = "movies";
+localRefresh._watchFilter = "watched";
+localRefresh._stfrSearchQuery = "alien";
+localRefresh._categories = () => ["movies", "series", "family"];
+localRefresh._familyCategories = () => ["movies", "series", "animation"];
+const localState = localRefresh._stfrCaptureRefreshState();
+localRefresh._watchFilter = "all";
+localRefresh._stfrSearchQuery = "";
+localRefresh._stfrRestoreRefreshState(localState);
+if (
+  localRefresh._watchFilter !== "watched" ||
+  localRefresh._stfrSearchQuery !== "alien"
+) {
+  throw new Error("Streaming Local search/watch bucket state was not restored");
+}
+
+console.log("Refresh state persistence and loading UX guards passed.");
