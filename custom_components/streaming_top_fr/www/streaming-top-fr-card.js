@@ -1996,6 +1996,12 @@ function stfrInfiniteScroll(card){
     :global;
 }
 
+function stfrSearchBoxEnabled(card){
+  return stfrHasCardOverride(card,"searchbox")
+    ?stfrBool(card._config.searchbox,true)
+    :true;
+}
+
 function stfrLayoutMode(width){
   const w=Number(width)||0;
   if(w>=STFR_LAYOUT_BREAKPOINT_LARGE)return"large";
@@ -2063,10 +2069,11 @@ function stfrSearchQuery(card){
 
 function stfrSearchFilter(card,items){
   const all=Array.isArray(items)?items:[];
+  if(!stfrSearchBoxEnabled(card))return all;
   const query=stfrSearchNormalize(stfrSearchQuery(card));
   if(!query)return all;
   return all.filter(item=>
-    stfrSearchNormalize(stfrSearchTitle(item)).startsWith(query)
+    stfrSearchNormalize(stfrSearchTitle(item)).includes(query)
   );
 }
 
@@ -2100,6 +2107,7 @@ function stfrInstallSearch(card){
   if(!root||!card?._data)return;
 
   root.querySelector(".stfr-search-box")?.remove?.();
+  if(!stfrSearchBoxEnabled(card))return;
 
   const target=root.querySelector(".rail")||root.querySelector(".state");
   if(!target)return;
@@ -2127,7 +2135,7 @@ function stfrInstallSearch(card){
   input.placeholder="Rechercher un titre…";
   input.autocomplete="off";
   input.spellcheck=false;
-  input.setAttribute("aria-label","Rechercher un titre commençant par");
+  input.setAttribute("aria-label","Rechercher dans les titres");
   input.style.cssText=[
     "min-width:0",
     "flex:1 1 auto",
@@ -2627,6 +2635,9 @@ StreamingTopFrCard.prototype._stfrSearchNormalize=stfrSearchNormalize;
 StreamingTopFrCard.prototype._stfrSearchFilter=function(items){
   return stfrSearchFilter(this,items);
 };
+StreamingTopFrCard.prototype._stfrSearchBoxEnabled=function(){
+  return stfrSearchBoxEnabled(this);
+};
 StreamingLocalCard.prototype._stfrLayoutRows=function(width){
   return stfrLayoutRows(this,width);
 };
@@ -2642,6 +2653,9 @@ StreamingLocalCard.prototype._stfrInfiniteScroll=function(){
 StreamingLocalCard.prototype._stfrSearchNormalize=stfrSearchNormalize;
 StreamingLocalCard.prototype._stfrSearchFilter=function(items){
   return stfrSearchFilter(this,items);
+};
+StreamingLocalCard.prototype._stfrSearchBoxEnabled=function(){
+  return stfrSearchBoxEnabled(this);
 };
 
 const _stfrResponsiveStreamingItems=StreamingTopFrCard.prototype._items;
@@ -2686,6 +2700,13 @@ function stfrWrapResponsiveSetConfig(proto){
   const original=proto.setConfig;
   proto.setConfig=function(config){
     stfrResetResponsiveState(this);
+    if(
+      config&&
+      Object.prototype.hasOwnProperty.call(config,"searchbox")&&
+      !stfrBool(config.searchbox,true)
+    ){
+      this._stfrSearchQuery="";
+    }
     return original.call(this,config);
   };
 }
