@@ -1,5 +1,7 @@
 "use strict";
 
+const fs = require("fs");
+
 global.HTMLElement = class {};
 global.window = {
   addEventListener() {},
