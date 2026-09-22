@@ -1,3 +1,15 @@
+## 1.0.6-beta.1
+
+- Ajoute un champ de recherche instantané sur les trois cartes Streaming Top FR.
+- La recherche fonctionne par préfixe : `I` → titres commençant par I, `IN` → titres commençant par IN, `IND` → titres commençant par IND.
+- La recherche est insensible à la casse et aux accents (`E` peut par exemple retrouver un titre commençant par `É`).
+- Le filtre s’applique au pool complet disponible avant le lazy loading et avant **Voir N de plus**.
+- Chaque requête dispose de son propre état de pagination afin que **Voir plus** continue de fonctionner correctement sur les résultats filtrés.
+- Le champ reste disponible même lorsqu’aucun résultat n’est trouvé ; le bouton × ou la touche Échap effacent la recherche.
+- Le focus et la position du curseur sont restaurés après chaque frappe afin de permettre une saisie continue sur desktop et mobile.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.6-beta.1`.
+
 ## 1.0.5
 
 - Stabilise la nouvelle grille responsive introduite avec la série `1.0.5-beta.x`.
