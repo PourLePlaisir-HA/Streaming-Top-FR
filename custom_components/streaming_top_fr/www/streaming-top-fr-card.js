@@ -2314,8 +2314,19 @@ function stfrInstallLoadMoreButton(card,rail,batch){
     "font-weight:800",
     "cursor:pointer",
   ].join(";");
+  // Do not let the temporary button become the focused scroll anchor.
+  // _render() removes this node immediately after the click; on mobile/HA,
+  // removing the focused element can move the scroll container back to top.
+  button.addEventListener("pointerdown",event=>{
+    event.preventDefault();
+  });
+  button.addEventListener("mousedown",event=>{
+    event.preventDefault();
+  });
   button.addEventListener("click",event=>{
+    event.preventDefault();
     event.stopPropagation();
+    try{button.blur();}catch(_e){}
     stfrLoadMore(card,rail,batch);
   });
   rail.insertAdjacentElement("afterend",button);
@@ -2324,7 +2335,19 @@ function stfrInstallLoadMoreButton(card,rail,batch){
 function stfrRestoreScroll(card,rail){
   const key=card?._stfrLayoutKey;
   const state=card?._stfrLayoutStates?.get?.(key);
-  rail.scrollTop=Math.max(0,Number(state?.scrollTop)||0);
+  const target=Math.max(0,Number(state?.scrollTop)||0);
+  const restore=()=>{
+    if(!rail?.isConnected)return;
+    rail.scrollTop=target;
+  };
+  // The new rail exists immediately after _render(), but Home Assistant and
+  // the browser may still recalculate its height/overflow afterwards.
+  // Restore once now, then after layout on two consecutive frames.
+  restore();
+  requestAnimationFrame(()=>{
+    restore();
+    requestAnimationFrame(restore);
+  });
 }
 
 function stfrApplyResponsiveLayout(card){
