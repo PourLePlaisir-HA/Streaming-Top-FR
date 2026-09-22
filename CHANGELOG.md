@@ -1,3 +1,12 @@
+## 1.0.7-beta.2
+
+- Corrige la perte de focus de la searchbox pendant la saisie continue.
+- Empêche les événements clavier de la searchbox de remonter vers les raccourcis globaux de Home Assistant.
+- Restaure le focus et la position du curseur après le rerender de la carte.
+- Conserve tous les comportements validés de `1.0.7-beta.1` : état vide de recherche, persistance après refresh, skeleton/loading et responsive.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.7-beta.2`.
+
 ## 1.0.7-beta.1
 
 - Améliore le message affiché lorsqu'une recherche ne retourne aucun résultat, avec rappel du texte recherché et bouton pour effacer la recherche.
