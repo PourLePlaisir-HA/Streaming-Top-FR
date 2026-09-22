@@ -1,5 +1,7 @@
 "use strict";
 
+const fs = require("fs");
+
 global.HTMLElement = class {};
 global.window = {
   addEventListener() {},
@@ -245,3 +247,16 @@ if (catalog._stfrInfiniteScroll() !== false) {
 }
 
 console.log("Responsive rows, controlled batches and infinite-scroll overrides passed.");
+
+
+const frontendSource = fs.readFileSync(
+  require.resolve("../custom_components/streaming_top_fr/www/streaming-top-fr-card.js"),
+  "utf8"
+);
+if (!frontendSource.includes('class="tabs section-tabs"')) {
+  throw new Error("Streaming bucket row is missing section-tabs class");
+}
+if (!frontendSource.includes(".provider-tabs,.media-tabs,.section-tabs{justify-content:center}")) {
+  throw new Error("Centered Streaming buckets CSS is missing");
+}
+console.log("Centered Streaming buckets on wide cards passed.");
