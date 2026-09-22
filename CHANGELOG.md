@@ -1,3 +1,12 @@
+## 1.0.5-beta.4
+
+- Corrige le retour en haut de la grille après un clic sur **Voir N de plus**.
+- Empêche le bouton temporaire **Voir plus** de devenir l’ancre de focus avant sa suppression par le rerender.
+- Restaure le `scrollTop` interne de la grille immédiatement puis sur deux frames successives, après recalcul du layout Home Assistant.
+- Conserve en parallèle la restauration de la position du dashboard introduite en beta.3.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.5-beta.4`.
+
 ## 1.0.5-beta.3
 
 - Corrige le retour en haut du dashboard lors d’un clic sur **Voir N de plus**.
