@@ -90,6 +90,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "enabled": True,
         "max_minutes": 120,
     },
+    "card_layout": {
+        "rows_small": 2,
+        "rows_medium": 2,
+        "rows_large": 3,
+    },
     "debug": {
         "enabled": False,
     },
@@ -191,6 +196,13 @@ classification:
 duration_filter:
   enabled: true          # Afficher le filtre de durée dans les vues Films
   max_minutes: 120       # Seuil du bouton : films strictement inférieurs à 120 min
+
+# Affichage responsive des trois cartes.
+# Les seuils sont basés sur la largeur réelle de chaque carte, pas sur le type d'appareil.
+card_layout:
+  rows_small: 2          # < 700 px (smartphone / carte étroite)
+  rows_medium: 2         # 700 à 1199 px (tablette / carte PC réduite)
+  rows_large: 3          # >= 1200 px (grande carte PC)
 
 debug:
   enabled: false         # Active les traces détaillées de diagnostic
@@ -414,6 +426,30 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
                 defaults["max_minutes"],
                 30,
                 360,
+            ),
+        }
+
+    card_layout = raw.get("card_layout") or {}
+    if isinstance(card_layout, dict):
+        defaults = DEFAULT_SETTINGS["card_layout"]
+        settings["card_layout"] = {
+            "rows_small": _as_int(
+                card_layout.get("rows_small"),
+                defaults["rows_small"],
+                1,
+                6,
+            ),
+            "rows_medium": _as_int(
+                card_layout.get("rows_medium"),
+                defaults["rows_medium"],
+                1,
+                6,
+            ),
+            "rows_large": _as_int(
+                card_layout.get("rows_large"),
+                defaults["rows_large"],
+                1,
+                6,
             ),
         }
 
