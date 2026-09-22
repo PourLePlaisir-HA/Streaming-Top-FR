@@ -1,3 +1,13 @@
+## 1.0.7-beta.1
+
+- Améliore le message affiché lorsqu'une recherche ne retourne aucun résultat, avec rappel du texte recherché et bouton pour effacer la recherche.
+- Conserve la recherche et la sélection courante après un rafraîchissement de carte : bucket Streaming, catégorie Top Streaming et filtre Vu/Non vu de Streaming Local.
+- Ajoute un skeleton responsive au premier chargement afin de réduire les changements brusques de hauteur.
+- Lors d'un refresh avec des données déjà présentes, conserve les posters affichés pendant le chargement au lieu de vider la carte.
+- Ajoute des contrôles de rendu explicites pour trois formats : smartphone, tablette et desktop large.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.7-beta.1`.
+
 ## 1.0.6
 
 - Stabilise la recherche instantanée introduite avec la série `1.0.6-beta.x`.
