@@ -34,12 +34,16 @@
         "data": {
           "visible_count": "Titres visibles",
           "prefetch_count": "Titres préchargés",
-          "max_depth": "Profondeur maximale"
+          "max_depth": "Profondeur maximale",
+          "posters_par_lot": "Posters par lot",
+          "scroll_infini": "Scroll infini"
         },
         "data_description": {
           "visible_count": "Nombre de titres affichés dans chaque carrousel.",
           "prefetch_count": "Nombre total de titres maintenus en mémoire, visibles + réserve.",
-          "max_depth": "Nombre maximal de candidats explorés pour reconstituer la réserve."
+          "max_depth": "Nombre maximal de candidats explorés pour reconstituer la réserve.",
+          "posters_par_lot": "Nombre de posters ajoutés à chaque clic sur « Voir N de plus » ou à chaque chargement automatique.",
+          "scroll_infini": "Désactivé par défaut : affiche le bouton « Voir plus ». Activé : ajoute automatiquement le lot en approchant de la fin du rail."
         }
       },
       "top_catalog": {
