@@ -1268,6 +1268,7 @@ class JustWatchClient:
             primaryImage {{ url width height }}
             ratingsSummary {{ aggregateRating voteCount }}
             plot {{ plotText {{ plainText }} }}
+            genres { genres { text } }
           }}
         }}
         """
@@ -1302,6 +1303,12 @@ class JustWatchClient:
         image = title_data.get("primaryImage") or {}
         ratings = title_data.get("ratingsSummary") or {}
         plot = ((title_data.get("plot") or {}).get("plotText") or {})
+        imdb_genres = [
+            entry.get("text")
+            for entry in ((title_data.get("genres") or {}).get("genres") or [])
+            if isinstance(entry, dict) and entry.get("text")
+        ]
+        genre_info = normalize_genres(imdb_genres, "imdb")
         result = {
             "imdb_id": imdb_id,
             "title": ((title_data.get("titleText") or {}).get("text") or None),
@@ -1310,6 +1317,7 @@ class JustWatchClient:
             "rating": ratings.get("aggregateRating"),
             "imdb_votes": ratings.get("voteCount"),
             "description": plot.get("plainText"),
+            **genre_info,
             "cached_at": datetime.now(timezone.utc).isoformat(),
             "cache_schema": METADATA_CACHE_SCHEMA,
         }
@@ -2972,6 +2980,10 @@ class JustWatchClient:
                 "rating": imdb_detail.get("rating"),
                 "rating_source": "IMDb" if imdb_detail.get("rating") is not None else None,
                 "imdb_votes": imdb_detail.get("imdb_votes"),
+                "genres_raw": list(imdb_detail.get("genres_raw") or []),
+                "genres": list(imdb_detail.get("genres") or []),
+                "genre_labels": list(imdb_detail.get("genre_labels") or []),
+                "genre_source": imdb_detail.get("genre_source"),
                 "age_certification": None,
                 "age_country": None,
                 "age_fr": None,
@@ -3844,6 +3856,10 @@ class LocalMetadataClient(JustWatchClient):
                         else None
                     ),
                     "imdb_votes": imdb_detail.get("imdb_votes"),
+                    "genres_raw": list(imdb_detail.get("genres_raw") or []),
+                    "genres": list(imdb_detail.get("genres") or []),
+                    "genre_labels": list(imdb_detail.get("genre_labels") or []),
+                    "genre_source": imdb_detail.get("genre_source"),
                     "age_certification": age_value,
                     "age_country": age_country,
                     "age_fr": age_fr,
