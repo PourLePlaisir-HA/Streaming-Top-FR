@@ -67,6 +67,9 @@ jobs:
       - name: Check brand assets
         run: python scripts/check_brand_assets.py
 
+      - name: Check automatic Lovelace resource
+        run: python scripts/check_lovelace_resource.py
+
       - name: Validate JSON
         run: |
           python -m json.tool custom_components/streaming_top_fr/manifest.json >/dev/null
