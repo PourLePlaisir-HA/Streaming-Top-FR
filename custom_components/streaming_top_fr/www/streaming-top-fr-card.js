@@ -2052,15 +2052,19 @@ function stfrSearchNormalize(value){
     .toLocaleLowerCase("fr");
 }
 
-function stfrSearchTitle(item){
-  return String(
-    item?.title||
-    item?.franchise_title||
-    item?.parsed_title||
-    item?.original_title||
-    item?.filename||
-    ""
-  ).trim();
+function stfrSearchText(item){
+  return[
+    item?.title,
+    item?.franchise_title,
+    item?.parsed_title,
+    item?.original_title,
+    item?.episode_title,
+    item?.season_title,
+    item?.filename,
+  ]
+    .filter(value=>value!==null&&value!==undefined&&String(value).trim()!=="")
+    .map(value=>String(value).trim())
+    .join(" ");
 }
 
 function stfrSearchQuery(card){
@@ -2073,7 +2077,7 @@ function stfrSearchFilter(card,items){
   const query=stfrSearchNormalize(stfrSearchQuery(card));
   if(!query)return all;
   return all.filter(item=>
-    stfrSearchNormalize(stfrSearchTitle(item)).includes(query)
+    stfrSearchNormalize(stfrSearchText(item)).includes(query)
   );
 }
 
