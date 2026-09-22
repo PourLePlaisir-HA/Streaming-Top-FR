@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.5-beta.4";
+const STFR_VERSION = "1.0.5";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -1919,7 +1919,7 @@ StreamingLocalCard.prototype._sortMovieCollections=function(items){
 // engines remain unchanged. Each card reacts to its own width, not to the
 // device type, so two cards side-by-side on a desktop can use a compact mode.
 //
-// v1.0.5-beta.4:
+// v1.0.5:
 // - default mode is explicit "Voir N de plus" loading (no nested scroll first)
 // - optional per-card/global infinite scroll
 // - configurable batch size
