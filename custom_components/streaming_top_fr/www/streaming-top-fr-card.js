@@ -2002,6 +2002,200 @@ function stfrSearchBoxEnabled(card){
     :true;
 }
 
+const STFR_GENRE_ORDER=[
+  "action","adventure","animation","comedy","crime","documentary","drama",
+  "family","fantasy","history","horror","music","mystery","romance",
+  "science_fiction","sport","thriller","war","western"
+];
+const STFR_GENRE_LABELS={
+  action:"Action",adventure:"Aventure",animation:"Animation",comedy:"Comédie",
+  crime:"Crime / Policier",documentary:"Documentaire",drama:"Drame",family:"Famille",
+  fantasy:"Fantastique",history:"Histoire",horror:"Horreur",music:"Musique",
+  mystery:"Mystère",romance:"Romance",science_fiction:"Science-fiction",
+  sport:"Sport",thriller:"Thriller",war:"Guerre",western:"Western"
+};
+
+function stfrGenreFilterEnabled(card){
+  return stfrHasCardOverride(card,"genre_filter")
+    ?stfrBool(card._config.genre_filter,true)
+    :true;
+}
+function stfrGenreValue(card){
+  return String(card?._stfrGenre||"all");
+}
+function stfrGenreFilter(card,items){
+  const all=Array.isArray(items)?items:[];
+  if(!stfrGenreFilterEnabled(card))return all;
+  const selected=stfrGenreValue(card);
+  if(!selected||selected==="all")return all;
+  return all.filter(item=>Array.isArray(item?.genres)&&item.genres.includes(selected));
+}
+function stfrGenreOptions(card){
+  if(!stfrGenreFilterEnabled(card))return[];
+  const source=card?._stfrGenreSourceItems?.()||[];
+  const found=new Set();
+  for(const item of source){
+    for(const genre of (Array.isArray(item?.genres)?item.genres:[])){
+      if(STFR_GENRE_LABELS[genre])found.add(genre);
+    }
+  }
+  return STFR_GENRE_ORDER.filter(genre=>found.has(genre));
+}
+function stfrNormalizeGenreSelection(card){
+  const options=stfrGenreOptions(card);
+  const selected=stfrGenreValue(card);
+  if(selected!=="all"&&!options.includes(selected))card._stfrGenre="all";
+  return options;
+}
+function stfrResetGenreView(card){
+  card._stfrLayoutStates=new Map();
+  card._stfrLayoutKey=null;
+  card._stfrLayoutLimit=0;
+  card._stfrLayoutExpanded=false;
+  card._stfrLayoutFullCount=0;
+}
+function stfrInstallGenreFilter(card){
+  const root=card?.shadowRoot;
+  if(!root||!card?._data)return;
+  root.querySelector(".stfr-genre-filter")?.remove?.();
+  if(!stfrGenreFilterEnabled(card)){card._stfrGenre="all";return;}
+
+  const options=stfrNormalizeGenreSelection(card);
+  if(!options.length){card._stfrGenre="all";return;}
+
+  const row=document.createElement("div");
+  row.className="stfr-genre-filter";
+  row.style.cssText=[
+    "display:flex","align-items:center","justify-content:center","gap:8px",
+    "margin:2px 0 10px","min-width:0"
+  ].join(";");
+
+  const label=document.createElement("label");
+  label.style.cssText=[
+    "display:flex","align-items:center","gap:6px","font-size:.78rem",
+    "font-weight:800","color:var(--secondary-text-color)","white-space:nowrap"
+  ].join(";");
+  const icon=document.createElement("ha-icon");
+  icon.setAttribute("icon","mdi:tag-multiple-outline");
+  icon.style.cssText="--mdc-icon-size:18px";
+  const text=document.createElement("span");
+  text.textContent="Genre";
+  label.append(icon,text);
+
+  const select=document.createElement("select");
+  select.className="stfr-genre-select";
+  select.setAttribute("aria-label","Filtrer par genre");
+  select.style.cssText=[
+    "max-width:min(260px,70vw)","min-width:150px","border:0","border-radius:999px",
+    "padding:8px 30px 8px 12px","background:var(--secondary-background-color)",
+    "color:var(--primary-text-color)","font:inherit","font-size:.84rem",
+    "font-weight:800","outline:none","cursor:pointer"
+  ].join(";");
+
+  const allOption=document.createElement("option");
+  allOption.value="all";allOption.textContent="Tous";select.appendChild(allOption);
+  for(const genre of options){
+    const option=document.createElement("option");
+    option.value=genre;
+    option.textContent=STFR_GENRE_LABELS[genre]||genre;
+    select.appendChild(option);
+  }
+  select.value=stfrGenreValue(card);
+
+  select.addEventListener("change",event=>{
+    event.stopPropagation();
+    card._stfrGenre=String(select.value||"all");
+    stfrResetGenreView(card);
+    card._render?.();
+  });
+  select.addEventListener("keydown",event=>event.stopPropagation());
+  select.addEventListener("keyup",event=>event.stopPropagation());
+
+  row.append(label,select);
+  const target=root.querySelector(".stfr-search-box")||
+    root.querySelector(".rail")||root.querySelector(".state");
+  target?.insertAdjacentElement?.("beforebegin",row);
+}
+function stfrInstallGenreFeedback(card){
+  const root=card?.shadowRoot;
+  if(!root||card?._loading||card?._error)return;
+  if(stfrSearchNormalize(stfrSearchQuery(card)))return;
+  if(stfrGenreValue(card)==="all")return;
+  if(Math.max(0,Number(card?._stfrLayoutFullCount)||0)!==0)return;
+  const state=root.querySelector(".state");
+  if(!state)return;
+  const genre=stfrGenreValue(card);
+  const label=STFR_GENRE_LABELS[genre]||genre;
+  state.textContent="";
+  const message=document.createElement("div");
+  message.textContent=`Aucun titre pour le genre « ${label} » dans cette sélection.`;
+  const reset=document.createElement("button");
+  reset.type="button";
+  reset.textContent="Afficher tous les genres";
+  reset.style.cssText=[
+    "margin-top:12px","border:0","border-radius:999px","padding:8px 12px",
+    "background:var(--primary-color)","color:#fff","font:inherit","font-weight:800",
+    "cursor:pointer"
+  ].join(";");
+  reset.onclick=()=>{
+    card._stfrGenre="all";
+    stfrResetGenreView(card);
+    card._render?.();
+  };
+  state.append(message,reset);
+}
+function stfrGenreDiagnostic(card,item){
+  const selected=stfrGenreValue(card);
+  const genres=Array.isArray(item?.genres)?item.genres:[];
+  return{
+    genres_raw:Array.isArray(item?.genres_raw)?item.genres_raw:[],
+    genres,
+    genre_labels:Array.isArray(item?.genre_labels)?item.genre_labels:[],
+    genre_source:item?.genre_source||null,
+    genre_filter:selected,
+    genre_filter_label:selected==="all"?"Tous":(STFR_GENRE_LABELS[selected]||selected),
+    genre_match:selected==="all"||genres.includes(selected),
+  };
+}
+function stfrAppendGenreDebug(card,item){
+  const root=card?.shadowRoot;
+  const debugEnabled=card instanceof StreamingLocalCard
+    ?card?._data?.debug?.enabled===true
+    :card?._data?.settings?.debug?.enabled===true;
+  if(!root||!debugEnabled)return;
+  const modal=root.querySelector(".modalbg .modal");
+  if(!modal||modal.querySelector(".stfr-genre-diagnostic"))return;
+  const panel=document.createElement("details");
+  panel.className="stfr-genre-diagnostic";
+  panel.style.cssText="margin:14px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color);padding:8px 0";
+  const summary=document.createElement("summary");
+  summary.textContent="Détails techniques — genres";
+  summary.style.cssText="cursor:pointer;font-weight:800;color:var(--secondary-text-color)";
+  const pre=document.createElement("pre");
+  pre.textContent=JSON.stringify(stfrGenreDiagnostic(card,item),null,2);
+  pre.style.cssText="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.72rem;line-height:1.35;max-height:240px;overflow:auto;background:var(--secondary-background-color);padding:10px;border-radius:10px";
+  panel.append(summary,pre);
+  const buttons=modal.querySelector(".buttons,.watch-actions");
+  if(buttons)modal.insertBefore(panel,buttons);else modal.appendChild(panel);
+}
+function stfrWrapGenreDetail(proto){
+  const original=proto._detail;
+  if(typeof original!=="function"||original._stfrGenreDebug)return;
+  const wrapped=function(item,...args){
+    const result=original.call(this,item,...args);
+    if(result&&typeof result.then==="function"){
+      return result.then(value=>{
+        stfrAppendGenreDebug(this,item);
+        return value;
+      });
+    }
+    stfrAppendGenreDebug(this,item);
+    return result;
+  };
+  wrapped._stfrGenreDebug=true;
+  proto._detail=wrapped;
+}
+
 function stfrLayoutMode(width){
   const w=Number(width)||0;
   if(w>=STFR_LAYOUT_BREAKPOINT_LARGE)return"large";
@@ -2237,6 +2431,7 @@ function stfrInstallSearch(card){
 function stfrLayoutKey(card,kind){
   const duration=card?._durationFilterActive?"short":"all";
   const search=stfrSearchNormalize(stfrSearchQuery(card));
+  const genre=stfrGenreValue(card);
   if(kind==="streaming"){
     return[
       "streaming",
@@ -2244,6 +2439,7 @@ function stfrLayoutKey(card,kind){
       card?._media||"",
       card?._section||"",
       duration,
+      genre,
       search,
     ].join(":");
   }
@@ -2254,6 +2450,7 @@ function stfrLayoutKey(card,kind){
       card?._category||"",
       card?._familyType||"",
       duration,
+      genre,
       search,
     ].join(":");
   }
@@ -2263,6 +2460,7 @@ function stfrLayoutKey(card,kind){
     card?._familyCategory||"",
     card?._watchFilter||"all",
     duration,
+    genre,
     search,
   ].join(":");
 }
@@ -2698,6 +2896,7 @@ function stfrInstallLoadingUx(card){
 function stfrCaptureRefreshState(card){
   return{
     search:String(card?._stfrSearchQuery||""),
+    genre:stfrGenreValue(card),
     provider:card?._provider,
     media:card?._media,
     section:card?._section,
@@ -2713,6 +2912,7 @@ function stfrRestoreRefreshState(card,state){
   if(!card||!state)return;
 
   card._stfrSearchQuery=String(state.search||"");
+  card._stfrGenre=String(state.genre||"all");
 
   if(card instanceof StreamingTopFrCatalogCard){
     const decades=card._decadeOrder?.()||[];
@@ -2776,7 +2976,9 @@ function stfrWrapRefreshPersistence(proto){
 
 function stfrApplyResponsiveLayout(card){
   stfrInstallSearch(card);
+  stfrInstallGenreFilter(card);
   stfrInstallSearchFeedback(card);
+  stfrInstallGenreFeedback(card);
   stfrInstallLoadingUx(card);
   if(card instanceof StreamingTopFrCard){
     stfrCenterStreamingBuckets(card);
@@ -2858,6 +3060,7 @@ function stfrCleanupResponsiveLayout(card){
 }
 
 function stfrResetResponsiveState(card){
+  card._stfrGenre="all";
   card._stfrLayoutStates=new Map();
   card._stfrLayoutKey=null;
   card._stfrLayoutLimit=0;
@@ -2897,6 +3100,12 @@ StreamingTopFrCard.prototype._stfrSearchFilter=function(items){
 StreamingTopFrCard.prototype._stfrSearchBoxEnabled=function(){
   return stfrSearchBoxEnabled(this);
 };
+StreamingTopFrCard.prototype._stfrGenreFilter=function(items){
+  return stfrGenreFilter(this,items);
+};
+StreamingTopFrCard.prototype._stfrGenreOptions=function(){
+  return stfrGenreOptions(this);
+};
 StreamingLocalCard.prototype._stfrLayoutRows=function(width){
   return stfrLayoutRows(this,width);
 };
@@ -2916,27 +3125,47 @@ StreamingLocalCard.prototype._stfrSearchFilter=function(items){
 StreamingLocalCard.prototype._stfrSearchBoxEnabled=function(){
   return stfrSearchBoxEnabled(this);
 };
+StreamingLocalCard.prototype._stfrGenreFilter=function(items){
+  return stfrGenreFilter(this,items);
+};
+StreamingLocalCard.prototype._stfrGenreOptions=function(){
+  return stfrGenreOptions(this);
+};
 
 const _stfrResponsiveStreamingItems=StreamingTopFrCard.prototype._items;
 StreamingTopFrCard.prototype._items=function(){
   const items=this._stfrRendering
     ?stfrStreamingLayoutItems(this,_stfrResponsiveStreamingItems)
     :_stfrResponsiveStreamingItems.call(this);
-  const filtered=stfrSearchFilter(this,items);
+  const genreFiltered=stfrGenreFilter(this,items);
+  const filtered=stfrSearchFilter(this,genreFiltered);
   return stfrLazyItems(this,filtered,stfrLayoutKey(this,"streaming"));
 };
 
 const _stfrResponsiveCatalogItems=StreamingTopFrCatalogCard.prototype._catalogItems;
 StreamingTopFrCatalogCard.prototype._catalogItems=function(){
   const items=_stfrResponsiveCatalogItems.call(this);
-  const filtered=stfrSearchFilter(this,items);
+  const genreFiltered=stfrGenreFilter(this,items);
+  const filtered=stfrSearchFilter(this,genreFiltered);
   return stfrLazyItems(this,filtered,stfrLayoutKey(this,"catalog"));
 };
 
 const _stfrResponsiveLocalItems=StreamingLocalCard.prototype._items;
+
+StreamingTopFrCard.prototype._stfrGenreSourceItems=function(){
+  return stfrStreamingLayoutItems(this,_stfrResponsiveStreamingItems);
+};
+StreamingTopFrCatalogCard.prototype._stfrGenreSourceItems=function(){
+  return _stfrResponsiveCatalogItems.call(this);
+};
+StreamingLocalCard.prototype._stfrGenreSourceItems=function(){
+  return _stfrResponsiveLocalItems.call(this);
+};
+
 StreamingLocalCard.prototype._items=function(){
   const items=_stfrResponsiveLocalItems.call(this);
-  const filtered=stfrSearchFilter(this,items);
+  const genreFiltered=stfrGenreFilter(this,items);
+  const filtered=stfrSearchFilter(this,genreFiltered);
   return stfrLazyItems(this,filtered,stfrLayoutKey(this,"local"));
 };
 
@@ -2981,6 +3210,9 @@ stfrWrapResponsiveRender(StreamingLocalCard.prototype,"local");
 stfrWrapRefreshPersistence(StreamingTopFrCard.prototype);
 stfrWrapRefreshPersistence(StreamingTopFrCatalogCard.prototype);
 stfrWrapRefreshPersistence(StreamingLocalCard.prototype);
+
+stfrWrapGenreDetail(StreamingTopFrCard.prototype);
+stfrWrapGenreDetail(StreamingLocalCard.prototype);
 
 StreamingTopFrCard.prototype._stfrSearchNoResultMessage=function(){
   return stfrSearchNoResultMessage(this);
