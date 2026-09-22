@@ -1,3 +1,15 @@
+## 1.0.5-beta.2
+
+- Ajoute un chargement progressif commun aux trois cartes Lovelace : **Streaming Top FR**, **Top Streaming FR** et **Streaming Local**.
+- Le rendu initial reste limité à la capacité visible de la carte ; le nombre de rangées reste responsive : 2 sur petit/moyen écran et 3 sur grand écran.
+- Ajoute `posters_par_lot` (défaut `8`, plage `1–50`) pour contrôler le nombre de posters révélés à chaque étape.
+- Ajoute `scroll_infini` (défaut `false`) : désactivé, la carte affiche **Voir N de plus** ; activé, le lot suivant est révélé automatiquement en approchant de la fin du rail.
+- Les réglages Lovelace surchargent les réglages globaux ; sinon la configuration native de l’intégration est utilisée.
+- La réserve de découverte est automatiquement portée à au moins `visible_count + posters_par_lot`, dans la limite technique existante de 100 titres.
+- Si moins de `N` titres restent disponibles, le dernier lot affiche simplement le nombre restant.
+- Conserve la position horizontale du rail lors des rerenders afin d’éviter un retour intempestif au début du carrousel.
+- Version frontend/backend : `1.0.5-beta.2`.
+
 ## 0.7.1
 
 - Stabilise la hauteur de la navigation Famille sur mobile et tablette (issue #2).
