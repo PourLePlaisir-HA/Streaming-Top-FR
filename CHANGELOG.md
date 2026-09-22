@@ -1,3 +1,15 @@
+## 1.0.6-beta.2
+
+- Ajoute l'option Lovelace `searchbox: true|false` sur les trois cartes ; la zone de recherche reste activée par défaut.
+- Avec `searchbox: false`, la zone de recherche n'est pas affichée et aucun filtre de recherche n'est appliqué.
+- Étend la recherche instantanée : elle cherche désormais le texte saisi n'importe où dans le titre affiché, et plus seulement au début.
+- Exemple : `Pit` retrouve **Les Chroniques de Riddick : Pitch Black**.
+- Conserve la recherche progressive : `I` → `IN` → `IND` continue de réduire dynamiquement les résultats.
+- Conserve l'insensibilité à la casse et aux accents.
+- Le filtrage reste appliqué avant le lazy loading et avant **Voir N de plus**.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.6-beta.2`.
+
 ## 1.0.6-beta.1
 
 - Ajoute un champ de recherche instantané sur les trois cartes Streaming Top FR.
