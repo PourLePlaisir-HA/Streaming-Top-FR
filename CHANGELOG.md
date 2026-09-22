@@ -6,6 +6,7 @@
 - Conserve la recherche de type `contains`, l'insensibilité à la casse et aux accents, et l'option Lovelace `searchbox: true|false`.
 - Ajoute le hot-fix Home Assistant Sections : les trois cartes demandent désormais `columns: "full"` afin d'occuper toute la largeur disponible de leur section.
 - Le responsive recalcule automatiquement le nombre de colonnes de posters lorsque la section est élargie.
+- Restaure le centrage des buckets **À découvrir / Ma liste / Déjà vus / Pas intéressé** sur les cartes larges, tout en conservant un alignement utilisable sur mobile.
 - Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
 - Version frontend/backend : `1.0.6-beta.3`.
 
