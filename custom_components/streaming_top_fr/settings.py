@@ -97,6 +97,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "visible_count": 10,
         "prefetch_count": 20,
         "max_depth": 100,
+        "posters_par_lot": 8,
+        "scroll_infini": False,
     },
 }
 
@@ -199,6 +201,8 @@ discovery:
   visible_count: 10      # Nombre de tuiles visibles dans « À découvrir » (pas de 1)
   prefetch_count: 20     # Fenêtre active totale : visibles + réserve, toujours maintenue pleine
   max_depth: 100         # Profondeur maximale explorée pour reconstituer la fenêtre active
+  posters_par_lot: 8     # Nombre de posters ajoutés par « Voir N de plus » (1 à 50)
+  scroll_infini: false   # false = bouton « Voir plus » ; true = chargement automatique en fin de rail
 """
 
 
@@ -432,13 +436,28 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         visible = _as_int(discovery.get("visible_count"), defaults["visible_count"], 1, 100)
         prefetch = _as_int(discovery.get("prefetch_count"), defaults["prefetch_count"], 1, 100)
         max_depth = _as_int(discovery.get("max_depth"), defaults["max_depth"], 1, 100)
+        posters_par_lot = _as_int(
+            discovery.get("posters_par_lot"),
+            defaults["posters_par_lot"],
+            1,
+            50,
+        )
+        scroll_infini = _as_bool(
+            discovery.get("scroll_infini"),
+            defaults["scroll_infini"],
+        )
 
-        prefetch = max(prefetch, visible)
+        # Keep at least one complete progressive batch in reserve. The existing
+        # discovery hard limit remains 100; a larger batch is simply capped by
+        # the number of titles actually available.
+        prefetch = max(prefetch, visible, min(100, visible + posters_par_lot))
         max_depth = max(max_depth, prefetch)
         settings["discovery"] = {
             "visible_count": visible,
             "prefetch_count": prefetch,
             "max_depth": max_depth,
+            "posters_par_lot": posters_par_lot,
+            "scroll_infini": scroll_infini,
         }
 
     return settings
