@@ -34,7 +34,9 @@
         "data": {
           "visible_count": "Visible titles",
           "prefetch_count": "Prefetched titles",
-          "max_depth": "Maximum depth"
+          "max_depth": "Maximum depth",
+          "posters_par_lot": "Posters per batch",
+          "scroll_infini": "Infinite scroll"
         }
       },
       "top_catalog": {
