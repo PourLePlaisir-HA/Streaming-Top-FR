@@ -253,10 +253,10 @@ const frontendSource = fs.readFileSync(
   require.resolve("../custom_components/streaming_top_fr/www/streaming-top-fr-card.js"),
   "utf8"
 );
-if (!frontendSource.includes('class="tabs section-tabs"')) {
-  throw new Error("Streaming bucket row is missing section-tabs class");
+if (!frontendSource.includes("function stfrCenterStreamingBuckets(card)")) {
+  throw new Error("Responsive Streaming bucket centering helper is missing");
 }
-if (!frontendSource.includes(".provider-tabs,.media-tabs,.section-tabs{justify-content:center}")) {
-  throw new Error("Centered Streaming buckets CSS is missing");
+if (!frontendSource.includes('row.style.justifyContent=width>=700?"center":"flex-start"')) {
+  throw new Error("Responsive Streaming bucket centering rule is missing");
 }
 console.log("Centered Streaming buckets on wide cards passed.");
