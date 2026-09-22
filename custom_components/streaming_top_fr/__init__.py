@@ -18,6 +18,10 @@ from .watch_registry import CanonicalWatchRegistry
 from .local_views import annotate_local_items, sync_historical_work
 from .local_playback import async_launch_vlc_local, log_local_launch_failure
 from .runtime_filter import RuntimeMetadataClient
+from .lovelace_resource import (
+    async_register_lovelace_resource,
+    async_remove_lovelace_resource,
+)
 
 
 _PACKAGE_LOGGER = logging.getLogger(__package__)
@@ -107,6 +111,7 @@ async def async_setup_entry(hass, entry):
             f"{DOMAIN}_local_canonical_index_bootstrap",
         )
     await _register_frontend(hass)
+    await async_register_lovelace_resource(hass)
     _register_ws(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -118,6 +123,11 @@ async def async_unload_entry(hass, entry):
         hass.data[DOMAIN].pop(entry.entry_id, None)
         _PACKAGE_LOGGER.setLevel(logging.NOTSET)
     return ok
+
+
+async def async_remove_entry(hass, entry):
+    """Remove integration-owned persistent resources."""
+    await async_remove_lovelace_resource(hass)
 
 
 async def _register_frontend(hass):
