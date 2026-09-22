@@ -105,7 +105,7 @@ if (streaming._stfrInfiniteScroll() !== false) {
 }
 
 const grid = streaming.getGridOptions();
-if (grid.columns !== 12 || grid.min_columns !== 3 || "rows" in grid) {
+if (grid.columns !== "full" || grid.min_columns !== 3 || "rows" in grid) {
   throw new Error(`Unexpected Sections grid options: ${JSON.stringify(grid)}`);
 }
 
@@ -234,8 +234,8 @@ catalog._data = {
     },
   },
 };
-if (catalog.getGridOptions().columns !== 12) {
-  throw new Error("Top Streaming Sections sizing failed");
+if (catalog.getGridOptions().columns !== "full") {
+  throw new Error("Top Streaming Sections full-width sizing failed");
 }
 if (catalog._stfrLayoutRows(1400) !== 3) {
   throw new Error("Top Streaming wide row setting failed");
