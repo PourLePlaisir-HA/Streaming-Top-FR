@@ -1,4 +1,4 @@
-## 1.0.8-beta.1
+## 1.0.8
 
 - Ajoute un filtre transversal de genres sur Streaming, Top Streaming et Streaming Local.
 - Le filtre est mono-sélection : `Tous` + les genres réellement disponibles dans la sélection courante.
@@ -11,7 +11,7 @@
 - Streaming Local utilise les genres JustWatch lorsqu'ils existent et un enrichissement IMDb dédié en fallback.
 - Les caches antérieurs sans genres sont rafraîchis automatiquement, puis les genres sont réhydratés depuis un cache séparé lors des rescans.
 - Les moteurs historiques Streaming / Top et le moteur Streaming Local restent protégés byte-for-byte par le CI.
-- Version frontend/backend : `1.0.8-beta.1`.
+- Version frontend/backend : `1.0.8`.
 
 ## 1.0.7
 
