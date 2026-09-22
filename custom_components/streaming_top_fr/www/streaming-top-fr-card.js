@@ -2539,8 +2539,221 @@ function stfrCenterStreamingBuckets(card){
   row.style.justifyContent=width>=700?"center":"flex-start";
 }
 
+// ---------------------------------------------------------------------------
+// UX consolidation (v1.0.7)
+// - explicit no-result search feedback
+// - refresh state preservation
+// - skeleton on first load while keeping existing content during refresh
+// ---------------------------------------------------------------------------
+function stfrSearchNoResultMessage(card){
+  const raw=String(stfrSearchQuery(card)||"").trim();
+  return raw
+    ?`Aucun résultat pour « ${raw} ». Essayez un autre titre ou effacez la recherche.`
+    :"";
+}
+
+function stfrInstallSearchFeedback(card){
+  const root=card?.shadowRoot;
+  if(!root||card?._loading||card?._error)return;
+  const query=String(stfrSearchQuery(card)||"").trim();
+  if(!query||Math.max(0,Number(card?._stfrLayoutFullCount)||0)!==0)return;
+
+  const state=root.querySelector(".state");
+  if(!state)return;
+
+  state.textContent="";
+  state.classList.add("stfr-search-empty");
+
+  const message=document.createElement("div");
+  message.className="stfr-search-empty-message";
+  message.textContent=stfrSearchNoResultMessage(card);
+
+  const clear=document.createElement("button");
+  clear.type="button";
+  clear.className="stfr-search-empty-clear";
+  clear.textContent="Effacer la recherche";
+  clear.style.cssText=[
+    "margin-top:12px",
+    "padding:8px 14px",
+    "border:0",
+    "border-radius:999px",
+    "background:var(--secondary-background-color)",
+    "color:var(--primary-text-color)",
+    "font:inherit",
+    "font-weight:800",
+    "cursor:pointer",
+  ].join(";");
+  clear.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    card._stfrSearchQuery="";
+    stfrResetCurrentSearchState(card);
+    card._render();
+  });
+
+  state.append(message,clear);
+}
+
+function stfrInstallLoadingUx(card){
+  const root=card?.shadowRoot;
+  if(!root)return;
+
+  const haCard=root.querySelector("ha-card");
+  if(haCard)haCard.setAttribute("aria-busy",card?._loading?"true":"false");
+
+  // During an explicit refresh, retain the current cards. This avoids a
+  // disruptive blank/reflow while fresh data is fetched.
+  if(card?._loading&&card?._data){
+    root.querySelector(".rail")?.classList?.add("stfr-refreshing");
+    return;
+  }
+
+  // Skeletons are only for first load. They mimic the final poster geometry
+  // and therefore keep the card height much more stable.
+  if(!card?._loading||card?._data)return;
+  const state=root.querySelector(".state");
+  if(!state)return;
+
+  const width=stfrLayoutWidth(card);
+  const columns=stfrLayoutColumns(width);
+  const rows=Math.min(2,stfrLayoutRows(card,width));
+  const count=Math.max(2,Math.min(12,columns*rows));
+
+  state.textContent="";
+  state.classList.add("stfr-loading-state");
+
+  const grid=document.createElement("div");
+  grid.className="stfr-skeleton-grid";
+  grid.style.cssText=[
+    "display:grid",
+    `grid-template-columns:repeat(${columns},minmax(0,1fr))`,
+    "gap:12px",
+    "width:100%",
+    "padding:2px 0",
+  ].join(";");
+
+  for(let index=0;index<count;index++){
+    const item=document.createElement("div");
+    item.className="stfr-skeleton-card";
+    item.style.cssText=[
+      "min-width:0",
+      "border-radius:14px",
+      "overflow:hidden",
+      "background:var(--secondary-background-color)",
+      "opacity:.72",
+    ].join(";");
+
+    const poster=document.createElement("div");
+    poster.style.cssText=[
+      "aspect-ratio:2/3",
+      "background:linear-gradient(100deg,var(--secondary-background-color) 30%,rgba(127,127,127,.18) 45%,var(--secondary-background-color) 60%)",
+      "background-size:220% 100%",
+      "animation:stfr-skeleton-shimmer 1.35s ease-in-out infinite",
+    ].join(";");
+
+    const text=document.createElement("div");
+    text.style.cssText="height:54px;margin:10px;border-radius:8px;background:rgba(127,127,127,.14)";
+    item.append(poster,text);
+    grid.appendChild(item);
+  }
+
+  const style=document.createElement("style");
+  style.textContent=`
+    @keyframes stfr-skeleton-shimmer{
+      0%{background-position:100% 0}
+      100%{background-position:-100% 0}
+    }
+    .stfr-refreshing{opacity:.88;transition:opacity .15s ease}
+    @media (prefers-reduced-motion: reduce){
+      .stfr-skeleton-card>div:first-child{animation:none!important}
+    }
+  `;
+  state.append(style,grid);
+}
+
+function stfrCaptureRefreshState(card){
+  return{
+    search:String(card?._stfrSearchQuery||""),
+    provider:card?._provider,
+    media:card?._media,
+    section:card?._section,
+    decade:card?._decade,
+    category:card?._category,
+    familyType:card?._familyType,
+    familyCategory:card?._familyCategory,
+    watchFilter:card?._watchFilter,
+  };
+}
+
+function stfrRestoreRefreshState(card,state){
+  if(!card||!state)return;
+
+  card._stfrSearchQuery=String(state.search||"");
+
+  if(card instanceof StreamingTopFrCatalogCard){
+    const decades=card._decadeOrder?.()||[];
+    if(state.decade&&(!decades.length||decades.includes(String(state.decade)))){
+      card._decade=String(state.decade);
+    }
+    const categories=card._categories?.(card._decade)||[];
+    if(state.category&&(!categories.length||categories.includes(state.category))){
+      card._category=state.category;
+    }
+    const familyTypes=card._familyTypes?.(card._decade)||[];
+    if(state.familyType&&(!familyTypes.length||familyTypes.includes(state.familyType))){
+      card._familyType=state.familyType;
+    }
+    return;
+  }
+
+  if(card instanceof StreamingLocalCard){
+    const categories=card._categories?.()||[];
+    if(state.category&&(!categories.length||categories.includes(state.category))){
+      card._category=state.category;
+    }
+    const familyCategories=card._familyCategories?.()||[];
+    if(
+      state.familyCategory&&
+      (!familyCategories.length||familyCategories.includes(state.familyCategory))
+    ){
+      card._familyCategory=state.familyCategory;
+    }
+    if(["all","unwatched","watched"].includes(state.watchFilter)){
+      card._watchFilter=state.watchFilter;
+    }
+    return;
+  }
+
+  const providers=card._providerOrder?.()||[];
+  if(state.provider&&(!providers.length||providers.includes(state.provider))){
+    card._provider=state.provider;
+  }
+  if(["movies","tv"].includes(state.media))card._media=state.media;
+  if(["discover","watchlist","watched","not_interested"].includes(state.section)){
+    card._section=state.section;
+  }
+}
+
+function stfrWrapRefreshPersistence(proto){
+  const original=proto._refresh;
+  if(typeof original!=="function"||original._stfrRefreshPersistence)return;
+  const wrapped=async function(...args){
+    const state=stfrCaptureRefreshState(this);
+    try{
+      return await original.apply(this,args);
+    }finally{
+      stfrRestoreRefreshState(this,state);
+      this._render?.();
+    }
+  };
+  wrapped._stfrRefreshPersistence=true;
+  proto._refresh=wrapped;
+}
+
 function stfrApplyResponsiveLayout(card){
   stfrInstallSearch(card);
+  stfrInstallSearchFeedback(card);
+  stfrInstallLoadingUx(card);
   if(card instanceof StreamingTopFrCard){
     stfrCenterStreamingBuckets(card);
   }
@@ -2740,6 +2953,29 @@ stfrWrapResponsiveSetConfig(StreamingLocalCard.prototype);
 stfrWrapResponsiveRender(StreamingTopFrCard.prototype,"streaming");
 stfrWrapResponsiveRender(StreamingTopFrCatalogCard.prototype,"catalog");
 stfrWrapResponsiveRender(StreamingLocalCard.prototype,"local");
+
+stfrWrapRefreshPersistence(StreamingTopFrCard.prototype);
+stfrWrapRefreshPersistence(StreamingTopFrCatalogCard.prototype);
+stfrWrapRefreshPersistence(StreamingLocalCard.prototype);
+
+StreamingTopFrCard.prototype._stfrSearchNoResultMessage=function(){
+  return stfrSearchNoResultMessage(this);
+};
+StreamingTopFrCard.prototype._stfrCaptureRefreshState=function(){
+  return stfrCaptureRefreshState(this);
+};
+StreamingTopFrCard.prototype._stfrRestoreRefreshState=function(state){
+  return stfrRestoreRefreshState(this,state);
+};
+StreamingLocalCard.prototype._stfrSearchNoResultMessage=function(){
+  return stfrSearchNoResultMessage(this);
+};
+StreamingLocalCard.prototype._stfrCaptureRefreshState=function(){
+  return stfrCaptureRefreshState(this);
+};
+StreamingLocalCard.prototype._stfrRestoreRefreshState=function(state){
+  return stfrRestoreRefreshState(this,state);
+};
 
 const _stfrResponsiveDisconnect=StreamingTopFrCard.prototype.disconnectedCallback;
 StreamingTopFrCard.prototype.disconnectedCallback=function(){
