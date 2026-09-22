@@ -1,3 +1,14 @@
+## 1.0.6-beta.3
+
+- Corrige la recherche lorsque le texte recherché se trouve dans un alias de titre plutôt que dans le titre principal.
+- La recherche inspecte désormais simultanément : `title`, `franchise_title`, `parsed_title`, `original_title`, `episode_title`, `season_title` et `filename`.
+- Exemple corrigé : `Pit` retrouve désormais un média dont le titre principal est **Les Chroniques de Riddick** mais dont `parsed_title` / `original_title` / nom de fichier contient **Pitch Black**.
+- Conserve la recherche de type `contains`, l'insensibilité à la casse et aux accents, et l'option Lovelace `searchbox: true|false`.
+- Ajoute le hot-fix Home Assistant Sections : les trois cartes demandent désormais `columns: "full"` afin d'occuper toute la largeur disponible de leur section.
+- Le responsive recalcule automatiquement le nombre de colonnes de posters lorsque la section est élargie.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.6-beta.3`.
+
 ## 1.0.6-beta.2
 
 - Ajoute l'option Lovelace `searchbox: true|false` sur les trois cartes ; la zone de recherche reste activée par défaut.
