@@ -332,6 +332,18 @@ searchbox: false
 
 La recherche est insensible à la casse et aux accents et cherche le texte saisi **n'importe où dans le titre affiché**. Par exemple, `Pit` peut retrouver **Les Chroniques de Riddick : Pitch Black**.
 
+À partir de `1.0.6-beta.2`, les trois cartes demandent par défaut toute la largeur disponible dans une vue Home Assistant **Sections** via `columns: full`. Une section qui s'étend sur plusieurs colonnes du dashboard peut donc réellement donner davantage de largeur à la carte, et le responsive recalcule automatiquement le nombre de colonnes de posters.
+
+Exemple de carte :
+
+```yaml
+type: custom:streaming-top-fr-card
+grid_options:
+  columns: full
+```
+
+La largeur maximale reste déterminée par la section Home Assistant qui contient la carte. Pour obtenir une carte plus large que la largeur standard d'une section, il faut donc également élargir cette section dans le dashboard.
+
 Le dimensionnement se fait carte par carte. Deux cartes placées côte à côte sur un écran large peuvent donc automatiquement utiliser un mode plus compact qu'une carte seule occupant toute la largeur.
 
 La position de scroll est conservée par vue lors des rerenders et rafraîchissements afin d'éviter de revenir systématiquement en haut de la carte.
