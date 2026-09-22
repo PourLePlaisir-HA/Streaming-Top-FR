@@ -1914,10 +1914,16 @@ StreamingLocalCard.prototype._sortMovieCollections=function(items){
 
 
 // ---------------------------------------------------------------------------
-// Responsive vertical grid + lazy rendering (v1.0.5)
+// Responsive vertical grid + progressive rendering (v1.0.5)
 // Presentation-only layer: the validated Streaming, Top Streaming and Local
 // engines remain unchanged. Each card reacts to its own width, not to the
 // device type, so two cards side-by-side on a desktop can use a compact mode.
+//
+// v1.0.5-beta.2:
+// - default mode is explicit "Voir N de plus" loading (no nested scroll first)
+// - optional per-card/global infinite scroll
+// - configurable batch size
+// - scroll position is preserved per logical view across re-renders/refreshes
 // ---------------------------------------------------------------------------
 const STFR_LAYOUT_BREAKPOINT_MEDIUM=700;
 const STFR_LAYOUT_BREAKPOINT_LARGE=1200;
@@ -1925,21 +1931,69 @@ const STFR_LAYOUT_DEFAULTS={
   rows_small:2,
   rows_medium:2,
   rows_large:3,
+  posters_par_lot:8,
+  scroll_infini:false,
 };
+
+function stfrClampInt(value,fallback,minimum,maximum){
+  const n=Number(value);
+  if(!Number.isFinite(n))return fallback;
+  return Math.max(minimum,Math.min(maximum,Math.floor(n)));
+}
+
+function stfrBool(value,fallback=false){
+  if(typeof value==="boolean")return value;
+  if(typeof value==="number")return value!==0;
+  if(typeof value==="string"){
+    const normalized=value.trim().toLowerCase();
+    if(["true","yes","1","on","oui"].includes(normalized))return true;
+    if(["false","no","0","off","non"].includes(normalized))return false;
+  }
+  return fallback;
+}
 
 function stfrLayoutConfig(card){
   const raw=card instanceof StreamingLocalCard
     ?card?._data?.card_layout
     :card?._data?.settings?.card_layout;
-  const clamp=(value,fallback)=>{
-    const n=Number(value);
-    return Number.isFinite(n)?Math.max(1,Math.min(6,Math.floor(n))):fallback;
-  };
   return{
-    rows_small:clamp(raw?.rows_small,STFR_LAYOUT_DEFAULTS.rows_small),
-    rows_medium:clamp(raw?.rows_medium,STFR_LAYOUT_DEFAULTS.rows_medium),
-    rows_large:clamp(raw?.rows_large,STFR_LAYOUT_DEFAULTS.rows_large),
+    rows_small:stfrClampInt(
+      raw?.rows_small,STFR_LAYOUT_DEFAULTS.rows_small,1,6
+    ),
+    rows_medium:stfrClampInt(
+      raw?.rows_medium,STFR_LAYOUT_DEFAULTS.rows_medium,1,6
+    ),
+    rows_large:stfrClampInt(
+      raw?.rows_large,STFR_LAYOUT_DEFAULTS.rows_large,1,6
+    ),
+    posters_par_lot:stfrClampInt(
+      raw?.posters_par_lot,STFR_LAYOUT_DEFAULTS.posters_par_lot,1,50
+    ),
+    scroll_infini:stfrBool(
+      raw?.scroll_infini,STFR_LAYOUT_DEFAULTS.scroll_infini
+    ),
   };
+}
+
+function stfrHasCardOverride(card,key){
+  return Boolean(
+    card?._config&&
+    Object.prototype.hasOwnProperty.call(card._config,key)
+  );
+}
+
+function stfrBatchSize(card){
+  const global=stfrLayoutConfig(card).posters_par_lot;
+  return stfrHasCardOverride(card,"posters_par_lot")
+    ?stfrClampInt(card._config.posters_par_lot,global,1,50)
+    :global;
+}
+
+function stfrInfiniteScroll(card){
+  const global=stfrLayoutConfig(card).scroll_infini;
+  return stfrHasCardOverride(card,"scroll_infini")
+    ?stfrBool(card._config.scroll_infini,global)
+    :global;
 }
 
 function stfrLayoutMode(width){
@@ -1984,49 +2038,6 @@ function stfrLayoutCapacity(card,width=stfrLayoutWidth(card)){
   };
 }
 
-function stfrLazyItems(card,items,key){
-  const all=Array.isArray(items)?items:[];
-  card._stfrLayoutFullCount=all.length;
-  if(!card._stfrRendering)return all;
-
-  const metrics=stfrLayoutCapacity(card);
-  const capacity=Math.max(1,metrics.columns*metrics.rows);
-  const initial=Math.max(12,capacity*2);
-
-  if(card._stfrLayoutKey!==key){
-    card._stfrLayoutKey=key;
-    card._stfrLayoutLimit=initial;
-    card._stfrPendingScrollTop=0;
-  }else{
-    card._stfrLayoutLimit=Math.max(
-      Number(card._stfrLayoutLimit)||0,
-      capacity+metrics.columns
-    );
-  }
-
-  return all.slice(0,Math.min(all.length,card._stfrLayoutLimit));
-}
-
-function stfrStreamingLayoutItems(card,originalItems){
-  if(card._section!=="discover")return originalItems.call(card);
-
-  const watched=card._watched();
-  const hidden=card._notInterested();
-  let items=[...(card._pd()?.[card._media]||[])].filter(
-    item=>!watched.has(item.media_key)&&!hidden.has(item.media_key)
-  );
-
-  if(
-    card._durationConfig?.().enabled&&
-    card._durationFilterActive&&
-    !card._durationLoading&&
-    card._durationMovieView?.()
-  ){
-    items=items.filter(item=>stfrDurationPass(card,item));
-  }
-  return items;
-}
-
 function stfrLayoutKey(card,kind){
   const duration=card?._durationFilterActive?"short":"all";
   if(kind==="streaming"){
@@ -2052,9 +2063,70 @@ function stfrLayoutKey(card,kind){
     card?._category||"",
     card?._familyCategory||"",
     card?._watchFilter||"all",
-    card?._data?.scan_revision||0,
     duration,
   ].join(":");
+}
+
+function stfrViewState(card,key,capacity,full){
+  card._stfrLayoutStates=card._stfrLayoutStates||new Map();
+  let state=card._stfrLayoutStates.get(key);
+  if(!state){
+    state={
+      limit:Math.min(full,capacity),
+      expanded:false,
+      scrollTop:0,
+    };
+    card._stfrLayoutStates.set(key,state);
+  }else if(!state.expanded){
+    state.limit=Math.min(full,capacity);
+  }else{
+    state.limit=Math.min(full,Math.max(Number(state.limit)||0,capacity));
+  }
+
+  // Infinite scroll starts with one prefetched visual batch so the viewport
+  // immediately becomes scrollable. Manual mode stays at exactly the visible
+  // row capacity until the user presses "Voir N de plus".
+  if(stfrInfiniteScroll(card)&&!state.expanded&&full>capacity){
+    state.limit=Math.min(full,capacity+stfrBatchSize(card));
+    state.expanded=true;
+  }
+
+  return state;
+}
+
+function stfrLazyItems(card,items,key){
+  const all=Array.isArray(items)?items:[];
+  card._stfrLayoutFullCount=all.length;
+  if(!card._stfrRendering)return all;
+
+  const metrics=stfrLayoutCapacity(card);
+  const capacity=Math.max(1,metrics.columns*metrics.rows);
+  const state=stfrViewState(card,key,capacity,all.length);
+  card._stfrLayoutKey=key;
+  card._stfrLayoutLimit=state.limit;
+  card._stfrLayoutExpanded=state.expanded;
+
+  return all.slice(0,Math.min(all.length,state.limit));
+}
+
+function stfrStreamingLayoutItems(card,originalItems){
+  if(card._section!=="discover")return originalItems.call(card);
+
+  const watched=card._watched();
+  const hidden=card._notInterested();
+  let items=[...(card._pd()?.[card._media]||[])].filter(
+    item=>!watched.has(item.media_key)&&!hidden.has(item.media_key)
+  );
+
+  if(
+    card._durationConfig?.().enabled&&
+    card._durationFilterActive&&
+    !card._durationLoading&&
+    card._durationMovieView?.()
+  ){
+    items=items.filter(item=>stfrDurationPass(card,item));
+  }
+  return items;
 }
 
 function stfrGridCardNodes(rail){
@@ -2093,17 +2165,28 @@ function stfrVisibleGridHeight(rail,columns,rows,isLocal){
   return Math.ceil(total+4);
 }
 
-function stfrLoadMore(card,rail,capacity){
-  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
-  const current=Math.max(0,Number(card?._stfrLayoutLimit)||0);
-  if(current>=full||card?._stfrLazyLoading)return;
+function stfrRememberScroll(card){
+  const rail=card?.shadowRoot?.querySelector?.(".rail");
+  const key=card?._stfrLayoutKey;
+  if(!rail||!key)return;
+  const states=card._stfrLayoutStates;
+  const state=states?.get?.(key);
+  if(state)state.scrollTop=Math.max(0,Number(rail.scrollTop)||0);
+}
 
+function stfrLoadMore(card,rail,count){
+  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  const key=card?._stfrLayoutKey;
+  const state=card?._stfrLayoutStates?.get?.(key);
+  if(!state||Number(state.limit)>=full||card?._stfrLazyLoading)return;
+
+  const increment=stfrClampInt(count,stfrBatchSize(card),1,50);
   card._stfrLazyLoading=true;
-  card._stfrPendingScrollTop=Number(rail?.scrollTop)||0;
-  card._stfrLayoutLimit=Math.min(
-    full,
-    current+Math.max(8,Number(capacity)||8)
-  );
+  state.scrollTop=Math.max(0,Number(rail?.scrollTop)||0);
+  state.expanded=true;
+  state.limit=Math.min(full,Math.max(0,Number(state.limit)||0)+increment);
+  card._stfrLayoutLimit=state.limit;
+  card._stfrLayoutExpanded=true;
   try{
     card._render();
   }finally{
@@ -2111,7 +2194,7 @@ function stfrLoadMore(card,rail,capacity){
   }
 }
 
-function stfrInstallLazyTrigger(card,rail,capacity){
+function stfrInstallInfiniteTrigger(card,rail,batch){
   card._stfrIntersectionObserver?.disconnect?.();
   card._stfrIntersectionObserver=null;
 
@@ -2122,14 +2205,15 @@ function stfrInstallLazyTrigger(card,rail,capacity){
   const sentinel=document.createElement("div");
   sentinel.className="stfr-lazy-sentinel";
   sentinel.setAttribute("aria-hidden","true");
-  sentinel.style.cssText="grid-column:1/-1;height:1px;min-height:1px;pointer-events:none";
+  sentinel.style.cssText=
+    "grid-column:1/-1;height:1px;min-height:1px;pointer-events:none";
   rail.appendChild(sentinel);
 
   if(typeof IntersectionObserver!=="undefined"){
     card._stfrIntersectionObserver=new IntersectionObserver(
       entries=>{
         if(entries.some(entry=>entry.isIntersecting)){
-          stfrLoadMore(card,rail,capacity);
+          stfrLoadMore(card,rail,batch);
         }
       },
       {root:rail,rootMargin:"0px 0px 180px 0px",threshold:0}
@@ -2140,9 +2224,49 @@ function stfrInstallLazyTrigger(card,rail,capacity){
 
   rail.addEventListener("scroll",()=>{
     if(rail.scrollTop+rail.clientHeight>=rail.scrollHeight-180){
-      stfrLoadMore(card,rail,capacity);
+      stfrLoadMore(card,rail,batch);
     }
   },{passive:true});
+}
+
+function stfrInstallLoadMoreButton(card,rail,batch){
+  const rendered=stfrGridCardNodes(rail).length;
+  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  const remaining=Math.max(0,full-rendered);
+  if(!remaining)return;
+
+  const next=Math.min(batch,remaining);
+  const button=document.createElement("button");
+  button.type="button";
+  button.className="stfr-load-more";
+  button.textContent=`Voir ${next} de plus ↓`;
+  button.setAttribute(
+    "aria-label",
+    `Afficher ${next} poster${next>1?"s":""} supplémentaire${next>1?"s":""}`
+  );
+  button.style.cssText=[
+    "display:block",
+    "margin:10px auto 2px",
+    "padding:9px 16px",
+    "border:0",
+    "border-radius:999px",
+    "background:var(--secondary-background-color)",
+    "color:var(--primary-text-color)",
+    "font:inherit",
+    "font-weight:800",
+    "cursor:pointer",
+  ].join(";");
+  button.addEventListener("click",event=>{
+    event.stopPropagation();
+    stfrLoadMore(card,rail,batch);
+  });
+  rail.insertAdjacentElement("afterend",button);
+}
+
+function stfrRestoreScroll(card,rail){
+  const key=card?._stfrLayoutKey;
+  const state=card?._stfrLayoutStates?.get?.(key);
+  rail.scrollTop=Math.max(0,Number(state?.scrollTop)||0);
 }
 
 function stfrApplyResponsiveLayout(card){
@@ -2156,6 +2280,8 @@ function stfrApplyResponsiveLayout(card){
   const rows=stfrLayoutRows(card,hostWidth);
   const capacity=Math.max(1,columns*rows);
   const isLocal=card instanceof StreamingLocalCard;
+  const batch=stfrBatchSize(card);
+  const infinite=stfrInfiniteScroll(card);
 
   rail.classList.add("stfr-responsive-grid");
   rail.style.setProperty("display","grid","important");
@@ -2169,11 +2295,13 @@ function stfrApplyResponsiveLayout(card){
   rail.style.setProperty("overflow-x","hidden","important");
   rail.style.setProperty("scroll-snap-type","none","important");
   rail.style.setProperty("align-items","start","important");
-  rail.style.setProperty("overscroll-behavior","contain","important");
+  // Allow the browser to hand the gesture back to the Home Assistant page
+  // when the internal viewport reaches an edge.
+  rail.style.setProperty("overscroll-behavior-y","auto","important");
   rail.style.setProperty("scrollbar-width","thin","important");
 
-  const full=Math.max(0,Number(card._stfrLayoutFullCount)||0);
-  const needsScroll=full>capacity;
+  const rendered=stfrGridCardNodes(rail).length;
+  const needsScroll=rendered>capacity;
   if(needsScroll){
     const visibleHeight=stfrVisibleGridHeight(
       rail,columns,rows,isLocal
@@ -2187,48 +2315,48 @@ function stfrApplyResponsiveLayout(card){
     rail.style.setProperty("overflow-y","visible","important");
   }
 
-  if(card._stfrPendingScrollTop!==undefined&&card._stfrPendingScrollTop!==null){
-    rail.scrollTop=Math.max(0,Number(card._stfrPendingScrollTop)||0);
-    card._stfrPendingScrollTop=null;
-  }
+  stfrRestoreScroll(card,rail);
 
-  stfrInstallLazyTrigger(card,rail,capacity);
+  if(infinite){
+    stfrInstallInfiniteTrigger(card,rail,batch);
+  }else{
+    card._stfrIntersectionObserver?.disconnect?.();
+    card._stfrIntersectionObserver=null;
+    stfrInstallLoadMoreButton(card,rail,batch);
+  }
 
   if(typeof ResizeObserver!=="undefined"&&!card._stfrResizeObserver){
     card._stfrResizeObserver=new ResizeObserver(()=>{
       const previous=Number(card._stfrLayoutWidth)||0;
       const current=stfrLayoutWidth(card);
       if(Math.abs(current-previous)<2)return;
+      stfrRememberScroll(card);
       card._stfrLayoutWidth=current;
-      const next=stfrLayoutCapacity(card,current);
-      const minimum=next.columns*next.rows+next.columns;
-      if(
-        Number(card._stfrLayoutFullCount)>Number(card._stfrLayoutLimit)&&
-        Number(card._stfrLayoutLimit)<minimum
-      ){
-        card._stfrLayoutLimit=Math.min(
-          Number(card._stfrLayoutFullCount),
-          Math.max(minimum,next.columns*next.rows*2)
-        );
-        card._stfrPendingScrollTop=0;
-        card._render();
-        return;
-      }
-      stfrApplyResponsiveLayout(card);
+      card._render();
     });
     card._stfrResizeObserver.observe(card);
   }
 }
 
 function stfrCleanupResponsiveLayout(card){
+  stfrRememberScroll(card);
   card?._stfrIntersectionObserver?.disconnect?.();
   card?._stfrResizeObserver?.disconnect?.();
   card._stfrIntersectionObserver=null;
   card._stfrResizeObserver=null;
 }
 
+function stfrResetResponsiveState(card){
+  card._stfrLayoutStates=new Map();
+  card._stfrLayoutKey=null;
+  card._stfrLayoutLimit=0;
+  card._stfrLayoutExpanded=false;
+  card._stfrLayoutFullCount=0;
+  card._stfrLayoutWidth=0;
+}
+
 function stfrGridOptions(){
-  // No fixed row count: the card owns its internal vertical viewport. Keeping
+  // No fixed HA row count: the card owns its internal viewport. Keeping
   // columns resizable lets users place two cards side-by-side in one section.
   return{columns:12,min_columns:3};
 }
@@ -2243,11 +2371,23 @@ StreamingTopFrCard.prototype._stfrLayoutRows=function(width){
 StreamingTopFrCard.prototype._stfrLayoutColumns=function(width){
   return stfrLayoutColumns(width);
 };
+StreamingTopFrCard.prototype._stfrBatchSize=function(){
+  return stfrBatchSize(this);
+};
+StreamingTopFrCard.prototype._stfrInfiniteScroll=function(){
+  return stfrInfiniteScroll(this);
+};
 StreamingLocalCard.prototype._stfrLayoutRows=function(width){
   return stfrLayoutRows(this,width);
 };
 StreamingLocalCard.prototype._stfrLayoutColumns=function(width){
   return stfrLayoutColumns(width);
+};
+StreamingLocalCard.prototype._stfrBatchSize=function(){
+  return stfrBatchSize(this);
+};
+StreamingLocalCard.prototype._stfrInfiniteScroll=function(){
+  return stfrInfiniteScroll(this);
 };
 
 const _stfrResponsiveStreamingItems=StreamingTopFrCard.prototype._items;
@@ -2270,9 +2410,11 @@ StreamingLocalCard.prototype._items=function(){
   return stfrLazyItems(this,items,stfrLayoutKey(this,"local"));
 };
 
-function stfrWrapResponsiveRender(proto){
+function stfrWrapResponsiveRender(proto,kind){
   const original=proto._render;
   proto._render=function(){
+    this._stfrLayoutKind=kind;
+    stfrRememberScroll(this);
     this._stfrRendering=true;
     try{
       return original.call(this);
@@ -2283,9 +2425,21 @@ function stfrWrapResponsiveRender(proto){
   };
 }
 
-stfrWrapResponsiveRender(StreamingTopFrCard.prototype);
-stfrWrapResponsiveRender(StreamingTopFrCatalogCard.prototype);
-stfrWrapResponsiveRender(StreamingLocalCard.prototype);
+function stfrWrapResponsiveSetConfig(proto){
+  const original=proto.setConfig;
+  proto.setConfig=function(config){
+    stfrResetResponsiveState(this);
+    return original.call(this,config);
+  };
+}
+
+stfrWrapResponsiveSetConfig(StreamingTopFrCard.prototype);
+stfrWrapResponsiveSetConfig(StreamingTopFrCatalogCard.prototype);
+stfrWrapResponsiveSetConfig(StreamingLocalCard.prototype);
+
+stfrWrapResponsiveRender(StreamingTopFrCard.prototype,"streaming");
+stfrWrapResponsiveRender(StreamingTopFrCatalogCard.prototype,"catalog");
+stfrWrapResponsiveRender(StreamingLocalCard.prototype,"local");
 
 const _stfrResponsiveDisconnect=StreamingTopFrCard.prototype.disconnectedCallback;
 StreamingTopFrCard.prototype.disconnectedCallback=function(){
