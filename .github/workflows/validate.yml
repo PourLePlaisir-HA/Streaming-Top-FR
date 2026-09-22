@@ -17,6 +17,7 @@ on:
       - dev-1.0.5
       - dev-1.0.6
       - dev-1.0.7
+      - dev-1.0.8
   pull_request:
     branches:
       - main
@@ -88,6 +89,12 @@ jobs:
 
       - name: Check instant title search
         run: node scripts/check_title_search.js
+
+      - name: Check genre metadata and debug
+        run: python scripts/check_genres.py
+
+      - name: Check transversal genre filter
+        run: node scripts/check_genres.js
 
       - name: Check Streaming Local Family/watched views
         run: node scripts/check_local_views.js
