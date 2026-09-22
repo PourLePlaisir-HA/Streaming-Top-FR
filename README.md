@@ -273,6 +273,32 @@ Catalogue de la vidéothèque locale, suivi Vu / Pas encore vu et lecture VLC.
 
 ---
 
+## 📐 Affichage responsive des cartes
+
+À partir de la série **1.0.5**, les trois cartes utilisent une grille verticale responsive avec chargement progressif des affiches.
+
+Le nombre de colonnes s'adapte automatiquement à la largeur réelle de chaque carte. Le comportement ne dépend donc pas directement de l'appareil : une carte étroite sur un grand écran peut utiliser le même mode qu'une tablette, tandis qu'une carte occupant une grande section exploite davantage de colonnes.
+
+Le nombre de lignes visibles est configurable dans :
+
+**Paramètres → Appareils et services → Streaming Top FR → Configurer → Affichage des cartes**
+
+Valeurs par défaut :
+
+```text
+Espace étroit  (< 700 px)     : 2 lignes
+Espace moyen   (700–1199 px)  : 2 lignes
+Grand espace   (≥ 1200 px)    : 3 lignes
+```
+
+Chaque valeur peut être réglée de **1 à 6 lignes**.
+
+Les titres sont affichés dans l'ordre naturel, de gauche à droite puis de haut en bas. Lorsque la liste dépasse la hauteur configurée, la navigation devient verticale et les éléments suivants sont rendus progressivement afin d'éviter de charger inutilement toute la grille dans le navigateur.
+
+Le dimensionnement se fait carte par carte. Deux cartes placées côte à côte sur un écran large peuvent donc automatiquement utiliser un mode plus compact qu'une carte seule occupant toute la largeur.
+
+---
+
 # 📦 Installation avec HACS
 
 ## 1. Ajouter le dépôt
