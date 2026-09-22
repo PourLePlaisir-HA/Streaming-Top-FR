@@ -15,6 +15,7 @@ on:
       - dev-1.0.3
       - dev-1.0.4
       - dev-1.0.5
+      - dev-1.0.6
   pull_request:
     branches:
       - main
@@ -83,6 +84,9 @@ jobs:
 
       - name: Check responsive card layout
         run: node scripts/check_responsive_layout.js
+
+      - name: Check instant title search
+        run: node scripts/check_title_search.js
 
       - name: Check Streaming Local Family/watched views
         run: node scripts/check_local_views.js
