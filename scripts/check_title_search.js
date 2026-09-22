@@ -184,6 +184,30 @@ if (disabled._stfrLayoutFullCount !== titles.length) {
   throw new Error("Disabled searchbox must not filter the card");
 }
 
+// Search must inspect all known title fields, not only the first non-empty one.
+// This mirrors Local items where the displayed/main title may differ from the
+// parsed/original/file title that contains the user's query.
+const aliases = streamingFixture();
+aliases._stfrSearchQuery = "pit";
+aliases._stfrLayoutStates = new Map();
+aliases._data.providers.netflix.movies = [
+  {
+    media_key: "movie:alias",
+    media_type: "movie",
+    title: "Les Chroniques de Riddick",
+    parsed_title: "Pitch Black",
+    original_title: "Pitch Black",
+    filename: "Pitch Black (2000).mkv",
+  },
+];
+results = aliases._items();
+if (
+  aliases._stfrLayoutFullCount !== 1 ||
+  results[0]?.title !== "Les Chroniques de Riddick"
+) {
+  throw new Error("Search did not inspect parsed/original/file title aliases");
+}
+
 // Streaming Local uses the same contains semantics.
 const local = new LocalCard();
 local._config = {};
