@@ -1,3 +1,13 @@
+## 1.0.5-beta.3
+
+- Corrige le retour en haut du dashboard lors d’un clic sur **Voir N de plus**.
+- Mémorise désormais le conteneur de scroll Home Assistant et sa position avant le rerender, puis restaure cette position après reconstruction du DOM.
+- Conserve également la position interne de la grille.
+- La restauration est appliquée sur deux frames successives afin de neutraliser le scroll anchoring du navigateur/Home Assistant.
+- Aligne le garde-fou CI historique sur la stable conservée `1.0.4` après nettoyage des anciens tags.
+- Aucun changement du moteur Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.5-beta.3`.
+
 ## 1.0.5-beta.2
 
 - Remplace le chargement automatique par un bouton **Voir N de plus** par défaut afin de garder les cartes compactes, notamment sur smartphone.
