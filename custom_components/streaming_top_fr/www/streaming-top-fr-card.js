@@ -1910,3 +1910,388 @@ StreamingLocalCard.prototype._sortMovieCollections=function(items){
   units.sort((a,b)=>compareTitle(a.sortTitle,b.sortTitle));
   return units.flatMap(unit=>unit.items);
 };
+
+
+
+// ---------------------------------------------------------------------------
+// Responsive vertical grid + lazy rendering (v1.0.5)
+// Presentation-only layer: the validated Streaming, Top Streaming and Local
+// engines remain unchanged. Each card reacts to its own width, not to the
+// device type, so two cards side-by-side on a desktop can use a compact mode.
+// ---------------------------------------------------------------------------
+const STFR_LAYOUT_BREAKPOINT_MEDIUM=700;
+const STFR_LAYOUT_BREAKPOINT_LARGE=1200;
+const STFR_LAYOUT_DEFAULTS={
+  rows_small:2,
+  rows_medium:2,
+  rows_large:3,
+};
+
+function stfrLayoutConfig(card){
+  const raw=card instanceof StreamingLocalCard
+    ?card?._data?.card_layout
+    :card?._data?.settings?.card_layout;
+  const clamp=(value,fallback)=>{
+    const n=Number(value);
+    return Number.isFinite(n)?Math.max(1,Math.min(6,Math.floor(n))):fallback;
+  };
+  return{
+    rows_small:clamp(raw?.rows_small,STFR_LAYOUT_DEFAULTS.rows_small),
+    rows_medium:clamp(raw?.rows_medium,STFR_LAYOUT_DEFAULTS.rows_medium),
+    rows_large:clamp(raw?.rows_large,STFR_LAYOUT_DEFAULTS.rows_large),
+  };
+}
+
+function stfrLayoutMode(width){
+  const w=Number(width)||0;
+  if(w>=STFR_LAYOUT_BREAKPOINT_LARGE)return"large";
+  if(w>=STFR_LAYOUT_BREAKPOINT_MEDIUM)return"medium";
+  return"small";
+}
+
+function stfrLayoutRows(card,width){
+  const cfg=stfrLayoutConfig(card);
+  const mode=stfrLayoutMode(width);
+  return mode==="large"
+    ?cfg.rows_large
+    :mode==="medium"
+    ?cfg.rows_medium
+    :cfg.rows_small;
+}
+
+function stfrLayoutColumns(width){
+  const w=Math.max(240,Number(width)||420);
+  // Aim for poster widths close to the historical 145-175 px cards.
+  // Very narrow containers still keep two columns for a touch-friendly mobile
+  // layout; wider cards gain columns instead of oversized posters.
+  return Math.max(2,Math.min(12,Math.floor((w+12)/(150+12))));
+}
+
+function stfrLayoutWidth(card){
+  const measured=Number(card?.getBoundingClientRect?.().width);
+  if(Number.isFinite(measured)&&measured>0)return measured;
+  const railWidth=Number(card?.shadowRoot?.querySelector?.(".rail")?.clientWidth);
+  if(Number.isFinite(railWidth)&&railWidth>0)return railWidth;
+  return Number(card?._stfrLayoutWidth)||420;
+}
+
+function stfrLayoutCapacity(card,width=stfrLayoutWidth(card)){
+  const columns=stfrLayoutColumns(width);
+  return{
+    width,
+    columns,
+    rows:stfrLayoutRows(card,width),
+  };
+}
+
+function stfrLazyItems(card,items,key){
+  const all=Array.isArray(items)?items:[];
+  card._stfrLayoutFullCount=all.length;
+  if(!card._stfrRendering)return all;
+
+  const metrics=stfrLayoutCapacity(card);
+  const capacity=Math.max(1,metrics.columns*metrics.rows);
+  const initial=Math.max(12,capacity*2);
+
+  if(card._stfrLayoutKey!==key){
+    card._stfrLayoutKey=key;
+    card._stfrLayoutLimit=initial;
+    card._stfrPendingScrollTop=0;
+  }else{
+    card._stfrLayoutLimit=Math.max(
+      Number(card._stfrLayoutLimit)||0,
+      capacity+metrics.columns
+    );
+  }
+
+  return all.slice(0,Math.min(all.length,card._stfrLayoutLimit));
+}
+
+function stfrStreamingLayoutItems(card,originalItems){
+  if(card._section!=="discover")return originalItems.call(card);
+
+  const watched=card._watched();
+  const hidden=card._notInterested();
+  let items=[...(card._pd()?.[card._media]||[])].filter(
+    item=>!watched.has(item.media_key)&&!hidden.has(item.media_key)
+  );
+
+  if(
+    card._durationConfig?.().enabled&&
+    card._durationFilterActive&&
+    !card._durationLoading&&
+    card._durationMovieView?.()
+  ){
+    items=items.filter(item=>stfrDurationPass(card,item));
+  }
+  return items;
+}
+
+function stfrLayoutKey(card,kind){
+  const duration=card?._durationFilterActive?"short":"all";
+  if(kind==="streaming"){
+    return[
+      "streaming",
+      card?._provider||"",
+      card?._media||"",
+      card?._section||"",
+      duration,
+    ].join(":");
+  }
+  if(kind==="catalog"){
+    return[
+      "catalog",
+      card?._decade||"",
+      card?._category||"",
+      card?._familyType||"",
+      duration,
+    ].join(":");
+  }
+  return[
+    "local",
+    card?._category||"",
+    card?._familyCategory||"",
+    card?._watchFilter||"all",
+    card?._data?.scan_revision||0,
+    duration,
+  ].join(":");
+}
+
+function stfrGridCardNodes(rail){
+  return[...(rail?.children||[])].filter(
+    node=>!node.classList?.contains("stfr-lazy-sentinel")
+  );
+}
+
+function stfrFallbackRowHeight(rail,columns,isLocal){
+  const width=Number(rail?.clientWidth)||420;
+  const gap=12;
+  const cardWidth=Math.max(110,(width-gap*(columns-1))/columns);
+  return cardWidth*1.5+(isLocal?72:88);
+}
+
+function stfrVisibleGridHeight(rail,columns,rows,isLocal){
+  const cards=stfrGridCardNodes(rail);
+  if(!cards.length)return 0;
+  const fallback=stfrFallbackRowHeight(rail,columns,isLocal);
+  let total=0;
+  const visibleRows=Math.min(rows,Math.ceil(cards.length/columns));
+  for(let row=0;row<visibleRows;row++){
+    const slice=cards.slice(row*columns,(row+1)*columns);
+    const rowHeight=Math.max(
+      fallback,
+      ...slice.map(node=>{
+        const rectHeight=Number(node?.getBoundingClientRect?.().height);
+        if(Number.isFinite(rectHeight)&&rectHeight>0)return rectHeight;
+        const offset=Number(node?.offsetHeight);
+        return Number.isFinite(offset)&&offset>0?offset:0;
+      })
+    );
+    total+=rowHeight;
+  }
+  if(visibleRows>1)total+=(visibleRows-1)*12;
+  return Math.ceil(total+4);
+}
+
+function stfrLoadMore(card,rail,capacity){
+  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  const current=Math.max(0,Number(card?._stfrLayoutLimit)||0);
+  if(current>=full||card?._stfrLazyLoading)return;
+
+  card._stfrLazyLoading=true;
+  card._stfrPendingScrollTop=Number(rail?.scrollTop)||0;
+  card._stfrLayoutLimit=Math.min(
+    full,
+    current+Math.max(8,Number(capacity)||8)
+  );
+  try{
+    card._render();
+  }finally{
+    card._stfrLazyLoading=false;
+  }
+}
+
+function stfrInstallLazyTrigger(card,rail,capacity){
+  card._stfrIntersectionObserver?.disconnect?.();
+  card._stfrIntersectionObserver=null;
+
+  const rendered=stfrGridCardNodes(rail).length;
+  const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  if(rendered>=full)return;
+
+  const sentinel=document.createElement("div");
+  sentinel.className="stfr-lazy-sentinel";
+  sentinel.setAttribute("aria-hidden","true");
+  sentinel.style.cssText="grid-column:1/-1;height:1px;min-height:1px;pointer-events:none";
+  rail.appendChild(sentinel);
+
+  if(typeof IntersectionObserver!=="undefined"){
+    card._stfrIntersectionObserver=new IntersectionObserver(
+      entries=>{
+        if(entries.some(entry=>entry.isIntersecting)){
+          stfrLoadMore(card,rail,capacity);
+        }
+      },
+      {root:rail,rootMargin:"0px 0px 180px 0px",threshold:0}
+    );
+    card._stfrIntersectionObserver.observe(sentinel);
+    return;
+  }
+
+  rail.addEventListener("scroll",()=>{
+    if(rail.scrollTop+rail.clientHeight>=rail.scrollHeight-180){
+      stfrLoadMore(card,rail,capacity);
+    }
+  },{passive:true});
+}
+
+function stfrApplyResponsiveLayout(card){
+  const rail=card?.shadowRoot?.querySelector?.(".rail");
+  if(!rail)return;
+
+  const hostWidth=stfrLayoutWidth(card);
+  card._stfrLayoutWidth=hostWidth;
+  const width=Number(rail.clientWidth)||Math.max(240,hostWidth-32);
+  const columns=stfrLayoutColumns(width);
+  const rows=stfrLayoutRows(card,hostWidth);
+  const capacity=Math.max(1,columns*rows);
+  const isLocal=card instanceof StreamingLocalCard;
+
+  rail.classList.add("stfr-responsive-grid");
+  rail.style.setProperty("display","grid","important");
+  rail.style.setProperty("grid-auto-flow","row","important");
+  rail.style.setProperty("grid-auto-columns","unset","important");
+  rail.style.setProperty(
+    "grid-template-columns",
+    `repeat(${columns},minmax(0,1fr))`,
+    "important"
+  );
+  rail.style.setProperty("overflow-x","hidden","important");
+  rail.style.setProperty("scroll-snap-type","none","important");
+  rail.style.setProperty("align-items","start","important");
+  rail.style.setProperty("overscroll-behavior","contain","important");
+  rail.style.setProperty("scrollbar-width","thin","important");
+
+  const full=Math.max(0,Number(card._stfrLayoutFullCount)||0);
+  const needsScroll=full>capacity;
+  if(needsScroll){
+    const visibleHeight=stfrVisibleGridHeight(
+      rail,columns,rows,isLocal
+    );
+    if(visibleHeight>0){
+      rail.style.setProperty("max-height",`${visibleHeight}px`,"important");
+    }
+    rail.style.setProperty("overflow-y","auto","important");
+  }else{
+    rail.style.removeProperty("max-height");
+    rail.style.setProperty("overflow-y","visible","important");
+  }
+
+  if(card._stfrPendingScrollTop!==undefined&&card._stfrPendingScrollTop!==null){
+    rail.scrollTop=Math.max(0,Number(card._stfrPendingScrollTop)||0);
+    card._stfrPendingScrollTop=null;
+  }
+
+  stfrInstallLazyTrigger(card,rail,capacity);
+
+  if(typeof ResizeObserver!=="undefined"&&!card._stfrResizeObserver){
+    card._stfrResizeObserver=new ResizeObserver(()=>{
+      const previous=Number(card._stfrLayoutWidth)||0;
+      const current=stfrLayoutWidth(card);
+      if(Math.abs(current-previous)<2)return;
+      card._stfrLayoutWidth=current;
+      const next=stfrLayoutCapacity(card,current);
+      const minimum=next.columns*next.rows+next.columns;
+      if(
+        Number(card._stfrLayoutFullCount)>Number(card._stfrLayoutLimit)&&
+        Number(card._stfrLayoutLimit)<minimum
+      ){
+        card._stfrLayoutLimit=Math.min(
+          Number(card._stfrLayoutFullCount),
+          Math.max(minimum,next.columns*next.rows*2)
+        );
+        card._stfrPendingScrollTop=0;
+        card._render();
+        return;
+      }
+      stfrApplyResponsiveLayout(card);
+    });
+    card._stfrResizeObserver.observe(card);
+  }
+}
+
+function stfrCleanupResponsiveLayout(card){
+  card?._stfrIntersectionObserver?.disconnect?.();
+  card?._stfrResizeObserver?.disconnect?.();
+  card._stfrIntersectionObserver=null;
+  card._stfrResizeObserver=null;
+}
+
+function stfrGridOptions(){
+  // No fixed row count: the card owns its internal vertical viewport. Keeping
+  // columns resizable lets users place two cards side-by-side in one section.
+  return{columns:12,min_columns:3};
+}
+
+StreamingTopFrCard.prototype.getGridOptions=stfrGridOptions;
+StreamingTopFrCatalogCard.prototype.getGridOptions=stfrGridOptions;
+StreamingLocalCard.prototype.getGridOptions=stfrGridOptions;
+
+StreamingTopFrCard.prototype._stfrLayoutRows=function(width){
+  return stfrLayoutRows(this,width);
+};
+StreamingTopFrCard.prototype._stfrLayoutColumns=function(width){
+  return stfrLayoutColumns(width);
+};
+StreamingLocalCard.prototype._stfrLayoutRows=function(width){
+  return stfrLayoutRows(this,width);
+};
+StreamingLocalCard.prototype._stfrLayoutColumns=function(width){
+  return stfrLayoutColumns(width);
+};
+
+const _stfrResponsiveStreamingItems=StreamingTopFrCard.prototype._items;
+StreamingTopFrCard.prototype._items=function(){
+  const items=this._stfrRendering
+    ?stfrStreamingLayoutItems(this,_stfrResponsiveStreamingItems)
+    :_stfrResponsiveStreamingItems.call(this);
+  return stfrLazyItems(this,items,stfrLayoutKey(this,"streaming"));
+};
+
+const _stfrResponsiveCatalogItems=StreamingTopFrCatalogCard.prototype._catalogItems;
+StreamingTopFrCatalogCard.prototype._catalogItems=function(){
+  const items=_stfrResponsiveCatalogItems.call(this);
+  return stfrLazyItems(this,items,stfrLayoutKey(this,"catalog"));
+};
+
+const _stfrResponsiveLocalItems=StreamingLocalCard.prototype._items;
+StreamingLocalCard.prototype._items=function(){
+  const items=_stfrResponsiveLocalItems.call(this);
+  return stfrLazyItems(this,items,stfrLayoutKey(this,"local"));
+};
+
+function stfrWrapResponsiveRender(proto){
+  const original=proto._render;
+  proto._render=function(){
+    this._stfrRendering=true;
+    try{
+      return original.call(this);
+    }finally{
+      this._stfrRendering=false;
+      stfrApplyResponsiveLayout(this);
+    }
+  };
+}
+
+stfrWrapResponsiveRender(StreamingTopFrCard.prototype);
+stfrWrapResponsiveRender(StreamingTopFrCatalogCard.prototype);
+stfrWrapResponsiveRender(StreamingLocalCard.prototype);
+
+const _stfrResponsiveDisconnect=StreamingTopFrCard.prototype.disconnectedCallback;
+StreamingTopFrCard.prototype.disconnectedCallback=function(){
+  stfrCleanupResponsiveLayout(this);
+  return _stfrResponsiveDisconnect?.call(this);
+};
+StreamingLocalCard.prototype.disconnectedCallback=function(){
+  stfrCleanupResponsiveLayout(this);
+};
