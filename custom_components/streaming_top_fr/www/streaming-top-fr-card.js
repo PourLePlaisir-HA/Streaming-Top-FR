@@ -2094,16 +2094,28 @@ function stfrResetCurrentSearchState(card){
 }
 
 function stfrFocusSearch(card,position){
-  const input=card?.shadowRoot?.querySelector?.(".stfr-search-input");
-  if(!input)return;
-  try{
-    input.focus({preventScroll:true});
-    const cursor=Math.max(0,Math.min(
-      String(input.value||"").length,
-      Number.isFinite(Number(position))?Number(position):String(input.value||"").length
-    ));
-    input.setSelectionRange?.(cursor,cursor);
-  }catch(_e){}
+  const restore=()=>{
+    const input=card?.shadowRoot?.querySelector?.(".stfr-search-input");
+    if(!input)return;
+    try{
+      input.focus({preventScroll:true});
+      const cursor=Math.max(0,Math.min(
+        String(input.value||"").length,
+        Number.isFinite(Number(position))
+          ?Number(position)
+          :String(input.value||"").length
+      ));
+      input.setSelectionRange?.(cursor,cursor);
+    }catch(_e){}
+  };
+
+  // Home Assistant may perform another focus/layout pass immediately after
+  // the card rerender. Restore synchronously, then once on the next microtask
+  // and animation frame so continuous typing never falls through to HA
+  // keyboard shortcuts.
+  restore();
+  if(typeof queueMicrotask==="function")queueMicrotask(restore);
+  if(typeof requestAnimationFrame==="function")requestAnimationFrame(restore);
 }
 
 function stfrInstallSearch(card){
@@ -2187,17 +2199,29 @@ function stfrInstallSearch(card){
   const apply=value=>{
     const cursor=input.selectionStart??String(value||"").length;
     card._stfrSearchQuery=String(value||"");
+    card._stfrSearchCaret=cursor;
     stfrResetCurrentSearchState(card);
     card._render();
     stfrFocusSearch(card,cursor);
   };
 
-  input.addEventListener("input",()=>apply(input.value));
+  // HA registers dashboard-level keyboard shortcuts. Never let keystrokes
+  // originating in our search field bubble out of the card.
+  const shieldKeyboard=event=>{
+    event.stopPropagation();
+  };
   input.addEventListener("keydown",event=>{
+    shieldKeyboard(event);
     if(event.key==="Escape"&&input.value){
       event.preventDefault();
       apply("");
     }
+  });
+  input.addEventListener("keypress",shieldKeyboard);
+  input.addEventListener("keyup",shieldKeyboard);
+  input.addEventListener("input",event=>{
+    event.stopPropagation();
+    apply(input.value);
   });
   clear.addEventListener("mousedown",event=>event.preventDefault());
   clear.addEventListener("click",event=>{
