@@ -2038,8 +2038,169 @@ function stfrLayoutCapacity(card,width=stfrLayoutWidth(card)){
   };
 }
 
+function stfrSearchNormalize(value){
+  return String(value??"")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .trim()
+    .toLocaleLowerCase("fr");
+}
+
+function stfrSearchTitle(item){
+  return String(
+    item?.title||
+    item?.franchise_title||
+    item?.parsed_title||
+    item?.original_title||
+    item?.filename||
+    ""
+  ).trim();
+}
+
+function stfrSearchQuery(card){
+  return String(card?._stfrSearchQuery||"");
+}
+
+function stfrSearchFilter(card,items){
+  const all=Array.isArray(items)?items:[];
+  const query=stfrSearchNormalize(stfrSearchQuery(card));
+  if(!query)return all;
+  return all.filter(item=>
+    stfrSearchNormalize(stfrSearchTitle(item)).startsWith(query)
+  );
+}
+
+function stfrSearchStateKey(card){
+  return stfrLayoutKey(card,card?._stfrLayoutKind||"streaming");
+}
+
+function stfrResetCurrentSearchState(card){
+  const key=stfrSearchStateKey(card);
+  card?._stfrLayoutStates?.delete?.(key);
+  card._stfrLayoutKey=null;
+  card._stfrLayoutLimit=0;
+  card._stfrLayoutExpanded=false;
+}
+
+function stfrFocusSearch(card,position){
+  const input=card?.shadowRoot?.querySelector?.(".stfr-search-input");
+  if(!input)return;
+  try{
+    input.focus({preventScroll:true});
+    const cursor=Math.max(0,Math.min(
+      String(input.value||"").length,
+      Number.isFinite(Number(position))?Number(position):String(input.value||"").length
+    ));
+    input.setSelectionRange?.(cursor,cursor);
+  }catch(_e){}
+}
+
+function stfrInstallSearch(card){
+  const root=card?.shadowRoot;
+  if(!root||!card?._data)return;
+
+  root.querySelector(".stfr-search-box")?.remove?.();
+
+  const target=root.querySelector(".rail")||root.querySelector(".state");
+  if(!target)return;
+
+  const box=document.createElement("div");
+  box.className="stfr-search-box";
+  box.style.cssText=[
+    "display:flex",
+    "align-items:center",
+    "gap:8px",
+    "margin:4px 0 12px",
+    "padding:8px 10px",
+    "border-radius:12px",
+    "background:var(--secondary-background-color)",
+  ].join(";");
+
+  const icon=document.createElement("ha-icon");
+  icon.setAttribute("icon","mdi:magnify");
+  icon.style.cssText="flex:0 0 auto;--mdc-icon-size:20px;color:var(--secondary-text-color)";
+
+  const input=document.createElement("input");
+  input.className="stfr-search-input";
+  input.type="search";
+  input.value=stfrSearchQuery(card);
+  input.placeholder="Rechercher un titre…";
+  input.autocomplete="off";
+  input.spellcheck=false;
+  input.setAttribute("aria-label","Rechercher un titre commençant par");
+  input.style.cssText=[
+    "min-width:0",
+    "flex:1 1 auto",
+    "border:0",
+    "outline:0",
+    "background:transparent",
+    "color:var(--primary-text-color)",
+    "font:inherit",
+    "font-size:.92rem",
+  ].join(";");
+
+  const count=document.createElement("span");
+  count.className="stfr-search-count";
+  const query=stfrSearchNormalize(stfrSearchQuery(card));
+  const total=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
+  count.textContent=query?`${total} résultat${total>1?"s":""}`:"";
+  count.style.cssText=[
+    "flex:0 0 auto",
+    "font-size:.72rem",
+    "color:var(--secondary-text-color)",
+    "white-space:nowrap",
+  ].join(";");
+
+  const clear=document.createElement("button");
+  clear.type="button";
+  clear.className="stfr-search-clear";
+  clear.textContent="×";
+  clear.title="Effacer la recherche";
+  clear.setAttribute("aria-label","Effacer la recherche");
+  clear.style.cssText=[
+    "display:"+(query?"grid":"none"),
+    "place-items:center",
+    "width:28px",
+    "height:28px",
+    "padding:0",
+    "border:0",
+    "border-radius:50%",
+    "background:transparent",
+    "color:var(--secondary-text-color)",
+    "font:inherit",
+    "font-size:22px",
+    "cursor:pointer",
+  ].join(";");
+
+  const apply=value=>{
+    const cursor=input.selectionStart??String(value||"").length;
+    card._stfrSearchQuery=String(value||"");
+    stfrResetCurrentSearchState(card);
+    card._render();
+    stfrFocusSearch(card,cursor);
+  };
+
+  input.addEventListener("input",()=>apply(input.value));
+  input.addEventListener("keydown",event=>{
+    if(event.key==="Escape"&&input.value){
+      event.preventDefault();
+      apply("");
+    }
+  });
+  clear.addEventListener("mousedown",event=>event.preventDefault());
+  clear.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    input.value="";
+    apply("");
+  });
+
+  box.append(icon,input,count,clear);
+  target.insertAdjacentElement("beforebegin",box);
+}
 function stfrLayoutKey(card,kind){
   const duration=card?._durationFilterActive?"short":"all";
+  const search=stfrSearchNormalize(stfrSearchQuery(card));
   if(kind==="streaming"){
     return[
       "streaming",
@@ -2047,6 +2208,7 @@ function stfrLayoutKey(card,kind){
       card?._media||"",
       card?._section||"",
       duration,
+      search,
     ].join(":");
   }
   if(kind==="catalog"){
@@ -2056,6 +2218,7 @@ function stfrLayoutKey(card,kind){
       card?._category||"",
       card?._familyType||"",
       duration,
+      search,
     ].join(":");
   }
   return[
@@ -2064,6 +2227,7 @@ function stfrLayoutKey(card,kind){
     card?._familyCategory||"",
     card?._watchFilter||"all",
     duration,
+    search,
   ].join(":");
 }
 
@@ -2351,6 +2515,7 @@ function stfrRestoreScroll(card,rail){
 }
 
 function stfrApplyResponsiveLayout(card){
+  stfrInstallSearch(card);
   const rail=card?.shadowRoot?.querySelector?.(".rail");
   if(!rail)return;
 
@@ -2458,6 +2623,10 @@ StreamingTopFrCard.prototype._stfrBatchSize=function(){
 StreamingTopFrCard.prototype._stfrInfiniteScroll=function(){
   return stfrInfiniteScroll(this);
 };
+StreamingTopFrCard.prototype._stfrSearchNormalize=stfrSearchNormalize;
+StreamingTopFrCard.prototype._stfrSearchFilter=function(items){
+  return stfrSearchFilter(this,items);
+};
 StreamingLocalCard.prototype._stfrLayoutRows=function(width){
   return stfrLayoutRows(this,width);
 };
@@ -2470,25 +2639,32 @@ StreamingLocalCard.prototype._stfrBatchSize=function(){
 StreamingLocalCard.prototype._stfrInfiniteScroll=function(){
   return stfrInfiniteScroll(this);
 };
+StreamingLocalCard.prototype._stfrSearchNormalize=stfrSearchNormalize;
+StreamingLocalCard.prototype._stfrSearchFilter=function(items){
+  return stfrSearchFilter(this,items);
+};
 
 const _stfrResponsiveStreamingItems=StreamingTopFrCard.prototype._items;
 StreamingTopFrCard.prototype._items=function(){
   const items=this._stfrRendering
     ?stfrStreamingLayoutItems(this,_stfrResponsiveStreamingItems)
     :_stfrResponsiveStreamingItems.call(this);
-  return stfrLazyItems(this,items,stfrLayoutKey(this,"streaming"));
+  const filtered=stfrSearchFilter(this,items);
+  return stfrLazyItems(this,filtered,stfrLayoutKey(this,"streaming"));
 };
 
 const _stfrResponsiveCatalogItems=StreamingTopFrCatalogCard.prototype._catalogItems;
 StreamingTopFrCatalogCard.prototype._catalogItems=function(){
   const items=_stfrResponsiveCatalogItems.call(this);
-  return stfrLazyItems(this,items,stfrLayoutKey(this,"catalog"));
+  const filtered=stfrSearchFilter(this,items);
+  return stfrLazyItems(this,filtered,stfrLayoutKey(this,"catalog"));
 };
 
 const _stfrResponsiveLocalItems=StreamingLocalCard.prototype._items;
 StreamingLocalCard.prototype._items=function(){
   const items=_stfrResponsiveLocalItems.call(this);
-  return stfrLazyItems(this,items,stfrLayoutKey(this,"local"));
+  const filtered=stfrSearchFilter(this,items);
+  return stfrLazyItems(this,filtered,stfrLayoutKey(this,"local"));
 };
 
 function stfrWrapResponsiveRender(proto,kind){
