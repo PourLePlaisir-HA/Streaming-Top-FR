@@ -323,6 +323,15 @@ scroll_infini: true
 posters_par_lot: 20
 ```
 
+À partir de la série **1.0.6**, les trois cartes disposent aussi d'une recherche instantanée dans les titres. La zone est activée par défaut et peut être masquée carte par carte avec :
+
+```yaml
+type: custom:streaming-local-card
+searchbox: false
+```
+
+La recherche est insensible à la casse et aux accents et cherche le texte saisi **n'importe où dans le titre affiché**. Par exemple, `Pit` peut retrouver **Les Chroniques de Riddick : Pitch Black**.
+
 Le dimensionnement se fait carte par carte. Deux cartes placées côte à côte sur un écran large peuvent donc automatiquement utiliser un mode plus compact qu'une carte seule occupant toute la largeur.
 
 La position de scroll est conservée par vue lors des rerenders et rafraîchissements afin d'éviter de revenir systématiquement en haut de la carte.
