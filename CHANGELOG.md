@@ -1,3 +1,18 @@
+## 1.0.5
+
+- Stabilise la nouvelle grille responsive introduite avec la série `1.0.5-beta.x`.
+- Conserve les réglages de lignes selon la largeur réelle de chaque carte.
+- Ajoute le chargement progressif avec **Voir N de plus** par défaut.
+- Ajoute `posters_par_lot` configurable (défaut `8`, plage `1–50`).
+- Ajoute `scroll_infini` optionnel (défaut `false`).
+- Autorise la surcharge de ces réglages directement dans chaque carte Lovelace.
+- Conserve la position du dashboard et de la grille lors du chargement de nouveaux lots.
+- Corrige le retour en haut provoqué par la disparition du bouton **Voir plus** après rerender.
+- Conserve la compatibilité des trois cartes : Streaming, Top Streaming et Streaming Local.
+- Aligne le garde-fou CI historique sur la stable conservée `1.0.4`.
+- Aucun changement des moteurs Streaming, Top Streaming, Streaming Local, IMDb/JustWatch, VLC ou des registres de statuts.
+- Version frontend/backend : `1.0.5`.
+
 ## 1.0.5-beta.4
 
 - Corrige le retour en haut de la grille après un clic sur **Voir N de plus**.
