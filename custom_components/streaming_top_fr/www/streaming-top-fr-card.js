@@ -2174,12 +2174,69 @@ function stfrRememberScroll(card){
   if(state)state.scrollTop=Math.max(0,Number(rail.scrollTop)||0);
 }
 
+function stfrScrollableParent(node){
+  let current=node;
+  while(current){
+    if(current instanceof ShadowRoot){
+      current=current.host;
+      continue;
+    }
+    current=current.parentNode;
+    if(!current)break;
+    if(current===document.body||current===document.documentElement)break;
+    try{
+      const style=getComputedStyle(current);
+      const overflow=String(style?.overflowY||"");
+      if(
+        /auto|scroll|overlay/i.test(overflow)&&
+        Number(current.scrollHeight)>Number(current.clientHeight)+1
+      )return current;
+    }catch(_e){}
+  }
+  return document.scrollingElement||document.documentElement;
+}
+
+function stfrCapturePageScroll(card){
+  const scroller=stfrScrollableParent(card);
+  const documentScroller=
+    scroller===document.scrollingElement||
+    scroller===document.documentElement||
+    scroller===document.body;
+  return{
+    scroller,
+    documentScroller,
+    scrollTop:documentScroller
+      ?Math.max(0,Number(window.scrollY)||Number(scroller?.scrollTop)||0)
+      :Math.max(0,Number(scroller?.scrollTop)||0),
+  };
+}
+
+function stfrRestorePageScroll(snapshot){
+  if(!snapshot?.scroller)return;
+  const restore=()=>{
+    if(snapshot.documentScroller){
+      window.scrollTo({top:snapshot.scrollTop,left:window.scrollX,behavior:"instant"});
+      snapshot.scroller.scrollTop=snapshot.scrollTop;
+    }else{
+      snapshot.scroller.scrollTop=snapshot.scrollTop;
+    }
+  };
+  // Home Assistant and the browser may both apply scroll anchoring after the
+  // DOM replacement. Restore once after layout, then once more on the next
+  // frame so "Voir plus" never sends the dashboard back to the card top.
+  requestAnimationFrame(()=>{
+    restore();
+    requestAnimationFrame(restore);
+  });
+}
+
 function stfrLoadMore(card,rail,count){
   const full=Math.max(0,Number(card?._stfrLayoutFullCount)||0);
   const key=card?._stfrLayoutKey;
   const state=card?._stfrLayoutStates?.get?.(key);
   if(!state||Number(state.limit)>=full||card?._stfrLazyLoading)return;
 
+  const pageScroll=stfrCapturePageScroll(card);
   const increment=stfrClampInt(count,stfrBatchSize(card),1,50);
   card._stfrLazyLoading=true;
   state.scrollTop=Math.max(0,Number(rail?.scrollTop)||0);
@@ -2189,6 +2246,7 @@ function stfrLoadMore(card,rail,count){
   card._stfrLayoutExpanded=true;
   try{
     card._render();
+    stfrRestorePageScroll(pageScroll);
   }finally{
     card._stfrLazyLoading=false;
   }
