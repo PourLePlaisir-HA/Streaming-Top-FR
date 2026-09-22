@@ -289,13 +289,44 @@ Valeurs par défaut :
 Espace étroit  (< 700 px)     : 2 lignes
 Espace moyen   (700–1199 px)  : 2 lignes
 Grand espace   (≥ 1200 px)    : 3 lignes
+Posters ajoutés par lot       : 8
+Scroll infini par défaut      : Non
 ```
 
-Chaque valeur peut être réglée de **1 à 6 lignes**.
+Chaque nombre de lignes peut être réglé de **1 à 6**. Le nombre de posters ajoutés par lot peut être réglé de **1 à 50**.
 
-Les titres sont affichés dans l'ordre naturel, de gauche à droite puis de haut en bas. Lorsque la liste dépasse la hauteur configurée, la navigation devient verticale et les éléments suivants sont rendus progressivement afin d'éviter de charger inutilement toute la grille dans le navigateur.
+Les titres sont affichés dans l'ordre naturel, de gauche à droite puis de haut en bas.
+
+Par défaut, la carte n'active pas de scroll vertical interne au premier affichage : elle montre uniquement le nombre de lignes configuré, puis propose un bouton **Voir N de plus ↓**. Chaque clic rend jusqu'à `N` posters supplémentaires, sans jamais dépasser le nombre de titres réellement disponibles dans le pool courant.
+
+Le **scroll infini** reste disponible en option. Lorsqu'il est activé, les lots suivants sont rendus automatiquement à l'approche du bas de la grille.
+
+Les deux paramètres peuvent être surchargés indépendamment dans chaque carte Lovelace :
+
+```yaml
+type: custom:streaming-top-fr-card
+scroll_infini: false
+posters_par_lot: 8
+```
+
+`scroll_infini` et `posters_par_lot` suivent la priorité suivante :
+
+1. valeur définie dans la carte Lovelace ;
+2. sinon, valeur de la configuration globale de l'intégration ;
+3. sinon, valeurs par défaut : `false` et `8`.
+
+Exemple avec un comportement différent pour Streaming Local :
+
+```yaml
+type: custom:streaming-local-card
+scroll_infini: true
+posters_par_lot: 20
+```
 
 Le dimensionnement se fait carte par carte. Deux cartes placées côte à côte sur un écran large peuvent donc automatiquement utiliser un mode plus compact qu'une carte seule occupant toute la largeur.
+
+La position de scroll est conservée par vue lors des rerenders et rafraîchissements afin d'éviter de revenir systématiquement en haut de la carte.
+
 
 ---
 
