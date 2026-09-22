@@ -269,6 +269,20 @@ type: custom:streaming-local-card
 title: Streaming Local
 ```
 
+### Chargement progressif des posters
+
+Les trois cartes acceptent les mêmes surcharges Lovelace :
+
+```yaml
+posters_par_lot: 8
+scroll_infini: false
+```
+
+- `posters_par_lot` : nombre de posters ajoutés à chaque étape, de 1 à 50.
+- `scroll_infini: false` : affiche le bouton **Voir N de plus**.
+- `scroll_infini: true` : charge automatiquement le lot suivant en approchant de la fin du rail.
+- Si ces clés sont absentes de la carte, les valeurs de la configuration native Home Assistant sont utilisées.
+
 Catalogue de la vidéothèque locale, suivi Vu / Pas encore vu et lecture VLC.
 
 ---
