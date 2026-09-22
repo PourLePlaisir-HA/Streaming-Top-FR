@@ -94,6 +94,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "rows_small": 2,
         "rows_medium": 2,
         "rows_large": 3,
+        "posters_par_lot": 8,
+        "scroll_infini": False,
     },
     "debug": {
         "enabled": False,
@@ -203,6 +205,8 @@ card_layout:
   rows_small: 2          # < 700 px (smartphone / carte étroite)
   rows_medium: 2         # 700 à 1199 px (tablette / carte PC réduite)
   rows_large: 3          # >= 1200 px (grande carte PC)
+  posters_par_lot: 8     # Nombre de posters ajoutés par "Voir plus" / lot du scroll infini
+  scroll_infini: false   # false = bouton "Voir plus" ; true = chargement automatique au scroll
 
 debug:
   enabled: false         # Active les traces détaillées de diagnostic
@@ -450,6 +454,16 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
                 defaults["rows_large"],
                 1,
                 6,
+            ),
+            "posters_par_lot": _as_int(
+                card_layout.get("posters_par_lot"),
+                defaults["posters_par_lot"],
+                1,
+                50,
+            ),
+            "scroll_infini": _as_bool(
+                card_layout.get("scroll_infini"),
+                defaults["scroll_infini"],
             ),
         }
 
