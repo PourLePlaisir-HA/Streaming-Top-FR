@@ -14,15 +14,42 @@
 
 ---
 
-### UX 1.0.7
+## 🆕 Nouveautés 1.0.7
 
-À partir de `1.0.7`, les cartes améliorent la continuité visuelle pendant les chargements :
+La version `1.0.7` consolide l'expérience utilisateur des trois cartes sans modifier les moteurs de données ou de classement.
 
-- une recherche sans résultat affiche un message explicite et permet d'effacer immédiatement la recherche ;
-- la recherche et la sélection courante restent actives après un rafraîchissement ;
-- le premier chargement utilise un skeleton responsive ;
-- un refresh conserve les contenus déjà visibles pendant la récupération des nouvelles données ;
-- les profils smartphone, tablette et desktop large sont couverts par les tests de mise en page.
+### 🔎 Recherche plus robuste
+
+La recherche affiche désormais un message explicite lorsqu'aucun résultat n'est trouvé, avec un bouton permettant d'effacer immédiatement la requête.
+
+Le champ de recherche conserve également correctement le focus pendant la saisie continue : les frappes restent dans la searchbox et ne déclenchent plus les raccourcis clavier globaux de Home Assistant.
+
+### 🔄 État conservé après refresh
+
+Un rafraîchissement conserve désormais les principaux choix de navigation :
+
+- recherche en cours ;
+- plateforme et type de média sur Streaming ;
+- bucket sélectionné : À découvrir / Ma liste / Déjà vus / Pas intéressé ;
+- décennie et catégorie sur Top Streaming ;
+- sous-catégorie Famille lorsqu'elle est utilisée ;
+- catégorie et filtre Tous / Pas encore vus / Vus sur Streaming Local.
+
+### ✨ Chargement plus fluide
+
+Le premier chargement utilise un skeleton responsive afin de limiter les changements brusques de hauteur.
+
+Lorsqu'un refresh est lancé avec des contenus déjà affichés, les posters restent visibles pendant la récupération des nouvelles données au lieu d'être remplacés par une carte vide ou un simple message de chargement.
+
+### 📱 Responsive renforcé
+
+La mise en page est explicitement couverte par les tests sur trois profils :
+
+- smartphone ~390 px ;
+- tablette ~820 px ;
+- desktop large ~1600 px.
+
+Les comportements `columns: full`, `Voir N de plus`, `scroll_infini` et `searchbox` restent compatibles.
 
 ## ✨ Pourquoi Streaming Top FR ?
 
