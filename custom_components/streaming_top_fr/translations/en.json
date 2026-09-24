@@ -222,7 +222,7 @@
       },
       "summary": {
         "title": "Settings summary",
-        "description": "### General\n- **Automatic refresh:** {update_hours} h\n\n### Streaming services\n{services}\n\n### Discovery\n- **Visible titles:** {visible_count}\n- **Prefetched titles:** {prefetch_count}\n- **Maximum depth:** {max_depth}\n\n### Responsive card layout\n- **Narrow space (< 700 px):** {layout_rows_small} row(s)\n- **Medium space (700–1199 px):** {layout_rows_medium} row(s)\n- **Wide space (≥ 1200 px):** {layout_rows_large} row(s)\n- **Posters per batch:** {layout_posters_per_batch}\n- **Infinite scroll by default:** {layout_infinite_scroll}\n\n### Movie duration filter\n- **Available in cards:** {duration_filter_enabled}\n- **Threshold:** < {duration_filter_max_minutes} min\n\n### Top Streaming / IMDb\n- **Top Streaming enabled:** {top_enabled}\n- **Minimum IMDb votes:** {min_imdb_votes}\n- **Short films < 40 min excluded:** {exclude_short_films}\n\n### Decades\n- **Default decade:** {default_decade}s\n\n**Enabled decades:**\n{decades}\n\n_Legend: 🎬 Movies · ✨ Animation · 📺 TV shows_\n\n### Family\n- **Enabled:** {family_enabled}\n- **Target age:** {target_age}\n- **Allow unrated:** {allow_unrated}\n- **Movies:** {family_movies} · **Animation:** {family_animation} · **TV shows:** {family_series}\n\n### Age ratings\n- **Display enabled:** {classification_enabled}\n- **Prefer France:** {classification_france}\n- **US fallback:** {us_fallback}\n- **US TV ratings:** {us_tv}\n\n### Debug\n- **Detailed logs:** {debug_enabled}\n\n### Streaming Local\n- **Enabled:** {local_enabled}\n- **SMB credential mode:** {local_auth_mode}\n- **Home Assistant library path:** {local_root_path}\n- **SMB URI:** {local_smb_base_uri}\n\n### Direct playback\n- **Enabled:** {playback_enabled}\n\n### Playback destinations\n- **Count:** {player_count}\n- **Destinations:** {players}\n\n_This page is read-only. Return to the menu to edit a section._"
+        "description": "### General\n- **Automatic refresh:** {update_hours} h\n\n### Streaming services\n{services}\n\n### Discovery\n- **Visible titles:** {visible_count}\n- **Prefetched titles:** {prefetch_count}\n- **Maximum depth:** {max_depth}\n\n### Responsive card layout\n- **Narrow space (< 700 px):** {layout_rows_small} row(s)\n- **Medium space (700–1199 px):** {layout_rows_medium} row(s)\n- **Wide space (≥ 1200 px):** {layout_rows_large} row(s)\n- **Posters per batch:** {layout_posters_per_batch}\n- **Infinite scroll by default:** {layout_infinite_scroll}\n\n### Movie duration filter\n- **Available in cards:** {duration_filter_enabled}\n- **Threshold:** < {duration_filter_max_minutes} min\n\n### Top Streaming / IMDb\n- **Top Streaming enabled:** {top_enabled}\n- **Minimum IMDb votes:** {min_imdb_votes}\n- **Short films < 40 min excluded:** {exclude_short_films}\n\n### Decades\n- **Default decade:** {default_decade}s\n\n**Enabled decades:**\n{decades}\n\n_Legend: 🎬 Movies · ✨ Animation · 📺 TV shows_\n\n### Family\n- **Enabled:** {family_enabled}\n- **Target age:** {target_age}\n- **Allow unrated:** {allow_unrated}\n- **Movies:** {family_movies} · **Animation:** {family_animation} · **TV shows:** {family_series}\n\n### Age ratings\n- **Display enabled:** {classification_enabled}\n- **Prefer France:** {classification_france}\n- **US fallback:** {us_fallback}\n- **US TV ratings:** {us_tv}\n\n### Debug\n- **Detailed logs:** {debug_enabled}\n\n### Streaming Local\n- **Enabled:** {local_enabled}\n- **SMB credential mode:** {local_auth_mode}\n- **SMB URI:** {local_smb_base_uri}\n\n### Direct playback\n- **Enabled:** {playback_enabled}\n\n### Playback destinations\n- **Count:** {player_count}\n- **Destinations:** {players}\n\n_This page is read-only. Return to the menu to edit a section._"
       },
       "default_decade": {
         "title": "Default decade",
@@ -233,10 +233,9 @@
       },
       "local_library": {
         "title": "Streaming Local",
-        "description": "Configure the media library mounted in Home Assistant and the SMB URI used by VLC. Configured credentials remain on the Home Assistant side and are never exposed to the card.",
+        "description": "Configure SMB access used by Streaming Local and VLC. The internal Home Assistant scan path is preserved automatically and is no longer exposed in this screen. Configured credentials remain on the Home Assistant side and are never exposed to the card.",
         "data": {
           "local_enabled": "Enable Streaming Local",
-          "local_root_path": "Home Assistant path",
           "local_smb_base_uri": "Base SMB URI for VLC",
           "local_smb_auth_mode": "VLC SMB authentication",
           "local_extensions": "Video extensions",
@@ -249,7 +248,6 @@
           "local_smb_password": "SMB password"
         },
         "data_description": {
-          "local_root_path": "Example: /medias/videos",
           "local_smb_base_uri": "Example: smb://192.168.0.200/videos — without username or password.",
           "local_smb_auth_mode": "Choose VLC-saved credentials or credentials configured here. Configured credentials are recommended for direct ADB launch.",
           "local_extensions": "Comma-separated list, for example: mkv, avi, mp4, m4v",

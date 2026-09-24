@@ -63,7 +63,6 @@ FIELD_PLAYER_ADB = "player_adb_player"
 FIELD_ADD_ANOTHER = "add_another"
 FIELD_DELETE_PLAYER = "delete_player"
 FIELD_LOCAL_ENABLED = "local_enabled"
-FIELD_LOCAL_ROOT = "local_root_path"
 FIELD_LOCAL_SMB = "local_smb_base_uri"
 FIELD_LOCAL_AUTH_MODE = "local_smb_auth_mode"
 FIELD_LOCAL_USERNAME = "local_smb_username"
@@ -236,10 +235,6 @@ def _local_library_schema(settings: dict[str, Any]) -> vol.Schema:
                 default=bool(local.get("enabled", False)),
             ): selector.BooleanSelector(),
             vol.Required(
-                FIELD_LOCAL_ROOT,
-                default=str(local.get("root_path") or ""),
-            ): selector.TextSelector(),
-            vol.Required(
                 FIELD_LOCAL_SMB,
                 default=str(local.get("smb_base_uri") or ""),
             ): selector.TextSelector(),
@@ -309,9 +304,12 @@ def _apply_local_library(
         ]
         return values or fallback
 
+    existing_local = settings.get("local_library") or {}
     settings["local_library"] = {
         "enabled": bool(user_input.get(FIELD_LOCAL_ENABLED, False)),
-        "root_path": str(user_input.get(FIELD_LOCAL_ROOT) or "").strip(),
+        # Internal scanner path: keep the previously configured/migrated value.
+        # It is intentionally no longer exposed in the Options Flow.
+        "root_path": str(existing_local.get("root_path") or "").strip(),
         "smb_base_uri": str(user_input.get(FIELD_LOCAL_SMB) or "").strip().rstrip("/"),
         "smb_auth_mode": str(user_input.get(FIELD_LOCAL_AUTH_MODE) or "configured"),
         "smb_username": str(user_input.get(FIELD_LOCAL_USERNAME) or "").strip(),
@@ -646,7 +644,6 @@ def _summary_placeholders(
         "debug_enabled": _status(debug.get("enabled", False)),
         "local_enabled": _status(local_enabled),
         "local_auth_mode": local_auth_label if local_enabled else "—",
-        "local_root_path": str(local_library.get("root_path") or "—") if local_enabled else "—",
         "local_smb_base_uri": str(local_library.get("smb_base_uri") or "—") if local_enabled else "—",
         "playback_enabled": _status(
             playback.get("enabled", bool(player_names))
