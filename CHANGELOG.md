@@ -1,3 +1,13 @@
+## 1.0.9-beta.1
+
+- Retire le champ utilisateur `Chemin dans Home Assistant` de la configuration **Streaming Local**.
+- Retire ce chemin de la page **Synthèse** et des traductions FR/EN associées.
+- Conserve en interne le `root_path` déjà configuré ou migré afin de préserver le scanner Streaming Local existant.
+- La configuration visible se concentre désormais sur l'accès SMB, les catégories, les extensions et l'authentification VLC.
+- Aucun changement du moteur de lecture VLC, du matching IMDb/JustWatch, des statuts ou des cartes Lovelace.
+- Ajoute un garde de régression vérifiant que le chemin interne Home Assistant n'est plus exposé par l'Options Flow.
+- Version frontend/backend : `1.0.9-beta.1`.
+
 ## 1.0.8
 
 - Ajoute un filtre transversal de genres sur Streaming, Top Streaming et Streaming Local.
