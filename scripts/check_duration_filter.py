@@ -21,12 +21,10 @@ assert 'FIELD_DURATION_FILTER_ENABLED = "duration_filter_enabled"' in config_flo
 assert 'FIELD_DURATION_FILTER_MAX_MINUTES = "duration_filter_max_minutes"' in config_flow
 assert '"duration_filter",' in config_flow
 assert '"local_auth_mode": local_auth_label if local_enabled else "—"' in config_flow
-assert '"local_root_path": str(local_library.get("root_path") or "—") if local_enabled else "—"' in config_flow
 assert '"local_smb_base_uri": str(local_library.get("smb_base_uri") or "—") if local_enabled else "—"' in config_flow
 
 assert "Filtrer sur la durée max des films" in fr
 assert "{local_auth_mode}" in fr
-assert "{local_root_path}" in fr
 assert "{local_smb_base_uri}" in fr
 
 # Runtime lookup is isolated behind its own client + WebSocket endpoint.
@@ -48,3 +46,7 @@ assert 'const STFR_VERSION = "1.0.8";' in card
 assert '"version": "1.0.8"' in manifest
 
 print("Optional movie duration filter checks passed.")
+
+# Streaming Local: the internal HA scan path must stay hidden from the Options Flow/UI.
+assert "FIELD_LOCAL_ROOT" not in config_flow
+assert "local_root_path" not in fr
