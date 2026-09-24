@@ -14,9 +14,9 @@
 
 ---
 
-## 🧪 Nouveautés 1.0.9-beta.1
+## 🆕 Nouveautés 1.0.9
 
-Cette bêta simplifie la configuration de **Streaming Local** sans modifier son fonctionnement de scan ou de lecture.
+La version 1.0.9 simplifie la configuration de **Streaming Local** sans modifier son fonctionnement de scan ou de lecture.
 
 ### ⚙️ Configuration Streaming Local simplifiée
 
