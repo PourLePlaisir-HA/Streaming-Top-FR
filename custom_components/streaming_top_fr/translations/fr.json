@@ -233,7 +233,7 @@
       },
       "summary": {
         "title": "Synthèse des paramètres",
-        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Affichage responsive des cartes\n- **Espace étroit (< 700 px) :** {layout_rows_small} ligne(s)\n- **Espace moyen (700–1199 px) :** {layout_rows_medium} ligne(s)\n- **Grand espace (≥ 1200 px) :** {layout_rows_large} ligne(s)\n- **Posters par lot :** {layout_posters_per_batch}\n- **Scroll infini par défaut :** {layout_infinite_scroll}\n\n### Filtre de durée des films\n- **Disponible dans les cartes :** {duration_filter_enabled}\n- **Seuil :** < {duration_filter_max_minutes} min\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Debug\n- **Logs détaillés :** {debug_enabled}\n\n### Streaming Local\n- **Activé :** {local_enabled}\n- **Mode d’identifiants SMB :** {local_auth_mode}\n- **Vidéothèque Home Assistant :** {local_root_path}\n- **URI SMB :** {local_smb_base_uri}\n\n### Lecture directe\n- **Activée :** {playback_enabled}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
+        "description": "### Général\n- **Actualisation automatique :** {update_hours} h\n\n### Services de streaming\n{services}\n\n### Découverte\n- **Titres visibles :** {visible_count}\n- **Titres préchargés :** {prefetch_count}\n- **Profondeur maximale :** {max_depth}\n\n### Affichage responsive des cartes\n- **Espace étroit (< 700 px) :** {layout_rows_small} ligne(s)\n- **Espace moyen (700–1199 px) :** {layout_rows_medium} ligne(s)\n- **Grand espace (≥ 1200 px) :** {layout_rows_large} ligne(s)\n- **Posters par lot :** {layout_posters_per_batch}\n- **Scroll infini par défaut :** {layout_infinite_scroll}\n\n### Filtre de durée des films\n- **Disponible dans les cartes :** {duration_filter_enabled}\n- **Seuil :** < {duration_filter_max_minutes} min\n\n### Top Streaming / IMDb\n- **Top Streaming activé :** {top_enabled}\n- **Votes IMDb minimum :** {min_imdb_votes}\n- **Courts métrages < 40 min exclus :** {exclude_short_films}\n\n### Décennies\n- **Décennie par défaut :** {default_decade}s\n\n**Décennies actives :**\n{decades}\n\n_Légende : 🎬 Films · ✨ Animation · 📺 Séries_\n\n### Famille\n- **Activée :** {family_enabled}\n- **Âge cible :** {target_age} ans\n- **Contenus non classifiés autorisés :** {allow_unrated}\n- **Films :** {family_movies} · **Animation :** {family_animation} · **Séries :** {family_series}\n\n### Classification d'âge\n- **Affichage activé :** {classification_enabled}\n- **Priorité France :** {classification_france}\n- **Fallback US :** {us_fallback}\n- **Classifications TV US :** {us_tv}\n\n### Debug\n- **Logs détaillés :** {debug_enabled}\n\n### Streaming Local\n- **Activé :** {local_enabled}\n- **Mode d’identifiants SMB :** {local_auth_mode}\n- **URI SMB :** {local_smb_base_uri}\n\n### Lecture directe\n- **Activée :** {playback_enabled}\n\n### Destinations de lecture\n- **Nombre :** {player_count}\n- **Destinations :** {players}\n\n_Cette page est en lecture seule. Revenez au menu pour modifier une section._"
       },
       "default_decade": {
         "title": "Décennie par défaut",
@@ -244,10 +244,9 @@
       },
       "local_library": {
         "title": "Streaming Local",
-        "description": "Configure l’accès à la vidéothèque montée dans Home Assistant et l’URI SMB utilisée par VLC. Les identifiants configurés restent côté Home Assistant et ne sont jamais exposés à la carte.",
+        "description": "Configure l’accès SMB utilisé par Streaming Local et VLC. Le chemin interne de scan Home Assistant est conservé automatiquement et n’est plus exposé dans cet écran. Les identifiants configurés restent côté Home Assistant et ne sont jamais exposés à la carte.",
         "data": {
           "local_enabled": "Activer Streaming Local",
-          "local_root_path": "Chemin dans Home Assistant",
           "local_smb_base_uri": "URI SMB de base pour VLC",
           "local_smb_auth_mode": "Authentification SMB VLC",
           "local_extensions": "Extensions vidéo",
@@ -260,7 +259,6 @@
           "local_smb_password": "Mot de passe SMB"
         },
         "data_description": {
-          "local_root_path": "Exemple : /medias/videos",
           "local_smb_base_uri": "Exemple : smb://192.168.0.200/videos — sans login ni mot de passe.",
           "local_smb_auth_mode": "Choisissez les identifiants mémorisés par VLC ou ceux configurés ici. Le mode configuré est recommandé pour le lancement direct ADB.",
           "local_extensions": "Liste séparée par des virgules, par exemple : mkv, avi, mp4, m4v",
