@@ -14,6 +14,28 @@
 
 ---
 
+## 🧪 Nouveautés 1.0.9-beta.1
+
+Cette bêta simplifie la configuration de **Streaming Local** sans modifier son fonctionnement de scan ou de lecture.
+
+### ⚙️ Configuration Streaming Local simplifiée
+
+Le champ **Chemin dans Home Assistant** n'est plus affiché dans l'écran de configuration ni dans la synthèse.
+
+Le chemin de scan déjà enregistré reste conservé en interne afin de ne pas casser les installations existantes. La configuration utilisateur reste centrée sur :
+
+- activation de Streaming Local ;
+- URI SMB utilisée par VLC ;
+- mode d'authentification SMB ;
+- utilisateur et mot de passe SMB ;
+- extensions vidéo ;
+- dossiers Films, Séries, Animation et Documentaires ;
+- scan éventuel des dossiers cachés.
+
+Cette évolution est volontairement limitée à la couche de configuration. Le scanner, le matching des métadonnées et la lecture VLC restent inchangés.
+
+---
+
 ## 🆕 Nouveautés 1.0.8
 
 La série `1.0.8` introduit un **filtre transversal de genres** sur les trois cartes, sans modifier les moteurs historiques de classement, de matching ou de lecture.
@@ -569,7 +591,6 @@ Les destinations se configurent normalement depuis l'interface Home Assistant ; 
 Configuration type :
 
 ```text
-Chemin Home Assistant : /medias/videos
 URI SMB              : smb://192.168.0.200/videos
 Authentification     : Streaming Top FR — identifiants configurés
 Utilisateur SMB      : media_user
