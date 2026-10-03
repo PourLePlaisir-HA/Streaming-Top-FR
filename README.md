@@ -14,6 +14,25 @@
 
 ---
 
+## 🧪 Nouveautés 1.0.10-beta.2
+
+Cette bêta corrige un détail d'interface dans la **barre de recherche**.
+
+### 🔎 Une seule croix d'effacement
+
+Certains navigateurs WebKit/Safari peuvent afficher leur propre bouton d'effacement pour un champ `type="search"`.
+
+Streaming Top FR ayant déjà son propre bouton d'effacement, deux croix pouvaient apparaître simultanément.
+
+La `1.0.10-beta.2` :
+
+- conserve le champ en `type="search"` ;
+- masque uniquement le contrôle natif WebKit ;
+- conserve le bouton d'effacement de la carte ;
+- ne modifie pas le comportement de recherche ni la gestion du focus.
+
+---
+
 ## 🧪 Nouveautés 1.0.10-beta.1
 
 Cette bêta corrige un cas de **matching erroné dans Streaming Local** pour certains films en plusieurs parties.
