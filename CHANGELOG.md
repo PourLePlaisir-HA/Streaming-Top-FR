@@ -1,3 +1,12 @@
+## 1.0.10-beta.2
+
+- Masque le bouton d'effacement natif des champs `input[type="search"]` rendu par WebKit/Safari afin d'éviter l'affichage de deux croix dans la barre de recherche.
+- Conserve le champ en `type="search"` pour préserver le clavier/retour de recherche sur mobile.
+- Conserve uniquement le bouton d'effacement personnalisé de Streaming Top FR dans l'interface.
+- Ajoute un garde de régression dédié dans le test de recherche.
+- Retire l'expérimentation de réutilisation/invalidation du cache scanner Local commencée après beta.1 : aucun changement supplémentaire du scanner Local n'est inclus dans cette bêta.
+- Version frontend/backend : `1.0.10-beta.2`.
+
 ## 1.0.10-beta.1
 
 - Corrige un faux positif de matching dans **Streaming Local** pour les films en plusieurs parties partageant le même titre de franchise et la même année.
