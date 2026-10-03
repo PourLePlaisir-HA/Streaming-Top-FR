@@ -2789,7 +2789,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v12:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         wanted_slug_for_cache = _matching_slug(title, media_type)
         if self.store:
@@ -3494,7 +3494,7 @@ class LocalMetadataClient(JustWatchClient):
         if not title:
             return None
         cache_prefix = (
-            "local-imdb-id-strict-v1" if strict else "local-imdb-id-v1"
+            "local-imdb-id-strict-v2" if strict else "local-imdb-id-v1"
         )
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         wanted_title_for_cache = _matching_slug(str(title), media_type)
