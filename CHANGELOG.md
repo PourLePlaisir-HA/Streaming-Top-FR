@@ -1,3 +1,13 @@
+## 1.0.10
+
+- Version stable validée de la série 1.0.10.
+- Corrige le faux positif de matching Streaming Local entre différentes parties d'une même franchise partageant la même année.
+- Conserve le correctif validé en beta.1 sur les titres multipart.
+- Masque le bouton d'effacement natif WebKit/Safari des champs de recherche pour éviter l'affichage de deux croix.
+- Conserve le champ en `type="search"` afin de préserver le comportement mobile et la gestion du focus.
+- Aucun changement supplémentaire du scanner Local n'est inclus dans la version stable.
+- Version frontend/backend : `1.0.10`.
+
 ## 1.0.10-beta.2
 
 - Masque le bouton d'effacement natif des champs `input[type="search"]` rendu par WebKit/Safari afin d'éviter l'affichage de deux croix dans la barre de recherche.
