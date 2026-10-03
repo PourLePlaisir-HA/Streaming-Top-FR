@@ -14,6 +14,40 @@
 
 ---
 
+## 🧪 Nouveautés 1.0.10-beta.1
+
+Cette bêta corrige un cas de **matching erroné dans Streaming Local** pour certains films en plusieurs parties.
+
+### 🎬 Matching des films multipart
+
+Un fichier dont le nom contient clairement le sous-titre de la première partie pouvait être associé à une autre partie de la même œuvre lorsque :
+
+- le préfixe de franchise était identique ;
+- l'année de sortie était identique ;
+- le titre catalogue contenait une numérotation explicite comme `Partie 1` ou `Partie 2`.
+
+Exemple du cas corrigé :
+
+```text
+La.Bataille.de.Gaulle.L.Age.de.Fer.2026....mkv
+```
+
+doit correspondre à :
+
+```text
+La Bataille de Gaulle - Partie 1 : L'Âge de fer
+```
+
+et non à une autre partie de la même franchise.
+
+La correction est appliquée dans la couche de matching complémentaire et conserve les moteurs historiques protégés par les tests de non-régression.
+
+### ♻️ Cache Local
+
+Lorsqu'une ancienne association multipart manifestement incorrecte est déjà présente en cache, elle est invalidée de manière ciblée afin de provoquer un nouveau matching.
+
+---
+
 ## 🆕 Nouveautés 1.0.9
 
 La version 1.0.9 simplifie la configuration de **Streaming Local** sans modifier son fonctionnement de scan ou de lecture.
