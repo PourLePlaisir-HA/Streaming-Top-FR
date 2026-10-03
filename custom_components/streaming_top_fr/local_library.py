@@ -60,6 +60,10 @@ _LOOKUP_VOLUME_SUFFIX = re.compile(
     r"(?i)\s*(?:#\s*\d{1,3}|vol(?:ume)?\.?\s*\d{1,3}|tome\s*\d{1,3})\s*$"
 )
 
+_EXPLICIT_PART = re.compile(
+    r"(?i)\b(?:partie|part|chapitre|chapter)[ ._:-]*(?P<number>\d{1,2})\b"
+)
+
 DEFAULT_CATEGORY_FOLDERS = {
     "movies": ["Films"],
     "series": ["Series", "Séries"],
@@ -158,6 +162,21 @@ class LocalLibraryScanner:
 
                 parsed_title = item.get("title")
                 parsed_year = item.get("year")
+
+                # Do not let a previously enriched multipart title overwrite a
+                # fresh filename parse that clearly points to another work.
+                # Example: "La Bataille de Gaulle L Age de Fer" must not keep
+                # cached metadata for "Partie 2 : J'ecris ton nom".
+                old_title = str(old_item.get("title") or "").strip()
+                fresh_title = str(parsed_title or "").strip()
+                old_part = _EXPLICIT_PART.search(old_title)
+                fresh_part = _EXPLICIT_PART.search(fresh_title)
+                if old_part and (
+                    not fresh_part
+                    or old_part.group("number") != fresh_part.group("number")
+                ):
+                    continue
+
                 for field in metadata_fields:
                     if field in old_item and old_item.get(field) is not None:
                         item[field] = old_item.get(field)
