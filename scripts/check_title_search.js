@@ -256,6 +256,10 @@ for (const marker of [
   'event.stopPropagation();',
   'queueMicrotask(restore)',
   'requestAnimationFrame(restore)',
+  'input.type="search"',
+  'stfr-search-native-controls-style',
+  '::-webkit-search-cancel-button',
+  'appearance:none;display:none',
 ]) {
   if (!frontendSourceForFocus.includes(marker)) {
     throw new Error(`Search focus/shortcut shielding marker missing: ${marker}`);
