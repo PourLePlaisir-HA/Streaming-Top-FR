@@ -1,3 +1,33 @@
+## 1.0.10
+
+- Version stable validée de la série 1.0.10.
+- Corrige le faux positif de matching Streaming Local entre différentes parties d'une même franchise partageant la même année.
+- Conserve le correctif validé en beta.1 sur les titres multipart.
+- Masque le bouton d'effacement natif WebKit/Safari des champs de recherche pour éviter l'affichage de deux croix.
+- Conserve le champ en `type="search"` afin de préserver le comportement mobile et la gestion du focus.
+- Aucun changement supplémentaire du scanner Local n'est inclus dans la version stable.
+- Version frontend/backend : `1.0.10`.
+
+## 1.0.10-beta.2
+
+- Masque le bouton d'effacement natif des champs `input[type="search"]` rendu par WebKit/Safari afin d'éviter l'affichage de deux croix dans la barre de recherche.
+- Conserve le champ en `type="search"` pour préserver le clavier/retour de recherche sur mobile.
+- Conserve uniquement le bouton d'effacement personnalisé de Streaming Top FR dans l'interface.
+- Ajoute un garde de régression dédié dans le test de recherche.
+- Retire l'expérimentation de réutilisation/invalidation du cache scanner Local commencée après beta.1 : aucun changement supplémentaire du scanner Local n'est inclus dans cette bêta.
+- Version frontend/backend : `1.0.10-beta.2`.
+
+## 1.0.10-beta.1
+
+- Corrige un faux positif de matching dans **Streaming Local** pour les films en plusieurs parties partageant le même titre de franchise et la même année.
+- Exemple corrigé : un fichier correspondant à **La Bataille de Gaulle - Partie 1 : L'Âge de fer** ne doit plus être associé à **Partie 2 : J'écris ton nom**.
+- Le parser de nom de fichier reste inchangé : la correction cible uniquement la couche de matching des métadonnées.
+- Renforce la règle de fallback des titres localisés : une numérotation explicite `Partie 1 / Partie 2 / Chapter / Chapitre` ne peut plus être traversée sur la seule base du préfixe de franchise et de l'année.
+- Ajoute une invalidation ciblée des mauvaises associations déjà présentes en cache afin de provoquer un rematching propre après mise à jour.
+- Préserve byte-for-byte les moteurs historiques Streaming / Top et la classe stable Streaming Local protégée par le CI.
+- Ajoute un test de régression dédié aux titres multipart.
+- Version frontend/backend : `1.0.10-beta.1`.
+
 ## 1.0.9
 
 - Version stable validée de la série 1.0.9.

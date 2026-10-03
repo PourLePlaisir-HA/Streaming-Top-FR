@@ -187,6 +187,21 @@ def _bare_sequel_number(slug: str) -> int | None:
     return value if 1 <= value <= 99 else None
 
 
+def _explicit_installment_number(slug: str) -> int | None:
+    """Return an explicit part/chapter number embedded in a title slug."""
+    parts = [part for part in str(slug or "").split("-") if part]
+    markers = {"part", "partie", "chapter", "chapitre"}
+    for index, part in enumerate(parts[:-1]):
+        if part not in markers:
+            continue
+        number = parts[index + 1]
+        if number.isdigit():
+            value = int(number)
+            if 1 <= value <= 99:
+                return value
+    return None
+
+
 def _localized_title_alias(wanted_slug: str, candidate_slug: str) -> bool:
     """Recognize strong original/localized title variants.
 
@@ -197,6 +212,18 @@ def _localized_title_alias(wanted_slug: str, candidate_slug: str) -> bool:
     wanted = [part for part in str(wanted_slug or "").split("-") if part]
     candidate = [part for part in str(candidate_slug or "").split("-") if part]
     if not wanted or not candidate:
+        return False
+
+    # Never use a generic franchise-prefix alias to jump between explicitly
+    # numbered instalments. Example:
+    #   "La Bataille de Gaulle L Age de Fer"
+    #   must not match "La Bataille de Gaulle Partie 2 J ecris ton nom"
+    # merely because both share the same year and franchise prefix.
+    wanted_part = _explicit_installment_number(wanted_slug)
+    candidate_part = _explicit_installment_number(candidate_slug)
+    if (wanted_part is None) != (candidate_part is None):
+        return False
+    if wanted_part is not None and wanted_part != candidate_part:
         return False
 
     # Example:
@@ -4298,8 +4325,41 @@ async def _stfr_local_search_with_genres(
         wanted_year = int(year) if year not in (None, "") else None
     except (TypeError, ValueError):
         wanted_year = None
-    cache_key = f"local-title-v11:{normalized_media}:{wanted_year or ''}:{_slug(str(title or '').strip())}"
+    normalized_title = str(title or "").strip()
+    title_slug = _matching_slug(normalized_title, normalized_media)
+    cache_key = f"local-title-v11:{normalized_media}:{wanted_year or ''}:{_slug(normalized_title)}"
     GenreMetadataExtension.invalidate_direct_cache_if_needed(self.store, cache_key)
+
+    # Invalidate only a demonstrably bad cached multipart association. This
+    # preserves the stable Local engine and its cache namespace while allowing
+    # a corrected rematch after upgrading.
+    if self.store:
+        cached_local = self.store.get_metadata(cache_key)
+        cached_slug = _matching_slug(
+            str((cached_local or {}).get("title") or ""), normalized_media
+        )
+        if (
+            cached_slug
+            and _explicit_installment_number(cached_slug) is not None
+            and SequenceMatcher(None, title_slug, cached_slug).ratio() < 0.88
+        ):
+            self.store.set_metadata(cache_key, {})
+
+            strict_key = (
+                f"local-imdb-id-strict-v1:{normalized_media}:"
+                f"{wanted_year or ''}:{_slug(normalized_title)}"
+            )
+            cached_imdb = self.store.get_metadata(strict_key)
+            resolved_slug = _matching_slug(
+                str((cached_imdb or {}).get("resolved_title") or ""),
+                normalized_media,
+            )
+            if (
+                resolved_slug
+                and _explicit_installment_number(resolved_slug) is not None
+                and SequenceMatcher(None, title_slug, resolved_slug).ratio() < 0.88
+            ):
+                self.store.set_metadata(strict_key, {})
 
     result = await _stfr_original_local_search(
         self, title, media_type, year, classification

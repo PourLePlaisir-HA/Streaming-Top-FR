@@ -1,4 +1,4 @@
-const STFR_VERSION = "1.0.9";
+const STFR_VERSION = "1.0.10";
 class StreamingTopFrCard extends HTMLElement {
   connectedCallback(){
     if(this._statusSyncHandler)return;
@@ -2315,6 +2315,21 @@ function stfrFocusSearch(card,position){
 function stfrInstallSearch(card){
   const root=card?.shadowRoot;
   if(!root||!card?._data)return;
+
+  // Keep type="search" for the mobile search keyboard, but hide WebKit's
+  // native clear control. Streaming Top FR already renders its own clear
+  // button, otherwise Safari/iOS/Chrome WebKit can show two × controls.
+  if(!root.querySelector("#stfr-search-native-controls-style")){
+    const searchStyle=document.createElement("style");
+    searchStyle.id="stfr-search-native-controls-style";
+    searchStyle.textContent=[
+      ".stfr-search-input::-webkit-search-cancel-button",
+      ".stfr-search-input::-webkit-search-decoration",
+      ".stfr-search-input::-webkit-search-results-button",
+      ".stfr-search-input::-webkit-search-results-decoration",
+    ].join(",")+"{-webkit-appearance:none;appearance:none;display:none;}";
+    root.appendChild(searchStyle);
+  }
 
   root.querySelector(".stfr-search-box")?.remove?.();
   if(!stfrSearchBoxEnabled(card))return;
