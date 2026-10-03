@@ -3494,7 +3494,7 @@ class LocalMetadataClient(JustWatchClient):
         if not title:
             return None
         cache_prefix = (
-            "local-imdb-id-strict-v2" if strict else "local-imdb-id-v1"
+            "local-imdb-id-strict-v1" if strict else "local-imdb-id-v1"
         )
         cache_key = f"{cache_prefix}:{media_type or 'title'}:{year or ''}:{_slug(title)}"
         wanted_title_for_cache = _matching_slug(str(title), media_type)
@@ -3781,7 +3781,7 @@ class LocalMetadataClient(JustWatchClient):
             wanted_year = None
 
         cache_key = (
-            f"local-title-v12:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         wanted_slug = _matching_slug(title, media_type)
 
@@ -4325,8 +4325,41 @@ async def _stfr_local_search_with_genres(
         wanted_year = int(year) if year not in (None, "") else None
     except (TypeError, ValueError):
         wanted_year = None
-    cache_key = f"local-title-v12:{normalized_media}:{wanted_year or ''}:{_slug(str(title or '').strip())}"
+    normalized_title = str(title or "").strip()
+    title_slug = _matching_slug(normalized_title, normalized_media)
+    cache_key = f"local-title-v11:{normalized_media}:{wanted_year or ''}:{_slug(normalized_title)}"
     GenreMetadataExtension.invalidate_direct_cache_if_needed(self.store, cache_key)
+
+    # Invalidate only a demonstrably bad cached multipart association. This
+    # preserves the stable Local engine and its cache namespace while allowing
+    # a corrected rematch after upgrading.
+    if self.store:
+        cached_local = self.store.get_metadata(cache_key)
+        cached_slug = _matching_slug(
+            str((cached_local or {}).get("title") or ""), normalized_media
+        )
+        if (
+            cached_slug
+            and _explicit_installment_number(cached_slug) is not None
+            and SequenceMatcher(None, title_slug, cached_slug).ratio() < 0.88
+        ):
+            self.store.set_metadata(cache_key, {})
+
+            strict_key = (
+                f"local-imdb-id-strict-v1:{normalized_media}:"
+                f"{wanted_year or ''}:{_slug(normalized_title)}"
+            )
+            cached_imdb = self.store.get_metadata(strict_key)
+            resolved_slug = _matching_slug(
+                str((cached_imdb or {}).get("resolved_title") or ""),
+                normalized_media,
+            )
+            if (
+                resolved_slug
+                and _explicit_installment_number(resolved_slug) is not None
+                and SequenceMatcher(None, title_slug, resolved_slug).ratio() < 0.88
+            ):
+                self.store.set_metadata(strict_key, {})
 
     result = await _stfr_original_local_search(
         self, title, media_type, year, classification
