@@ -2789,7 +2789,7 @@ class JustWatchClient:
             wanted_year = None
 
         cache_key = (
-            f"local-title-v12:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         wanted_slug_for_cache = _matching_slug(title, media_type)
         if self.store:
@@ -3781,7 +3781,7 @@ class LocalMetadataClient(JustWatchClient):
             wanted_year = None
 
         cache_key = (
-            f"local-title-v11:{media_type}:{wanted_year or ''}:{_slug(title)}"
+            f"local-title-v12:{media_type}:{wanted_year or ''}:{_slug(title)}"
         )
         wanted_slug = _matching_slug(title, media_type)
 
@@ -4325,7 +4325,7 @@ async def _stfr_local_search_with_genres(
         wanted_year = int(year) if year not in (None, "") else None
     except (TypeError, ValueError):
         wanted_year = None
-    cache_key = f"local-title-v11:{normalized_media}:{wanted_year or ''}:{_slug(str(title or '').strip())}"
+    cache_key = f"local-title-v12:{normalized_media}:{wanted_year or ''}:{_slug(str(title or '').strip())}"
     GenreMetadataExtension.invalidate_direct_cache_if_needed(self.store, cache_key)
 
     result = await _stfr_original_local_search(
