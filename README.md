@@ -14,6 +14,20 @@
 
 ---
 
+## 🆕 Nouveautés 1.0.10
+
+La version stable `1.0.10` consolide les correctifs validés dans les bêta de la série.
+
+### 🎬 Matching Streaming Local
+
+Le matching est renforcé pour éviter les faux positifs entre différentes parties d'une même franchise partageant la même année.
+
+### 🔎 Barre de recherche
+
+Le contrôle d'effacement natif WebKit/Safari est masqué afin de conserver une seule croix dans l'interface, tout en maintenant le champ en `type="search"` pour préserver le comportement mobile.
+
+---
+
 ## 🧪 Nouveautés 1.0.10-beta.2
 
 Cette bêta corrige un détail d'interface dans la **barre de recherche**.
