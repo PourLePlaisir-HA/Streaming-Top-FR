@@ -2327,8 +2327,7 @@ function stfrInstallSearch(card){
       ".stfr-search-input::-webkit-search-decoration",
       ".stfr-search-input::-webkit-search-results-button",
       ".stfr-search-input::-webkit-search-results-decoration",
-      "{-webkit-appearance:none;appearance:none;display:none;}",
-    ].join(",");
+    ].join(",")+"{-webkit-appearance:none;appearance:none;display:none;}";
     root.appendChild(searchStyle);
   }
 
