@@ -97,13 +97,15 @@
           "player_media_player": "Media player principal",
           "player_remote": "Remote",
           "player_adb_player": "Media player Android Debug Bridge",
+          "player_disney_pin": "Code PIN Disney+ (optionnel)",
           "add_another": "Ajouter une autre destination"
         },
         "data_description": {
           "player_id": "Exemple : salon, etage, chambre. Cet identifiant est utilisé en interne.",
           "player_media_player": "Destination Home Assistant logique.",
           "player_remote": "Entité remote utilisée pour réveiller le Player et envoyer les commandes.",
-          "player_adb_player": "Entité media_player créée par l'intégration Android Debug Bridge."
+          "player_adb_player": "Entité media_player créée par l'intégration Android Debug Bridge.",
+          "player_disney_pin": "Code PIN à 4 chiffres si le profil Disney+ sur cette destination est verrouillé."
         }
       }
     },
@@ -228,6 +230,7 @@
           "player_media_player": "Media player principal",
           "player_remote": "Remote",
           "player_adb_player": "Media player Android Debug Bridge",
+          "player_disney_pin": "Code PIN Disney+ (optionnel)",
           "delete_player": "Supprimer cette destination"
         }
       },

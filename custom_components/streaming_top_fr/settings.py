@@ -147,6 +147,7 @@ players:
     media_player: media_player.android_tv_salon
     remote: remote.android_tv_salon
     adb_player: media_player.android_tv_salon_adb
+    # disney_pin: "1234"       # Optionnel : code PIN à 4 chiffres si le profil Disney+ est verrouillé
 
   etage:
     name: Étage
@@ -154,6 +155,7 @@ players:
     media_player: media_player.android_tv_etage
     remote: remote.android_tv_etage
     adb_player: media_player.android_tv_etage_adb
+    # disney_pin: "1234"
 
 
 # Deuxième carte : custom:streaming-top-fr-catalog-card
@@ -259,12 +261,14 @@ def _normalize_players(value: Any) -> dict[str, dict[str, Any]]:
 
         name = _clean_string(raw.get("name")) or player_id
         player_type = (_clean_string(raw.get("type")) or "android_tv").casefold()
+        disney_pin = _clean_string(raw.get("disney_pin"))
         out[player_id] = {
             "name": name,
             "type": player_type,
             "media_player": _clean_string(raw.get("media_player")),
             "remote": _clean_string(raw.get("remote")),
             "adb_player": _clean_string(raw.get("adb_player")),
+            "disney_pin": disney_pin,
         }
 
     return out

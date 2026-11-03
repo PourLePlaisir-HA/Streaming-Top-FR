@@ -27,6 +27,7 @@ players:
     media_player: media_player.android_tv_salon
     remote: remote.android_tv_salon
     adb_player: media_player.android_tv_salon_adb
+    # disney_pin: "1234"  # Optionnel : code PIN Disney+ si le profil est verrouillé
 
   etage:
     name: Étage
@@ -34,6 +35,7 @@ players:
     media_player: media_player.android_tv_etage
     remote: remote.android_tv_etage
     adb_player: media_player.android_tv_etage_adb
+    # disney_pin: "1234"
 
 # Deuxième carte : custom:streaming-top-fr-catalog-card
 # top_count s'applique séparément aux Films, Animation et Séries activés.
