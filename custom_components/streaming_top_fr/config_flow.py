@@ -60,6 +60,7 @@ FIELD_PLAYER_NAME = "player_name"
 FIELD_PLAYER_MEDIA = "player_media_player"
 FIELD_PLAYER_REMOTE = "player_remote"
 FIELD_PLAYER_ADB = "player_adb_player"
+FIELD_PLAYER_DISNEY_PIN = "player_disney_pin"
 FIELD_ADD_ANOTHER = "add_another"
 FIELD_DELETE_PLAYER = "delete_player"
 FIELD_LOCAL_ENABLED = "local_enabled"
@@ -552,6 +553,15 @@ def _player_schema(
         marker = vol.Required(field, default=value) if value else vol.Required(field)
         schema[marker] = _entity(domain)
 
+    schema[
+        vol.Optional(
+            FIELD_PLAYER_DISNEY_PIN,
+            default=str(current.get("disney_pin") or ""),
+        )
+    ] = selector.TextSelector(
+        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+    )
+
     if include_add_another:
         schema[vol.Optional(FIELD_ADD_ANOTHER, default=False)] = selector.BooleanSelector()
     if include_delete:
@@ -833,6 +843,7 @@ class StreamingTopFrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "media_player": user_input[FIELD_PLAYER_MEDIA],
                     "remote": user_input[FIELD_PLAYER_REMOTE],
                     "adb_player": user_input[FIELD_PLAYER_ADB],
+                    "disney_pin": str(user_input.get(FIELD_PLAYER_DISNEY_PIN) or "").strip() or None,
                 }
                 if user_input.get(FIELD_ADD_ANOTHER, False):
                     self._player_counter += 1
@@ -1310,6 +1321,7 @@ class StreamingTopFrOptionsFlow(OptionsFlowWithReload):
                     "media_player": user_input[FIELD_PLAYER_MEDIA],
                     "remote": user_input[FIELD_PLAYER_REMOTE],
                     "adb_player": user_input[FIELD_PLAYER_ADB],
+                    "disney_pin": str(user_input.get(FIELD_PLAYER_DISNEY_PIN) or "").strip() or None,
                 }
                 return self._save()
 

@@ -82,6 +82,10 @@ async def async_launch_android_tv(
         if not content_id and not watch_url:
             raise ValueError("URL Disney+ France indisponible pour ce titre")
 
+        disney_pin = "".join(
+            c for c in str(player.get("disney_pin") or "") if c.isdigit()
+        )
+
         await _call(
             hass,
             "androidtv",
@@ -105,7 +109,18 @@ async def async_launch_android_tv(
             "send_command",
             {"entity_id": remote, "command": "DPAD_CENTER"},
         )
-        await asyncio.sleep(3)
+        if disney_pin:
+            await asyncio.sleep(2)
+            await _call(
+                hass,
+                "androidtv",
+                "adb_command",
+                {"entity_id": adb_player, "command": f"input text {disney_pin}"},
+            )
+            await asyncio.sleep(4)
+        else:
+            await asyncio.sleep(3)
+
         await _call(
             hass,
             "remote",

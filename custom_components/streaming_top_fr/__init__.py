@@ -369,6 +369,12 @@ def _register_ws(hass):
         public_local.pop("smb_username", None)
         public_local.pop("smb_password", None)
         public_settings["local_library"] = public_local
+        public_settings["players"] = {
+            pid: {k: v for k, v in p.items() if k != "disney_pin"}
+            if isinstance(p, dict)
+            else p
+            for pid, p in (public_settings.get("players") or {}).items()
+        }
         payload["settings"] = public_settings
         store = data["store"]
         GenreMetadataExtension.attach_tree_from_store(store, payload)

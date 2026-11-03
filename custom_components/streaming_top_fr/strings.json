@@ -92,6 +92,7 @@
           "player_media_player": "Main media player",
           "player_remote": "Remote",
           "player_adb_player": "Android Debug Bridge media player",
+          "player_disney_pin": "Disney+ PIN code (optional)",
           "add_another": "Add another destination"
         }
       }
@@ -217,6 +218,7 @@
           "player_media_player": "Main media player",
           "player_remote": "Remote",
           "player_adb_player": "Android Debug Bridge media player",
+          "player_disney_pin": "Disney+ PIN code (optional)",
           "delete_player": "Delete this destination"
         }
       },
